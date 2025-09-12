@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Notifications\Notifiable;
+use Laravel\Sanctum\HasApiTokens;
+
+class User extends Authenticatable
+{
+    use HasFactory, Notifiable, HasApiTokens;
+
+    protected $primaryKey = 'userID';
+    
+    protected $fillable = [
+        'firstName',
+        'lastName',
+        'email',
+        'password',
+        'departmentID',
+        'userRolesID',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'password' => 'hashed',
+        ];
+    }
+
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'userRolesID', 'userRoleID');
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'departmentID', 'departmentID');
+    }
+
+    public function proposals()
+    {
+        return $this->hasMany(Proposal::class, 'userID', 'userID');
+    }
+
+    public function reviews()
+    {
+        return $this->hasMany(Review::class, 'reviewerID', 'userID');
+    }
+
+    public function decisions()
+    {
+        return $this->hasMany(Decision::class, 'decisionMakerID', 'userID');
+    }
+
+    public function endorsements()
+    {
+        return $this->hasMany(Endorsement::class, 'endorserID', 'userID');
+    }
+
+    public function getFullNameAttribute()
+    {
+        return $this->firstName . ' ' . $this->lastName;
+    }
+}
