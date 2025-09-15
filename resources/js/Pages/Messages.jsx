@@ -11,6 +11,8 @@ const Messages = () => {
   const [sendingMessage, setSendingMessage] = useState(false);
   const [availableCM, setAvailableCM] = useState(null);
   const [cmLoading, setCmLoading] = useState(false);
+  const [showCompose, setShowCompose] = useState(false);
+  const [composeData, setComposeData] = useState({ recipient: '', subject: '', type: 'general', content: '' });
   
   const { user } = useAuth();
   const { 
@@ -98,6 +100,12 @@ const Messages = () => {
     console.log('User ID:', conversation.otherUser.userID);
     setSelectedConversation(conversation);
     await fetchConversation(conversation.otherUser.userID);
+  };
+
+
+  const handleComposeMessage = async () => {
+    // Placeholder: close modal for now as recipient lookup is not implemented here
+    setShowCompose(false);
   };
 
   const handleSendMessage = async () => {
@@ -543,7 +551,6 @@ const Messages = () => {
           </div>
         )}
       </div>
-    </Layout>
   );
 };
 
