@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
-import { Bell, Check, X, Filter, Wifi, WifiOff } from 'lucide-react';
+import { Bell, Check, X, Filter, Wifi, WifiOff, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Notification = () => {
   const [filter, setFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const notificationsPerPage = 8;
   const { notifications, loading, unreadCount, markAsRead: markAsReadContext, markAllAsRead: markAllAsReadContext, removeNotification: removeNotificationContext, refreshNotifications } = useNotifications();
   const navigate = useNavigate();
 
@@ -39,6 +41,17 @@ const Notification = () => {
     if (filter === 'read') return !notification.unread;
     return notification.type === filter;
   });
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredNotifications.length / notificationsPerPage);
+  const startIndex = (currentPage - 1) * notificationsPerPage;
+  const endIndex = startIndex + notificationsPerPage;
+  const currentNotifications = filteredNotifications.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [filter]);
 
   const markAsRead = async (id) => {
     await markAsReadContext(id);
@@ -120,7 +133,7 @@ const Notification = () => {
   // Use unreadCount from context instead of calculating locally
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto flex flex-col">
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -212,10 +225,29 @@ const Notification = () => {
           </div>
         </div>
 
-        {/* Notifications List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {filteredNotifications.length === 0 ? (
-            <div className="text-center py-12">
+        {/* Notifications Container - Absolutely Fixed in Place */}
+        <div 
+          className="bg-white rounded-lg shadow-sm border border-gray-200 notification-container-fixed"
+          style={{ 
+            position: 'relative',
+            height: '720px', 
+            minHeight: '720px', 
+            maxHeight: '720px',
+            width: '100%',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+            overflow: 'hidden'
+          }}
+        >
+          {loading ? (
+            <div style={{ height: '100%' }} className="flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading notifications...</p>
+              </div>
+            </div>
+          ) : filteredNotifications.length === 0 ? (
+            <div style={{ height: '100%' }} className="text-center py-12 flex flex-col items-center justify-center">
               <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications</h3>
               <p className="text-gray-500">
@@ -228,65 +260,70 @@ const Notification = () => {
               </p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
-              {filteredNotifications.map((notification) => (
+            <div style={{ height: '100%' }} className="divide-y divide-gray-100">
+              {currentNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  onClick={() => handleNotificationClick(notification)}
-                  className={`p-6 hover:bg-gray-50 transition-colors cursor-pointer ${
+                  className={`p-6 hover:bg-gray-50 transition-colors notification-item-fixed ${
                     notification.unread ? 'bg-blue-50' : ''
                   }`}
                 >
-                  <div className="flex items-start space-x-4">
+                  <div className="flex items-start space-x-4 h-full">
                     {getTypeIcon(notification.type)}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            {notification.unread && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                            )}
-                            <h4 className="text-sm font-semibold text-gray-900">
-                              {notification.title}
-                            </h4>
-                            {notification.unread && (
-                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                                Live
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600 mb-2">
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-gray-400">
-                            {notification.time}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 ml-4">
-                          {notification.unread && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                markAsRead(notification.id);
-                              }}
-                              className="p-1 text-gray-400 hover:text-green-600 transition-colors"
-                              title="Mark as read"
-                            >
-                              <Check size={16} />
-                            </button>
-                          )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteNotification(notification.id);
-                            }}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete notification"
-                          >
-                            <X size={16} />
-                          </button>
-                        </div>
+                    <div className="flex-1 min-w-0 flex flex-col h-full">
+                      <div className="flex items-center gap-2 mb-2" style={{ height: '24px', minHeight: '24px', maxHeight: '24px' }}>
+                        {notification.unread && (
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                        )}
+                        <h4 className="text-sm font-semibold text-gray-900 line-clamp-1 overflow-hidden" style={{ height: '20px', minHeight: '20px', maxHeight: '20px' }}>
+                          {notification.title}
+                        </h4>
+                        {notification.unread && (
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                            Live
+                          </span>
+                        )}
                       </div>
+                      <div className="flex-1 flex flex-col justify-center" style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}>
+                        <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 overflow-hidden" style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}>
+                          {notification.message}
+                        </p>
+                      </div>
+                      <div className="mt-auto" style={{ height: '20px', minHeight: '20px', maxHeight: '20px' }}>
+                        <p className="text-xs text-gray-400" style={{ height: '16px', minHeight: '16px', maxHeight: '16px' }}>
+                          {notification.time}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-center gap-3 ml-4 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (notification.unread) {
+                            markAsRead(notification.id);
+                          } else {
+                            // If already read, clicking check does nothing or could mark as unread
+                          }
+                        }}
+                        className={`p-2 rounded-full transition-colors ${
+                          notification.unread 
+                            ? 'text-gray-400 hover:text-green-600 hover:bg-green-50' 
+                            : 'text-green-600 bg-green-50'
+                        }`}
+                        title={notification.unread ? "Mark as read" : "Already read"}
+                      >
+                        <Check size={18} />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteNotification(notification.id);
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                        title="Delete notification"
+                      >
+                        <X size={18} />
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -294,6 +331,50 @@ const Notification = () => {
             </div>
           )}
         </div>
+
+        {/* Pagination Controls */}
+        {!loading && filteredNotifications.length > 0 && totalPages > 1 && (
+          <div className="mt-6 flex items-center justify-between">
+            <div className="text-sm text-gray-700">
+              Showing {startIndex + 1} to {Math.min(endIndex, filteredNotifications.length)} of {filteredNotifications.length} notifications
+            </div>
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </button>
+              
+              <div className="flex items-center space-x-1">
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                  <button
+                    key={page}
+                    onClick={() => setCurrentPage(page)}
+                    className={`px-3 py-2 text-sm font-medium rounded-md ${
+                      currentPage === page
+                        ? 'bg-red-600 text-white'
+                        : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    {page}
+                  </button>
+                ))}
+              </div>
+              
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="flex items-center px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </button>
+            </div>
+          </div>
+        )}
     </div>
   );
 };

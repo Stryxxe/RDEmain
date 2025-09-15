@@ -128,12 +128,12 @@ const Messages = () => {
       const result = await sendMessage(
         recipientID,
         `Re: ${selectedConversation.latestMessage.subject}`,
-        newMessage,
-        'reply'
-      );
-      
+      newMessage,
+      'reply'
+    );
+    
       console.log('Message sent successfully:', result);
-      setNewMessage('');
+    setNewMessage('');
       
       // Refresh the conversation to show the new message
       await fetchConversation(recipientID);
@@ -158,7 +158,7 @@ const Messages = () => {
 
 
   return (
-    <div className="max-w-6xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
