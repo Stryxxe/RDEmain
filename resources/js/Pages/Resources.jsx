@@ -1,5 +1,4 @@
 import React from 'react';
-import Layout from '../Components/Layout';
 import { FileText, Download, ExternalLink } from 'lucide-react';
 
 const Resources = () => {
@@ -62,8 +61,7 @@ const Resources = () => {
   };
 
   return (
-    <Layout>
-      <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Resources</h1>
           <p className="text-gray-600">Download forms, templates, and guidelines for research proposals</p>
@@ -125,8 +123,7 @@ const Resources = () => {
             </div>
           </div>
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 };
 

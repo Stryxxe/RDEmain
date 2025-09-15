@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../Components/Layout';
 import { useMessages } from '../contexts/MessageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageCircle, Send, Search, Wifi, WifiOff, User, Clock, AlertCircle } from 'lucide-react';
@@ -151,8 +150,7 @@ const Messages = () => {
 
 
   return (
-    <Layout>
-      <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -448,6 +446,102 @@ const Messages = () => {
           </div>
         </div>
 
+        {/* Compose Message Modal */}
+        {showCompose && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Compose Message</h3>
+                  <button
+                    onClick={() => setShowCompose(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    To
+                  </label>
+                  <input
+                    type="text"
+                    value={composeData.recipient}
+                    onChange={(e) => setComposeData({...composeData, recipient: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Enter recipient name or email"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={composeData.subject}
+                    onChange={(e) => setComposeData({...composeData, subject: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Enter message subject"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message Type
+                  </label>
+                  <select
+                    value={composeData.type}
+                    onChange={(e) => setComposeData({...composeData, type: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="general">General</option>
+                    <option value="review">Review</option>
+                    <option value="revision">Revision</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="status">Status</option>
+                    <option value="security">Security</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message
+                  </label>
+                  <textarea
+                    value={composeData.content}
+                    onChange={(e) => setComposeData({...composeData, content: e.target.value})}
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Type your message here..."
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCompose(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleComposeMessage}
+                  disabled={!composeData.recipient.trim() || !composeData.subject.trim() || !composeData.content.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send size={16} />
+                  Send Message
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

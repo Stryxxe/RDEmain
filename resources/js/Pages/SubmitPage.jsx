@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../Components/Layout';
 import FormField from '../Components/FormField';
 import CheckboxGroup from '../Components/CheckboxGroup';
 import FileUpload from '../Components/FileUpload';
@@ -197,49 +196,46 @@ const SubmitPage = () => {
 
   if (submitSuccess) {
     return (
-      <Layout>
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Submitted Successfully!</h1>
-            <p className="text-gray-600 mb-4">Your research proposal has been submitted for review.</p>
-            <p className="text-sm text-gray-500">Redirecting to projects page...</p>
+      <div className="max-w-4xl w-full">
+        <div className="text-center py-12">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
           </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Submitted Successfully!</h1>
+          <p className="text-gray-600 mb-4">Your research proposal has been submitted for review.</p>
+          <p className="text-sm text-gray-500">Redirecting to projects page...</p>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Proposal</h1>
-        </div>
+    <div className="max-w-4xl w-full">
+      <div className="text-center mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Proposal</h1>
+      </div>
 
-        {submitError && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <p>{submitError}</p>
-                </div>
+      {submitError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Error</h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{submitError}</p>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8">
+      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8">
           <div className="mb-8">
             <DragDropUpload 
               onFileSelect={handleFileSelect}
@@ -391,8 +387,7 @@ const SubmitPage = () => {
             </button>
           </div>
         </form>
-      </div>
-    </Layout>
+    </div>
   );
 };
 
