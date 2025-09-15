@@ -119,9 +119,11 @@ export const NotificationProvider = ({ children }) => {
     fetchUnreadCount();
   };
 
-  // Get notifications that should be shown as toasts (not dismissed)
+  // Get notifications that should be shown as toasts (unread and not dismissed)
   const getToastNotifications = () => {
-    return notifications.filter(notification => !dismissedToasts.has(notification.id));
+    return notifications.filter(notification => 
+      !notification.read && !dismissedToasts.has(notification.id)
+    );
   };
 
   const value = {
