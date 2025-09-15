@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import Layout from '../Components/Layout';
 import { User, Mail, Building, Shield, Save } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -62,22 +61,19 @@ const Account = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-center min-h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading account information...</p>
-            </div>
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-center min-h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading account information...</p>
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
           <p className="text-gray-600">Manage your account information and preferences</p>
@@ -217,8 +213,7 @@ const Account = () => {
             </div>
           </div>
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 };
 

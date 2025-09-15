@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import Layout from '../Components/Layout';
 import { ArrowLeft, Download, Eye, X } from 'lucide-react';
 import apiService from '../services/api';
 
@@ -103,23 +102,21 @@ const ProposalDetail = () => {
 
   if (loading) {
     return (
-      <Layout>
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-center min-h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading proposal details...</p>
-            </div>
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-center min-h-64">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading proposal details...</p>
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (error) {
     return (
-      <Layout>
-        <div className="max-w-4xl mx-auto">
+      <div className="max-w-4xl mx-auto">
+        <div className="flex items-center justify-center min-h-64">
           <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
             <div className="text-red-600 mb-2">
               <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -136,27 +133,25 @@ const ProposalDetail = () => {
             </button>
           </div>
         </div>
-      </Layout>
+      </div>
     );
   }
 
   if (!proposal) {
     return (
-      <Layout>
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center py-12">
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
-            <p className="text-gray-600 mb-4">The requested proposal could not be found.</p>
-            <p className="text-sm text-gray-500 mb-4">Proposal ID: {id}</p>
-            <button
-              onClick={() => navigate('/proponent/projects')}
-              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-            >
-              Back to Projects
-            </button>
-          </div>
+      <div className="max-w-4xl mx-auto">
+        <div className="text-center py-12">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
+          <p className="text-gray-600 mb-4">The requested proposal could not be found.</p>
+          <p className="text-sm text-gray-500 mb-4">Proposal ID: {id}</p>
+          <button
+            onClick={() => navigate('/proponent/projects')}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Back to Projects
+          </button>
         </div>
-      </Layout>
+      </div>
     );
   }
 
@@ -166,8 +161,7 @@ const ProposalDetail = () => {
   console.log('Matrix data:', matrix);
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <button
@@ -315,10 +309,9 @@ const ProposalDetail = () => {
             </div>
           )}
         </div>
-      </div>
 
-      {/* File Viewer Modal */}
-      {fileViewerOpen && viewingFile && (
+        {/* File Viewer Modal */}
+        {fileViewerOpen && viewingFile && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full mx-4">
             <div className="flex items-center justify-between p-4 border-b">
@@ -404,7 +397,7 @@ const ProposalDetail = () => {
           </div>
         </div>
       )}
-    </Layout>
+    </div>
   );
 };
 

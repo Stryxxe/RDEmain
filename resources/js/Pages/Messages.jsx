@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../Components/Layout';
 import { useMessages } from '../contexts/MessageContext';
 import { MessageCircle, Send, Search, Filter, Wifi, WifiOff } from 'lucide-react';
 
@@ -141,8 +140,7 @@ const Messages = () => {
   };
 
   return (
-    <Layout>
-      <div className="max-w-6xl mx-auto">
+    <div className="max-w-6xl mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -474,8 +472,7 @@ const Messages = () => {
             </div>
           </div>
         )}
-      </div>
-    </Layout>
+    </div>
   );
 };
 

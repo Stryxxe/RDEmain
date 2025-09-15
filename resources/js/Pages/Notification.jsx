@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Layout from '../Components/Layout';
 import { useNotifications } from '../contexts/NotificationContext';
 import { Bell, Check, X, Filter, Wifi, WifiOff } from 'lucide-react';
 
@@ -121,8 +120,7 @@ const Notification = () => {
   // Use unreadCount from context instead of calculating locally
 
   return (
-    <Layout>
-      <div className="max-w-4xl mx-auto">
+    <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
@@ -296,8 +294,7 @@ const Notification = () => {
             </div>
           )}
         </div>
-      </div>
-    </Layout>
+    </div>
   );
 };
 

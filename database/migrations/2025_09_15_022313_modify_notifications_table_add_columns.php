@@ -12,17 +12,8 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('notifications', function (Blueprint $table) {
-            $table->unsignedBigInteger('userID')->after('id');
-            $table->string('type')->after('userID');
-            $table->string('title')->after('type');
-            $table->text('message')->after('title');
-            $table->json('data')->nullable()->after('message');
-            $table->boolean('read')->default(false)->after('data');
-            $table->timestamp('read_at')->nullable()->after('read');
-            
-            $table->foreign('userID')->references('userID')->on('users')->onDelete('cascade');
-            $table->index(['userID', 'read']);
-            $table->index('created_at');
+            // All columns already exist in the original table, so this migration is not needed
+            // The original create_notifications_table migration already includes all these columns
         });
     }
 
