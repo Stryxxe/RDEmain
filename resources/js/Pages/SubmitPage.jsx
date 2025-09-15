@@ -160,7 +160,9 @@ const SubmitPage = () => {
     setSubmitSuccess(false);
 
     try {
+      console.log('Submitting proposal with data:', formData);
       const response = await apiService.createProposal(formData);
+      console.log('Proposal submission response:', response);
       
       if (response.success) {
         setSubmitSuccess(true);
@@ -189,6 +191,11 @@ const SubmitPage = () => {
       }
     } catch (error) {
       console.error('Submit error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        response: error.response
+      });
       setSubmitError(error.message || 'An error occurred while submitting the proposal');
     } finally {
       setIsSubmitting(false);
@@ -245,6 +252,7 @@ const SubmitPage = () => {
               onFileSelect={handleFileSelect}
               acceptedTypes="PDF, DOC, DOCX"
               maxSize="10MB"
+              selectedFile={formData.reportFile}
             />
           </div>
 
@@ -350,18 +358,21 @@ const SubmitPage = () => {
                 label="Upload SETI Scorecard"
                 onChange={(file) => handleFileChange('setiScorecard', file)}
                 accept=".pdf,.doc,.docx"
+                selectedFile={formData.setiScorecard}
               />
               
               <FileUpload
                 label="Upload GAD Certificate"
                 onChange={(file) => handleFileChange('gadCertificate', file)}
                 accept=".pdf,.doc,.docx"
+                selectedFile={formData.gadCertificate}
               />
               
               <FileUpload
                 label="Upload Matrix of Compliance (If Applicable)"
                 onChange={(file) => handleFileChange('matrixOfCompliance', file)}
                 accept=".pdf,.doc,.docx"
+                selectedFile={formData.matrixOfCompliance}
               />
             </div>
           </div>

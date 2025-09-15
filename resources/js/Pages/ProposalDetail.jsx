@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Layout from '../Components/Layout';
-import { ArrowLeft, Download, Eye } from 'lucide-react';
+import { ArrowLeft, Download, Eye, X } from 'lucide-react';
 import apiService from '../services/api';
 
 const ProposalDetail = () => {
@@ -10,6 +10,8 @@ const ProposalDetail = () => {
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [viewingFile, setViewingFile] = useState(null);
+  const [fileViewerOpen, setFileViewerOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -21,10 +23,13 @@ const ProposalDetail = () => {
     try {
       setLoading(true);
       setError('');
+      console.log('Loading proposal with ID:', id);
       const response = await apiService.getProposal(id);
+      console.log('API Response:', response);
       
       if (response.success) {
         setProposal(response.data);
+        console.log('Proposal loaded successfully:', response.data);
       } else {
         setError(response.message || 'Failed to load proposal');
       }
@@ -62,9 +67,38 @@ const ProposalDetail = () => {
     const link = document.createElement('a');
     link.href = `/storage/${file.filePath}`;
     link.download = file.fileName;
+    link.target = '_blank';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const handleViewFile = (file) => {
+    const fileUrl = `/storage/${file.filePath}`;
+    console.log('Opening file:', fileUrl);
+    console.log('File details:', file);
+    
+    // Test if the file exists first
+    fetch(fileUrl, { method: 'HEAD' })
+      .then(response => {
+        if (response.ok) {
+          console.log('File exists, opening...');
+          setViewingFile({ ...file, url: fileUrl });
+          setFileViewerOpen(true);
+        } else {
+          console.error('File not found:', response.status, response.statusText);
+          alert(`File not found: ${file.fileName}`);
+        }
+      })
+      .catch(error => {
+        console.error('Error checking file:', error);
+        alert(`Error accessing file: ${file.fileName}`);
+      });
+  };
+
+  const closeFileViewer = () => {
+    setFileViewerOpen(false);
+    setViewingFile(null);
   };
 
   if (loading) {
@@ -95,7 +129,7 @@ const ProposalDetail = () => {
             <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Proposal</h3>
             <p className="text-red-600 mb-4">{error}</p>
             <button
-              onClick={() => navigate('projects')}
+              onClick={() => navigate('/proponent/projects')}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Back to Projects
@@ -113,8 +147,9 @@ const ProposalDetail = () => {
           <div className="text-center py-12">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Not Found</h1>
             <p className="text-gray-600 mb-4">The requested proposal could not be found.</p>
+            <p className="text-sm text-gray-500 mb-4">Proposal ID: {id}</p>
             <button
-              onClick={() => navigate('projects')}
+              onClick={() => navigate('/proponent/projects')}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Back to Projects
@@ -126,6 +161,9 @@ const ProposalDetail = () => {
   }
 
   const matrix = proposal.matrixOfCompliance || {};
+  
+  console.log('Proposal data:', proposal);
+  console.log('Matrix data:', matrix);
 
   return (
     <Layout>
@@ -133,7 +171,7 @@ const ProposalDetail = () => {
         {/* Header */}
         <div className="mb-6">
           <button
-            onClick={() => navigate('projects')}
+            onClick={() => navigate('/proponent/projects')}
             className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-4"
           >
             <ArrowLeft size={20} />
@@ -252,23 +290,23 @@ const ProposalDetail = () => {
                       </div>
                       <div>
                         <p className="text-sm font-medium text-gray-900">{file.fileName}</p>
-                        <p className="text-xs text-gray-500">{file.formattedSize}</p>
+                        <p className="text-xs text-gray-500">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleViewFile(file)}
+                        className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                        title="View file"
+                      >
+                        <Eye size={16} />
+                      </button>
                       <button
                         onClick={() => handleDownloadFile(file)}
                         className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
                         title="Download file"
                       >
                         <Download size={16} />
-                      </button>
-                      <button
-                        onClick={() => window.open(`/storage/${file.filePath}`, '_blank')}
-                        className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
-                        title="View file"
-                      >
-                        <Eye size={16} />
                       </button>
                     </div>
                   </div>
@@ -278,6 +316,94 @@ const ProposalDetail = () => {
           )}
         </div>
       </div>
+
+      {/* File Viewer Modal */}
+      {fileViewerOpen && viewingFile && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full mx-4">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-semibold text-gray-900">
+                {viewingFile.fileName}
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleDownloadFile(viewingFile)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Download file"
+                >
+                  <Download size={20} />
+                </button>
+                <button
+                  onClick={closeFileViewer}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                  title="Close"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+            <div className="p-4 h-[70vh] overflow-auto">
+              {viewingFile.fileName.toLowerCase().endsWith('.pdf') ? (
+                <div className="h-full">
+                  <iframe
+                    src={viewingFile.url}
+                    className="w-full h-full border-0"
+                    title={viewingFile.fileName}
+                    onError={() => {
+                      console.log('Iframe failed to load, trying alternative method');
+                    }}
+                  />
+                  <div className="mt-2 text-center">
+                    <p className="text-sm text-gray-500 mb-2">
+                      If the PDF doesn't load, try downloading it instead.
+                    </p>
+                    <button
+                      onClick={() => window.open(viewingFile.url, '_blank')}
+                      className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 transition-colors"
+                    >
+                      Open in New Tab
+                    </button>
+                  </div>
+                </div>
+              ) : viewingFile.fileName.toLowerCase().match(/\.(jpg|jpeg|png|gif|bmp|webp)$/i) ? (
+                <img
+                  src={viewingFile.url}
+                  alt={viewingFile.fileName}
+                  className="max-w-full max-h-full mx-auto"
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <div className="text-gray-400 mb-4">
+                    <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                  </div>
+                  <h4 className="text-lg font-medium text-gray-900 mb-2">
+                    {viewingFile.fileName}
+                  </h4>
+                  <p className="text-gray-600 mb-4">
+                    This file type cannot be previewed in the browser.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => window.open(viewingFile.url, '_blank')}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Open in New Tab
+                    </button>
+                    <button
+                      onClick={() => handleDownloadFile(viewingFile)}
+                      className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                      Download File
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };

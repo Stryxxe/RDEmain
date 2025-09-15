@@ -18,6 +18,13 @@ class Proposal extends Model
 
     protected $fillable = [
         'researchTitle',
+        'description',
+        'objectives',
+        'researchCenter',
+        'researchAgenda',
+        'dostSPs',
+        'sustainableDevelopmentGoals',
+        'proposedBudget',
         'revisionFile',
         'matrixOfCompliance',
         'uploadedAt',
@@ -26,7 +33,11 @@ class Proposal extends Model
     ];
 
     protected $casts = [
+        'researchAgenda' => 'array',
+        'dostSPs' => 'array',
+        'sustainableDevelopmentGoals' => 'array',
         'matrixOfCompliance' => 'array',
+        'proposedBudget' => 'decimal:2',
         'uploadedAt' => 'datetime'
     ];
 

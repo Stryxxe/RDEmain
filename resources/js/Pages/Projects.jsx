@@ -23,6 +23,8 @@ const Projects = () => {
       const response = await apiService.getProposals();
       
       if (response.success) {
+        console.log('Projects data:', response.data);
+        console.log('First project user data:', response.data[0]?.user);
         setProjects(response.data);
       } else {
         setError(response.message || 'Failed to load projects');
@@ -118,7 +120,7 @@ const Projects = () => {
 
   // Handle view details click
   const handleViewDetails = (projectId) => {
-    navigate(`projects/${projectId}`);
+    navigate(`/proponent/projects/${projectId}`);
   };
 
   if (loading) {

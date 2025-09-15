@@ -16,8 +16,8 @@ return new class extends Migration
                 $table->string('fileName');
                 $table->string('filePath');
                 $table->string('fileType', 25);
-                $table->date('uploadDate');
-                $table->time('uploadTime');
+                $table->bigInteger('fileSize')->nullable();
+                $table->timestamp('uploadedAt')->useCurrent();
                 $table->foreignId('proposalID')->constrained('proposals', 'proposalID');
                 $table->timestamps();
             });

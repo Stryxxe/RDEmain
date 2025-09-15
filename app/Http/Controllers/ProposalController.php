@@ -20,7 +20,7 @@ class ProposalController extends Controller
         $user = Auth::user();
         
         $proposals = Proposal::where('userID', $user->userID)
-            ->with(['status', 'files'])
+            ->with(['status', 'files', 'user'])
             ->orderBy('created_at', 'desc')
             ->get();
 
@@ -39,7 +39,7 @@ class ProposalController extends Controller
         
         $proposal = Proposal::where('proposalID', $id)
             ->where('userID', $user->userID)
-            ->with(['status', 'files'])
+            ->with(['status', 'files', 'user'])
             ->first();
 
         if (!$proposal) {
@@ -65,9 +65,9 @@ class ProposalController extends Controller
             'description' => 'required|string',
             'objectives' => 'required|string',
             'researchCenter' => 'required|string',
-            'researchAgenda' => 'required|array',
-            'dostSPs' => 'required|array',
-            'sustainableDevelopmentGoals' => 'required|array',
+            'researchAgenda' => 'required|string', // Will be JSON string from frontend
+            'dostSPs' => 'required|string', // Will be JSON string from frontend
+            'sustainableDevelopmentGoals' => 'required|string', // Will be JSON string from frontend
             'proposedBudget' => 'required|numeric|min:0',
             'reportFile' => 'required|file|mimes:pdf,doc,docx|max:10240', // 10MB max
             'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
@@ -86,20 +86,32 @@ class ProposalController extends Controller
         try {
             $user = Auth::user();
             
+            // Parse JSON strings from frontend
+            $researchAgenda = json_decode($request->researchAgenda, true);
+            $dostSPs = json_decode($request->dostSPs, true);
+            $sustainableDevelopmentGoals = json_decode($request->sustainableDevelopmentGoals, true);
+            
             // Create the proposal
             $proposal = Proposal::create([
                 'researchTitle' => $request->researchTitle,
+                'description' => $request->description,
+                'objectives' => $request->objectives,
+                'researchCenter' => $request->researchCenter,
+                'researchAgenda' => $researchAgenda,
+                'dostSPs' => $dostSPs,
+                'sustainableDevelopmentGoals' => $sustainableDevelopmentGoals,
+                'proposedBudget' => $request->proposedBudget,
                 'userID' => $user->userID,
                 'statusID' => 1, // Assuming 1 is "Under Review" status
-                'matrixOfCompliance' => json_encode([
-                    'researchAgenda' => $request->researchAgenda,
-                    'dostSPs' => $request->dostSPs,
-                    'sustainableDevelopmentGoals' => $request->sustainableDevelopmentGoals,
+                'matrixOfCompliance' => [
+                    'researchAgenda' => $researchAgenda,
+                    'dostSPs' => $dostSPs,
+                    'sustainableDevelopmentGoals' => $sustainableDevelopmentGoals,
                     'proposedBudget' => $request->proposedBudget,
                     'researchCenter' => $request->researchCenter,
                     'description' => $request->description,
                     'objectives' => $request->objectives
-                ])
+                ]
             ]);
 
             // Handle file uploads
@@ -203,9 +215,7 @@ class ProposalController extends Controller
             ]);
 
             if ($request->hasAny(['researchAgenda', 'dostSPs', 'sustainableDevelopmentGoals', 'proposedBudget'])) {
-                $matrixData = is_array($proposal->matrixOfCompliance) 
-                    ? $proposal->matrixOfCompliance 
-                    : (json_decode($proposal->matrixOfCompliance, true) ?? []);
+                $matrixData = $proposal->matrixOfCompliance ?: [];
                 
                 if ($request->has('researchAgenda')) $matrixData['researchAgenda'] = $request->researchAgenda;
                 if ($request->has('dostSPs')) $matrixData['dostSPs'] = $request->dostSPs;

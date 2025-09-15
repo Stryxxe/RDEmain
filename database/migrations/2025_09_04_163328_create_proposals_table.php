@@ -14,6 +14,13 @@ return new class extends Migration
             Schema::create('proposals', function (Blueprint $table) {
                 $table->id('proposalID');
                 $table->string('researchTitle');
+                $table->text('description')->nullable();
+                $table->text('objectives')->nullable();
+                $table->string('researchCenter')->nullable();
+                $table->json('researchAgenda')->nullable();
+                $table->json('dostSPs')->nullable();
+                $table->json('sustainableDevelopmentGoals')->nullable();
+                $table->decimal('proposedBudget', 15, 2)->nullable();
                 $table->string('revisionFile')->nullable();
                 $table->json('matrixOfCompliance')->nullable();
                 $table->timestamp('uploadedAt')->useCurrent();

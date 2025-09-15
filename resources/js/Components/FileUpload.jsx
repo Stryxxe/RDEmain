@@ -1,17 +1,41 @@
-import React from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
+import FileIcon from './FileIcon';
 
 const FileUpload = ({ 
   label, 
   onChange, 
   required = false, 
   hint = '', 
-  accept = '.pdf,.doc,.docx' 
+  accept = '.pdf,.doc,.docx',
+  selectedFile = null
 }) => {
+  const [file, setFile] = useState(selectedFile);
+  const fileInputRef = useRef(null);
+
+  // Sync with parent state
+  useEffect(() => {
+    setFile(selectedFile);
+  }, [selectedFile]);
+
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      onChange(file);
+    const selectedFile = e.target.files[0];
+    if (selectedFile) {
+      setFile(selectedFile);
+      onChange(selectedFile);
     }
+  };
+
+  const handleRemoveFile = () => {
+    setFile(null);
+    onChange(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleButtonClick = () => {
+    fileInputRef.current?.click();
   };
 
   return (
@@ -21,24 +45,57 @@ const FileUpload = ({
         {required && <span className="text-red-500 ml-1">*</span>}
       </label>
       
-      <div className="flex items-center gap-4">
-        <input
-          type="file"
-          onChange={handleFileChange}
-          accept={accept}
-          className="hidden"
-          id={`file-${label.toLowerCase().replace(/\s+/g, '-')}`}
-        />
-        <label
-          htmlFor={`file-${label.toLowerCase().replace(/\s+/g, '-')}`}
-          className="bg-red-600 text-white py-2.5 px-5 rounded-md cursor-pointer text-sm font-medium transition-colors hover:bg-red-700"
-        >
-          Choose File
-        </label>
-        <span className="text-gray-600 text-sm">
-          {accept ? `Accepted formats: ${accept}` : 'All files accepted'}
-        </span>
-      </div>
+      {file ? (
+        <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <FileIcon fileName={file.name} size="w-8 h-8" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">{file.name}</p>
+                <p className="text-xs text-gray-500">
+                  {(file.size / 1024 / 1024).toFixed(2)} MB
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleButtonClick}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                Change
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveFile}
+                className="text-red-600 hover:text-red-800 p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileChange}
+            accept={accept}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={handleButtonClick}
+            className="bg-red-600 text-white py-2.5 px-5 rounded-md cursor-pointer text-sm font-medium transition-colors hover:bg-red-700"
+          >
+            Choose File
+          </button>
+          <span className="text-gray-600 text-sm">
+            {accept ? `Accepted formats: ${accept}` : 'All files accepted'}
+          </span>
+        </div>
+      )}
       
       {hint && (
         <p className="text-xs text-gray-500 mt-2 leading-relaxed">
