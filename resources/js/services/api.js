@@ -30,7 +30,6 @@ class ApiService {
       this.csrfToken = data.csrf_token;
       
       this.csrfInitialized = true;
-      console.log('CSRF Initialized - XSRF-TOKEN cookie set, CSRF token:', this.csrfToken);
     } catch (error) {
       console.error('Error initializing CSRF:', error);
     }
@@ -186,10 +185,6 @@ class ApiService {
       const xsrfToken = this.getCsrfTokenFromCookie();
       const token = localStorage.getItem('token');
       
-      console.log('CSRF Token:', csrfToken);
-      console.log('XSRF Token:', xsrfToken);
-      console.log('Auth Token:', token);
-      console.log('Cookies:', document.cookie);
       
       const response = await fetch(`${this.baseURL}/proposals`, {
         method: 'POST',
@@ -226,20 +221,14 @@ class ApiService {
   // Get single proposal
   async getProposal(id) {
     try {
-      console.log('Fetching proposal with ID:', id);
-      console.log('API URL:', `${this.baseURL}/proposals/${id}`);
-      console.log('Headers:', this.getHeaders());
       
       const response = await fetch(`${this.baseURL}/proposals/${id}`, {
         method: 'GET',
         headers: this.getHeaders()
       });
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
       
       const data = await this.handleResponse(response);
-      console.log('Parsed response data:', data);
       return data;
     } catch (error) {
       console.error('Error fetching proposal:', error);

@@ -21,8 +21,15 @@ class DepartmentSeeder extends Seeder
             'Student Services'
         ];
 
-        foreach ($departments as $department) {
-            Department::create(['name' => $department]);
+        // Update existing departments or create new ones
+        foreach ($departments as $index => $departmentName) {
+            $departmentId = $index + 1;
+            Department::updateOrCreate(
+                ['departmentID' => $departmentId],
+                ['name' => $departmentName]
+            );
         }
+        
+        $this->command->info('Updated ' . count($departments) . ' departments.');
     }
 }

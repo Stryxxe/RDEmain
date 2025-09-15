@@ -19,24 +19,7 @@ Route::middleware('web')->group(function () {
     });
 });
 
-Route::get('/debug/csrf', function (Request $request) {
-    return response()->json([
-        'csrf_token' => csrf_token(),
-        'headers' => $request->headers->all(),
-        'cookies' => $request->cookies->all(),
-        'session_available' => $request->hasSession(),
-        'session_token' => $request->hasSession() ? $request->session()->token() : null
-    ]);
-});
 
-// Test CSRF endpoint
-Route::post('/test-csrf', function (Request $request) {
-    return response()->json([
-        'message' => 'CSRF test successful',
-        'csrf_token' => csrf_token(),
-        'request_data' => $request->all()
-    ]);
-})->middleware('web');
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth:sanctum');
 
@@ -82,32 +65,13 @@ Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/messages', [MessageController::class, 'index']);
     Route::get('/messages/sent', [MessageController::class, 'sent']);
     Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
+    Route::get('/messages/conversations', [MessageController::class, 'conversations']);
+    Route::get('/messages/conversation/{otherUserId}', [MessageController::class, 'conversation']);
+    Route::get('/messages/available-cm', [MessageController::class, 'getAvailableCM']);
     Route::post('/messages', [MessageController::class, 'store']);
     Route::get('/messages/{id}', [MessageController::class, 'show']);
     Route::put('/messages/{id}/read', [MessageController::class, 'markAsRead']);
     Route::put('/messages/mark-all-read', [MessageController::class, 'markAllAsRead']);
     Route::delete('/messages/{id}', [MessageController::class, 'destroy']);
-});
-
-// Debug route to check proposal data (no auth required for testing)
-Route::get('/debug/proposals', function () {
-    $proposals = App\Models\Proposal::with('user')->get();
-    $users = App\Models\User::all(['userID', 'firstName', 'lastName']);
-    
-    return response()->json([
-        'all_users' => $users,
-        'all_proposals' => $proposals->map(function($p) {
-            return [
-                'proposalID' => $p->proposalID,
-                'userID' => $p->userID,
-                'researchTitle' => $p->researchTitle,
-                'user' => $p->user ? [
-                    'userID' => $p->user->userID,
-                    'firstName' => $p->user->firstName,
-                    'lastName' => $p->user->lastName,
-                    'fullName' => $p->user->fullName
-                ] : null
-            ];
-        })
-    ]);
+    Route::delete('/messages/clear-all', [MessageController::class, 'clearAll']);
 });

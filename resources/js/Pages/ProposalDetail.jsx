@@ -23,13 +23,10 @@ const ProposalDetail = () => {
     try {
       setLoading(true);
       setError('');
-      console.log('Loading proposal with ID:', id);
       const response = await apiService.getProposal(id);
-      console.log('API Response:', response);
       
       if (response.success) {
         setProposal(response.data);
-        console.log('Proposal loaded successfully:', response.data);
       } else {
         setError(response.message || 'Failed to load proposal');
       }
@@ -75,24 +72,17 @@ const ProposalDetail = () => {
 
   const handleViewFile = (file) => {
     const fileUrl = `/storage/${file.filePath}`;
-    console.log('Opening file:', fileUrl);
-    console.log('File details:', file);
     
     // Test if the file exists first
     fetch(fileUrl, { method: 'HEAD' })
       .then(response => {
         if (response.ok) {
-          console.log('File exists, opening...');
           setViewingFile({ ...file, url: fileUrl });
           setFileViewerOpen(true);
         } else {
-          console.error('File not found:', response.status, response.statusText);
-          alert(`File not found: ${file.fileName}`);
         }
       })
       .catch(error => {
-        console.error('Error checking file:', error);
-        alert(`Error accessing file: ${file.fileName}`);
       });
   };
 
@@ -162,8 +152,6 @@ const ProposalDetail = () => {
 
   const matrix = proposal.matrixOfCompliance || {};
   
-  console.log('Proposal data:', proposal);
-  console.log('Matrix data:', matrix);
 
   return (
     <Layout>
@@ -210,8 +198,15 @@ const ProposalDetail = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Budget</label>
-                  <p className="text-gray-900 font-semibold">{formatCurrency(matrix.proposedBudget)}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Funding Status</label>
+                  <p className="text-gray-900 font-semibold">
+                    {proposal.statusID === 2 ? formatCurrency(matrix.proposedBudget) : 'Pending RDD Approval'}
+                  </p>
+                  {proposal.statusID !== 2 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Proposed Budget: {formatCurrency(matrix.proposedBudget)}
+                    </p>
+                  )}
                 </div>
                 
                 <div>
@@ -349,9 +344,7 @@ const ProposalDetail = () => {
                     src={viewingFile.url}
                     className="w-full h-full border-0"
                     title={viewingFile.fileName}
-                    onError={() => {
-                      console.log('Iframe failed to load, trying alternative method');
-                    }}
+                    onError={() => {}}
                   />
                   <div className="mt-2 text-center">
                     <p className="text-sm text-gray-500 mb-2">

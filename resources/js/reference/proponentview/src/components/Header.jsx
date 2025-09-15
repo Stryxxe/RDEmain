@@ -102,7 +102,6 @@ const Header = () => {
   };
 
   const handleNavigation = (path) => {
-    console.log(`Navigating to: ${path}`);
     navigate(path);
   };
 

@@ -29,7 +29,6 @@ const ProposalDetail = () => {
         setError(response.message || 'Failed to load proposal');
       }
     } catch (error) {
-      console.error('Failed to load proposal:', error);
       setError('Failed to load proposal. Please try again.');
     } finally {
       setLoading(false);
@@ -172,8 +171,15 @@ const ProposalDetail = () => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Proposed Budget</label>
-                  <p className="text-gray-900 font-semibold">{formatCurrency(matrix.proposedBudget)}</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Funding Status</label>
+                  <p className="text-gray-900 font-semibold">
+                    {proposal.statusID === 2 ? formatCurrency(matrix.proposedBudget) : 'Pending RDD Approval'}
+                  </p>
+                  {proposal.statusID !== 2 && (
+                    <p className="text-sm text-gray-500 mt-1">
+                      Proposed Budget: {formatCurrency(matrix.proposedBudget)}
+                    </p>
+                  )}
                 </div>
                 
                 <div>

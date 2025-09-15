@@ -160,9 +160,7 @@ const SubmitPage = () => {
     setSubmitSuccess(false);
 
     try {
-      console.log('Submitting proposal with data:', formData);
       const response = await apiService.createProposal(formData);
-      console.log('Proposal submission response:', response);
       
       if (response.success) {
         setSubmitSuccess(true);
@@ -191,11 +189,6 @@ const SubmitPage = () => {
       }
     } catch (error) {
       console.error('Submit error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        response: error.response
-      });
       setSubmitError(error.message || 'An error occurred while submitting the proposal');
     } finally {
       setIsSubmitting(false);

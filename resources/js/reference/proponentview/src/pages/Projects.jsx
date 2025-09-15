@@ -28,7 +28,6 @@ const Projects = () => {
         setError(response.message || 'Failed to load projects');
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
       setError('Failed to load projects. Please try again.');
     } finally {
       setLoading(false);
@@ -268,10 +267,13 @@ const Projects = () => {
                       <td className="px-6 py-4">
                         <div>
                           <p className="text-sm font-semibold text-gray-900">
-                            {formatCurrency(budget)}
+                            {project.statusID === 2 ? formatCurrency(budget) : 'Pending'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {budget > 1000000 ? 'High Priority' : budget > 500000 ? 'Medium Priority' : 'Low Priority'}
+                            {project.statusID === 2 
+                              ? (budget > 1000000 ? 'High Priority' : budget > 500000 ? 'Medium Priority' : 'Low Priority')
+                              : 'Awaiting RDD Approval'
+                            }
                           </p>
                         </div>
                       </td>

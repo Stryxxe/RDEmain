@@ -16,7 +16,7 @@ import RDDView from './Pages/RoleViews/RDDView';
 import CMView from './Pages/RoleViews/CMView';
 import ProponentView from './Pages/RoleViews/ProponentView';
 import OPView from './Pages/RoleViews/OPView';
-import OSUURUView from './Pages/RoleViews/OSUURUView';
+import OSUORUView from './Pages/RoleViews/OSUORUView';
 import ReviewerView from './Pages/RoleViews/ReviewerView';
 
 // Protected Route component
@@ -51,7 +51,7 @@ const RoleBasedRedirect = () => {
       return <Navigate to="/proponent" replace />;
     case 'OP':
       return <Navigate to="/op" replace />;
-    case 'OSUURU':
+    case 'OSUORU':
       return <Navigate to="/osuur" replace />;
     case 'Reviewer':
       return <Navigate to="/reviewer" replace />;
@@ -114,7 +114,7 @@ const AppContent = () => {
             path="/osuur" 
             element={
               <ProtectedRoute>
-                <OSUURUView />
+                <OSUORUView />
               </ProtectedRoute>
             } 
           />

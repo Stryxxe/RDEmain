@@ -15,7 +15,7 @@ class RoleSeeder extends Seeder
             'CM',
             'Proponent',
             'OP',
-            'OSUURU',
+            'OSUORU',
             'Reviewer'
         ];
 

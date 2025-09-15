@@ -1,11 +1,11 @@
 import React from 'react';
 import RoleBasedLayout from '../../Components/Layouts/RoleBasedLayout';
 
-const OSUURUView = () => {
+const OSUORUView = () => {
   return (
     <RoleBasedLayout roleName="Office of Student Affairs and University Relations Unit">
       <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">OSUURU Dashboard</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">OSUORU Dashboard</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <div className="bg-blue-50 p-6 rounded-lg">
@@ -35,4 +35,4 @@ const OSUURUView = () => {
   );
 };
 
-export default OSUURUView;
+export default OSUORUView;

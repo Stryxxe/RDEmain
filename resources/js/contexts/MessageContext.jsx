@@ -14,6 +14,8 @@ export const useMessages = () => {
 export const MessageProvider = ({ children }) => {
   const [messages, setMessages] = useState([]);
   const [sentMessages, setSentMessages] = useState([]);
+  const [conversations, setConversations] = useState([]);
+  const [currentConversation, setCurrentConversation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -53,7 +55,6 @@ export const MessageProvider = ({ children }) => {
       const response = await axios.get('/api/messages/unread-count', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Messages unread count API response:', response.data);
       setUnreadCount(response.data.count || 0);
     } catch (error) {
       console.error('Failed to fetch unread count:', error);
@@ -61,11 +62,40 @@ export const MessageProvider = ({ children }) => {
     }
   };
 
+  // Fetch conversations from API
+  const fetchConversations = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/messages/conversations', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setConversations(response.data.data || []);
+    } catch (error) {
+      console.error('Failed to fetch conversations:', error);
+      console.error('Error details:', error.response?.data);
+    }
+  };
+
+  // Fetch specific conversation
+  const fetchConversation = async (otherUserId) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`/api/messages/conversation/${otherUserId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setCurrentConversation(response.data.data || []);
+      return response.data.data || [];
+    } catch (error) {
+      console.error('Failed to fetch conversation:', error);
+      return [];
+    }
+  };
+
   // Load messages on mount
   useEffect(() => {
-    console.log('MessageContext: Initializing...');
     fetchMessages();
     fetchSentMessages();
+    fetchConversations();
     fetchUnreadCount();
   }, []);
 
@@ -120,9 +150,30 @@ export const MessageProvider = ({ children }) => {
     }
   };
 
+  const deleteSentMessage = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`/api/messages/${id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSentMessages(prev => prev.filter(message => message.id !== id));
+    } catch (error) {
+      console.error('Failed to delete sent message:', error);
+    }
+  };
+
   const sendMessage = async (recipientId, subject, content, type = 'general') => {
     try {
       const token = localStorage.getItem('token');
+      console.log('Token exists:', !!token);
+      console.log('Token length:', token ? token.length : 0);
+      console.log('Sending message with data:', {
+        recipientID: recipientId,
+        subject,
+        content,
+        type
+      });
+      
       const response = await axios.post('/api/messages', {
         recipientID: recipientId,
         subject,
@@ -132,32 +183,89 @@ export const MessageProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Refresh sent messages
+      console.log('Message sent successfully:', response.data);
+      
+      // Refresh sent messages and conversations
       fetchSentMessages();
+      fetchConversations();
+      
+      // If we're in a conversation, refresh it
+      if (currentConversation && currentConversation.length > 0) {
+        const otherUserId = currentConversation[0].senderID === response.data.senderID 
+          ? currentConversation[0].recipientID 
+          : currentConversation[0].senderID;
+        await fetchConversation(otherUserId);
+      }
       
       return response.data;
     } catch (error) {
       console.error('Failed to send message:', error);
+      console.error('Error response:', error.response?.data);
+      console.error('Error status:', error.response?.status);
       throw error;
+    }
+  };
+
+  // Fetch available CM for proponents
+  const fetchAvailableCM = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get('/api/messages/available-cm', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch available CM:', error);
+      return null;
     }
   };
 
   const refreshMessages = () => {
     fetchMessages();
     fetchSentMessages();
+    fetchConversations();
     fetchUnreadCount();
+  };
+
+  const clearAllMessages = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete('/api/messages/clear-all', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Clear local state
+      setMessages([]);
+      setSentMessages([]);
+      setConversations([]);
+      setCurrentConversation(null);
+      setUnreadCount(0);
+      
+      return true;
+    } catch (error) {
+      console.error('Failed to clear all messages:', error);
+      return false;
+    }
   };
 
   const value = {
     messages,
     sentMessages,
+    conversations,
+    currentConversation,
     loading,
     unreadCount,
     markAsRead,
     markAllAsRead,
     deleteMessage,
+    deleteSentMessage,
     sendMessage,
     refreshMessages,
+    fetchConversations,
+    fetchConversation,
+    setCurrentConversation,
+    fetchAvailableCM,
+    clearAllMessages,
   };
 
   return (

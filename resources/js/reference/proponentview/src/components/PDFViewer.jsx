@@ -22,13 +22,11 @@ const PDFViewer = ({ pdfPath, title = 'Document' }) => {
   };
 
   const handlePdfError = () => {
-    console.error('PDF failed to load:', pdfPath);
     setPdfError(true);
     setIsLoading(false);
   };
 
   const handlePdfLoad = () => {
-    console.log('PDF loaded successfully:', pdfPath);
     setPdfError(false);
     setIsLoading(false);
   };
@@ -38,7 +36,6 @@ const PDFViewer = ({ pdfPath, title = 'Document' }) => {
     if (pdfPath) {
       const timer = setTimeout(() => {
         if (isLoading) {
-          console.log('PDF load timeout, assuming success');
           setPdfError(false);
           setIsLoading(false);
         }

@@ -36,7 +36,6 @@ const Account = () => {
         });
       }
     } catch (error) {
-      console.error('Failed to load user data:', error);
     } finally {
       setLoading(false);
     }
@@ -61,7 +60,6 @@ const Account = () => {
       setMessage('Profile updated successfully!');
       setEditing(false);
     } catch (error) {
-      console.error('Failed to update profile:', error);
       setMessage('Failed to update profile. Please try again.');
     } finally {
       setSaving(false);

@@ -23,7 +23,7 @@ return new class extends Migration
                 ['userRole' => 'CM'],
                 ['userRole' => 'Proponent'],
                 ['userRole' => 'OP'],
-                ['userRole' => 'OSUURU'],
+                ['userRole' => 'OSUORU'],
                 ['userRole' => 'Admin'],
                 ['userRole' => 'Reviewer']
             ]);

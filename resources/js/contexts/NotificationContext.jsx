@@ -25,7 +25,6 @@ export const NotificationProvider = ({ children }) => {
       const response = await axios.get('/api/notifications', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Notifications API response:', response.data);
       setNotifications(response.data.data || []);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
@@ -43,7 +42,6 @@ export const NotificationProvider = ({ children }) => {
       const response = await axios.get('/api/notifications/unread-count', {
         headers: { Authorization: `Bearer ${token}` }
       });
-      console.log('Unread count API response:', response.data);
       setUnreadCount(response.data.count || 0);
     } catch (error) {
       console.error('Failed to fetch unread count:', error);
@@ -53,7 +51,6 @@ export const NotificationProvider = ({ children }) => {
 
   // Load notifications on mount
   useEffect(() => {
-    console.log('NotificationContext: Initializing...');
     fetchNotifications();
     fetchUnreadCount();
   }, []);

@@ -18,7 +18,7 @@ class UserSeeder extends Seeder
         $cmRole = Role::where('userRole', 'CM')->first();
         $proponentRole = Role::where('userRole', 'Proponent')->first();
         $opRole = Role::where('userRole', 'OP')->first();
-        $osuurRole = Role::where('userRole', 'OSUURU')->first();
+        $osuurRole = Role::where('userRole', 'OSUORU')->first();
         $reviewerRole = Role::where('userRole', 'Reviewer')->first();
 
         // Get departments
@@ -60,6 +60,16 @@ class UserSeeder extends Seeder
                 'userRolesID' => $cmRole->userRoleID,
             ],
             
+            // CM (Center Manager) for Academic Affairs (same department as proponent)
+            [
+                'firstName' => 'Dr. Jennifer',
+                'lastName' => 'Martinez',
+                'email' => 'cm-academic@usep.edu.ph',
+                'password' => Hash::make('password'),
+                'departmentID' => $academicDept->departmentID,
+                'userRolesID' => $cmRole->userRoleID,
+            ],
+            
             // Proponent
             [
                 'firstName' => 'Sarah',
@@ -80,7 +90,7 @@ class UserSeeder extends Seeder
                 'userRolesID' => $opRole->userRoleID,
             ],
             
-            // OSUURU
+            // OSUORU
             [
                 'firstName' => 'Lisa',
                 'lastName' => 'Wilson',

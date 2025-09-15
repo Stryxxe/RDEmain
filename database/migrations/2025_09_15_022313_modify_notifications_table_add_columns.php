@@ -12,17 +12,35 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('notifications', function (Blueprint $table) {
-            $table->unsignedBigInteger('userID')->after('id');
-            $table->string('type')->after('userID');
-            $table->string('title')->after('type');
-            $table->text('message')->after('title');
-            $table->json('data')->nullable()->after('message');
-            $table->boolean('read')->default(false)->after('data');
-            $table->timestamp('read_at')->nullable()->after('read');
+            // Only add columns that don't already exist
+            if (!Schema::hasColumn('notifications', 'userID')) {
+                $table->unsignedBigInteger('userID')->after('id');
+            }
+            if (!Schema::hasColumn('notifications', 'type')) {
+                $table->string('type')->after('userID');
+            }
+            if (!Schema::hasColumn('notifications', 'title')) {
+                $table->string('title')->after('type');
+            }
+            if (!Schema::hasColumn('notifications', 'message')) {
+                $table->text('message')->after('title');
+            }
+            if (!Schema::hasColumn('notifications', 'data')) {
+                $table->json('data')->nullable()->after('message');
+            }
+            if (!Schema::hasColumn('notifications', 'read')) {
+                $table->boolean('read')->default(false)->after('data');
+            }
+            if (!Schema::hasColumn('notifications', 'read_at')) {
+                $table->timestamp('read_at')->nullable()->after('read');
+            }
             
-            $table->foreign('userID')->references('userID')->on('users')->onDelete('cascade');
-            $table->index(['userID', 'read']);
-            $table->index('created_at');
+            // Add foreign key and indexes if they don't exist
+            if (!Schema::hasColumn('notifications', 'userID')) {
+                $table->foreign('userID')->references('userID')->on('users')->onDelete('cascade');
+                $table->index(['userID', 'read']);
+                $table->index('created_at');
+            }
         });
     }
 
