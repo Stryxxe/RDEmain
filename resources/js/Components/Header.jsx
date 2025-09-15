@@ -1,45 +1,52 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import { useMessages } from '../contexts/MessageContext';
 import usepLogo from '../../assets/logo.png';
 
 const Header = () => {
   const { logout } = useAuth();
+  const { notifications, unreadCount, markAsRead, refreshNotifications } = useNotifications();
+  const { unreadCount: messageUnreadCount } = useMessages();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications] = useState([
-    {
-      id: 1,
-      title: 'New Research Proposal Submitted',
-      message: 'A new research proposal has been submitted for review.',
-      time: '2 hours ago',
-      unread: true,
-      type: 'proposal'
-    },
-    {
-      id: 2,
-      title: 'Progress Report Due',
-      message: 'Monthly progress report is due in 3 days.',
-      time: '1 day ago',
-      unread: true,
-      type: 'reminder'
-    },
-    {
-      id: 3,
-      title: 'Endorsement Approved',
-      message: 'Your research endorsement has been approved by the committee.',
-      time: '2 days ago',
-      unread: false,
-      type: 'approval'
-    }
-  ]);
-
-  const unreadCount = notifications.filter(n => n.unread).length;
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
+  const formatTime = (timestamp) => {
+    const now = new Date();
+    const diff = now - new Date(timestamp);
+    const minutes = Math.floor(diff / 60000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  // Convert notifications to header format
+  const formattedNotifications = notifications.map(notification => ({
+    id: notification.id,
+    title: notification.title,
+    message: notification.message,
+    time: formatTime(notification.created_at),
+    unread: !notification.read,
+    type: notification.type || 'info'
+  }));
+
   const handleViewAllMessages = () => {
     setShowNotifications(false);
-    handleNavigation('messages');
+    navigate('/proponent/messages');
+  };
+
+  const handleNotificationClick = async (notificationId) => {
+    await markAsRead(notificationId);
+    setShowNotifications(false);
+    navigate('/proponent/notification');
   };
 
   // Close dropdown when clicking outside or pressing Escape
@@ -104,10 +111,6 @@ const Header = () => {
     }
   };
 
-  const handleNavigation = (path) => {
-    console.log(`Navigating to: ${path}`);
-    navigate(path);
-  };
 
   return (
     <header className="bg-red-900 text-white px-8 py-4 flex justify-between items-center shadow-md fixed top-0 left-0 right-0 z-40">
@@ -154,7 +157,9 @@ const Header = () => {
             <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
                 <h3 className="text-lg font-semibold text-gray-900">Notifications</h3>
-                <span className="text-sm text-gray-500">{unreadCount} unread</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-500">{unreadCount} unread</span>
+                </div>
               </div>
             </div>
             
@@ -171,6 +176,7 @@ const Header = () => {
                   {notifications.map((notification) => (
                     <div
                       key={notification.id}
+                      onClick={() => handleNotificationClick(notification.id)}
                       className={`p-4 hover:bg-gray-50 transition-colors duration-200 cursor-pointer ${
                         notification.unread ? 'bg-blue-50' : ''
                       }`}
@@ -209,19 +215,17 @@ const Header = () => {
               )}
             </div>
             
-            {notifications.length > 0 && (
-              <div className="p-4 border-t border-gray-200">
-                <button 
-                  onClick={() => {
-                    setShowNotifications(false);
-                    handleNavigation('notification');
-                  }}
-                  className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium"
-                >
-                  View All Notifications
-                </button>
-              </div>
-            )}
+            <div className="p-4 border-t border-gray-200">
+              <button 
+                onClick={() => {
+                  setShowNotifications(false);
+                  navigate('/proponent/notification');
+                }}
+                className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                View All Notifications
+              </button>
+            </div>
           </div>
         </div>
 
@@ -235,9 +239,11 @@ const Header = () => {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-              2
-            </span>
+            {messageUnreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                {messageUnreadCount}
+              </span>
+            )}
           </button>
         </div>
 

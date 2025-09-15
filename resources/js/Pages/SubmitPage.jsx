@@ -184,7 +184,7 @@ const SubmitPage = () => {
         
         // Redirect to projects page after 2 seconds
         setTimeout(() => {
-          navigate('projects');
+          navigate('/proponent/projects');
         }, 2000);
       } else {
         setSubmitError(response.message || 'Failed to submit proposal');
@@ -380,7 +380,7 @@ const SubmitPage = () => {
           <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
             <button
               type="button"
-              onClick={() => navigate('projects')}
+              onClick={() => navigate('/proponent/projects')}
               className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
               disabled={isSubmitting}
             >

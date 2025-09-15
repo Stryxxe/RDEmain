@@ -1,78 +1,68 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../Components/Layout';
-import { Bell, Check, X, Filter } from 'lucide-react';
+import { useNotifications } from '../contexts/NotificationContext';
+import { Bell, Check, X, Filter, Wifi, WifiOff } from 'lucide-react';
 
 const Notification = () => {
   const [filter, setFilter] = useState('all');
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      title: 'New Research Proposal Submitted',
-      message: 'A new research proposal has been submitted for review.',
-      time: '2 hours ago',
-      unread: true,
-      type: 'proposal'
-    },
-    {
-      id: 2,
-      title: 'Progress Report Due',
-      message: 'Monthly progress report is due in 3 days.',
-      time: '1 day ago',
-      unread: true,
-      type: 'reminder'
-    },
-    {
-      id: 3,
-      title: 'Endorsement Approved',
-      message: 'Your research endorsement has been approved by the committee.',
-      time: '2 days ago',
-      unread: false,
-      type: 'approval'
-    },
-    {
-      id: 4,
-      title: 'Review Comments Available',
-      message: 'Review comments for your proposal are now available.',
-      time: '3 days ago',
-      unread: false,
-      type: 'review'
-    },
-    {
-      id: 5,
-      title: 'Budget Revision Required',
-      message: 'Please revise your proposed budget based on committee feedback.',
-      time: '1 week ago',
-      unread: false,
-      type: 'revision'
-    }
-  ]);
+  const { notifications, loading, unreadCount, markAsRead: markAsReadContext, markAllAsRead: markAllAsReadContext, removeNotification: removeNotificationContext, refreshNotifications } = useNotifications();
+  const navigate = useNavigate();
 
-  const filteredNotifications = notifications.filter(notification => {
+  const formatTime = (timestamp) => {
+    const now = new Date();
+    const diff = now - new Date(timestamp);
+    const minutes = Math.floor(diff / 60000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  // Convert notifications to display format
+  const formattedNotifications = notifications.map(notification => ({
+    id: notification.id,
+    title: notification.title,
+    message: notification.message,
+    time: formatTime(notification.created_at),
+    unread: !notification.read,
+    type: notification.type || 'info'
+  }));
+
+  const filteredNotifications = formattedNotifications.filter(notification => {
     if (filter === 'all') return true;
     if (filter === 'unread') return notification.unread;
+    if (filter === 'read') return !notification.unread;
     return notification.type === filter;
   });
 
-  const markAsRead = (id) => {
-    setNotifications(prev => 
-      prev.map(notification => 
-        notification.id === id 
-          ? { ...notification, unread: false }
-          : notification
-      )
-    );
+  const markAsRead = async (id) => {
+    await markAsReadContext(id);
   };
 
-  const markAllAsRead = () => {
-    setNotifications(prev => 
-      prev.map(notification => ({ ...notification, unread: false }))
-    );
+  const markAllAsRead = async () => {
+    await markAllAsReadContext();
   };
 
   const deleteNotification = (id) => {
-    setNotifications(prev => 
-      prev.filter(notification => notification.id !== id)
-    );
+    removeNotificationContext(id);
+  };
+
+  const handleNotificationClick = (notification) => {
+    // Mark as read when clicked
+    if (notification.unread) {
+      markAsRead(notification.id);
+    }
+    // Only navigate if it's a proposal notification, otherwise stay on the page
+    if (notification.type === 'proposal') {
+      navigate('/proponent/projects');
+    }
+    // For other notification types, just mark as read and stay on the page
   };
 
   const getTypeIcon = (type) => {
@@ -128,7 +118,7 @@ const Notification = () => {
     }
   };
 
-  const unreadCount = notifications.filter(n => n.unread).length;
+  // Use unreadCount from context instead of calculating locally
 
   return (
     <Layout>
@@ -136,7 +126,19 @@ const Notification = () => {
         <div className="mb-8">
           <div className="flex justify-between items-center">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">Notifications</h1>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={refreshNotifications}
+                    disabled={loading}
+                    className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                  >
+                    <Wifi className="w-5 h-5" />
+                    <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
+                  </button>
+                </div>
+              </div>
               <p className="text-gray-600">Stay updated with your research activities</p>
             </div>
             {unreadCount > 0 && (
@@ -150,22 +152,56 @@ const Notification = () => {
           </div>
         </div>
 
-        {/* Filter */}
+        {/* Read/Unread Tabs */}
+        <div className="mb-6">
+          <div className="flex items-center gap-4">
+            <div className="flex bg-gray-100 rounded-lg p-1">
+              {[
+                { key: 'all', label: 'All', count: formattedNotifications.length },
+                { key: 'unread', label: 'Unread', count: formattedNotifications.filter(n => n.unread).length },
+                { key: 'read', label: 'Read', count: formattedNotifications.filter(n => !n.unread).length }
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setFilter(tab.key)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                    filter === tab.key
+                      ? 'bg-white text-red-600 shadow-sm'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {tab.label}
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    filter === tab.key
+                      ? 'bg-red-100 text-red-600'
+                      : 'bg-gray-200 text-gray-600'
+                  }`}>
+                    {tab.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Type Filter */}
         <div className="mb-6">
           <div className="flex items-center gap-4">
             <Filter className="w-5 h-5 text-gray-500" />
             <div className="flex gap-2">
               {[
-                { key: 'all', label: 'All' },
-                { key: 'unread', label: 'Unread' },
                 { key: 'proposal', label: 'Proposals' },
                 { key: 'reminder', label: 'Reminders' },
-                { key: 'approval', label: 'Approvals' }
+                { key: 'approval', label: 'Approvals' },
+                { key: 'success', label: 'Success' },
+                { key: 'error', label: 'Error' },
+                { key: 'warning', label: 'Warning' },
+                { key: 'info', label: 'Info' }
               ].map((filterOption) => (
                 <button
                   key={filterOption.key}
                   onClick={() => setFilter(filterOption.key)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
                     filter === filterOption.key
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -187,6 +223,8 @@ const Notification = () => {
               <p className="text-gray-500">
                 {filter === 'unread' 
                   ? 'You have no unread notifications' 
+                  : filter === 'read'
+                  ? 'You have no read notifications'
                   : 'You have no notifications yet'
                 }
               </p>
@@ -196,7 +234,8 @@ const Notification = () => {
               {filteredNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-6 hover:bg-gray-50 transition-colors ${
+                  onClick={() => handleNotificationClick(notification)}
+                  className={`p-6 hover:bg-gray-50 transition-colors cursor-pointer ${
                     notification.unread ? 'bg-blue-50' : ''
                   }`}
                 >
@@ -207,11 +246,16 @@ const Notification = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
                             {notification.unread && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
                             )}
                             <h4 className="text-sm font-semibold text-gray-900">
                               {notification.title}
                             </h4>
+                            {notification.unread && (
+                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                Live
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-600 mb-2">
                             {notification.message}
@@ -223,7 +267,10 @@ const Notification = () => {
                         <div className="flex items-center gap-2 ml-4">
                           {notification.unread && (
                             <button
-                              onClick={() => markAsRead(notification.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                markAsRead(notification.id);
+                              }}
                               className="p-1 text-gray-400 hover:text-green-600 transition-colors"
                               title="Mark as read"
                             >
@@ -231,7 +278,10 @@ const Notification = () => {
                             </button>
                           )}
                           <button
-                            onClick={() => deleteNotification(notification.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteNotification(notification.id);
+                            }}
                             className="p-1 text-gray-400 hover:text-red-600 transition-colors"
                             title="Delete notification"
                           >

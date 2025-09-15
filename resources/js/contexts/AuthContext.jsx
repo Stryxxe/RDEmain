@@ -59,10 +59,26 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const updateUser = async (userData) => {
+    try {
+      const response = await axios.put('/api/user', userData, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      setUser(response.data);
+      return { success: true };
+    } catch (error) {
+      return { 
+        success: false, 
+        message: error.response?.data?.message || 'Update failed' 
+      };
+    }
+  };
+
   const value = {
     user,
     login,
     logout,
+    updateUser,
     loading
   };
 

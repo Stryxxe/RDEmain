@@ -1,4 +1,4 @@
-import { Search, FileText, FolderOpen, User } from 'lucide-react';
+import { Search, FileText, FolderOpen, User, Bell } from 'lucide-react';
 import { useLocation, Link } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -39,6 +39,19 @@ const Sidebar = () => {
             >
               <FileText size={20} />
               <span className="text-sm">Projects</span>
+            </Link>
+          </li>
+          <li>
+            <Link 
+              to="/proponent/notification" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                isActive('/proponent/notification') 
+                  ? 'bg-white text-red-800 font-semibold' 
+                  : 'text-white hover:bg-red-700'
+              }`}
+            >
+              <Bell size={20} />
+              <span className="text-sm">Notifications</span>
             </Link>
           </li>
           <li>

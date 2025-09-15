@@ -128,6 +128,25 @@ class ApiService {
     }
   }
 
+  // Update user profile
+  async updateUser(userData) {
+    try {
+      await this.ensureCsrfInitialized();
+      
+      const response = await fetch(`${this.baseURL}/user`, {
+        method: 'PUT',
+        credentials: 'include',
+        headers: this.getHeaders(),
+        body: JSON.stringify(userData)
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      console.error('Error updating user profile:', error);
+      throw error;
+    }
+  }
+
   // Create proposal
   async createProposal(proposalData) {
     try {

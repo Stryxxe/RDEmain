@@ -1,84 +1,59 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../Components/Layout';
-import { MessageCircle, Send, Search, Filter } from 'lucide-react';
+import { useMessages } from '../contexts/MessageContext';
+import { MessageCircle, Send, Search, Filter, Wifi, WifiOff } from 'lucide-react';
 
 const Messages = () => {
   const [activeTab, setActiveTab] = useState('inbox');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMessage, setSelectedMessage] = useState(null);
   const [newMessage, setNewMessage] = useState('');
+  const [showCompose, setShowCompose] = useState(false);
+  const [composeData, setComposeData] = useState({
+    recipient: '',
+    subject: '',
+    content: '',
+    type: 'general'
+  });
+  const { messages: realTimeMessages, sentMessages: realTimeSentMessages, markAsRead, markAllAsRead, deleteMessage, deleteSentMessage, sendMessage } = useMessages();
+  const navigate = useNavigate();
 
-  const messages = [
-    {
-      id: 1,
-      sender: 'Dr. Maria Santos',
-      senderRole: 'Review Committee Chair',
-      subject: 'Review Comments for Proposal PRO-2025-00029',
-      preview: 'Thank you for submitting your research proposal. We have completed the initial review and have some comments...',
-      time: '2 hours ago',
-      unread: true,
-      type: 'review'
-    },
-    {
-      id: 2,
-      sender: 'Research Office',
-      senderRole: 'Administration',
-      subject: 'Budget Revision Required',
-      preview: 'Your proposed budget needs to be revised based on the committee feedback. Please review the attached guidelines...',
-      time: '1 day ago',
-      unread: true,
-      type: 'revision'
-    },
-    {
-      id: 3,
-      sender: 'Dr. John Smith',
-      senderRole: 'Department Head',
-      subject: 'Meeting Request - Research Discussion',
-      preview: 'I would like to schedule a meeting to discuss your research proposal and provide additional guidance...',
-      time: '2 days ago',
-      unread: false,
-      type: 'meeting'
-    },
-    {
-      id: 4,
-      sender: 'Dr. Ana Rodriguez',
-      senderRole: 'Research Coordinator',
-      subject: 'Proposal Status Update',
-      preview: 'Your proposal has been moved to the next stage of review. You will receive detailed feedback within 5 business days...',
-      time: '3 days ago',
-      unread: false,
-      type: 'status'
-    },
-    {
-      id: 5,
-      sender: 'System Administrator',
-      senderRole: 'System',
-      subject: 'Account Security Alert',
-      preview: 'We noticed unusual activity on your account. Please verify your recent login attempts...',
-      time: '1 week ago',
-      unread: false,
-      type: 'security'
-    }
-  ];
+  const formatTime = (timestamp) => {
+    const now = new Date();
+    const diff = now - new Date(timestamp);
+    const minutes = Math.floor(diff / 60000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
 
-  const sentMessages = [
-    {
-      id: 1,
-      recipient: 'Dr. Maria Santos',
-      subject: 'Re: Review Comments for Proposal PRO-2025-00029',
-      preview: 'Thank you for the detailed feedback. I have addressed all the comments and will resubmit the revised proposal...',
-      time: '1 hour ago',
-      status: 'sent'
-    },
-    {
-      id: 2,
-      recipient: 'Research Office',
-      subject: 'Budget Revision Submission',
-      preview: 'I have revised the budget as requested and attached the updated proposal with detailed budget breakdown...',
-      time: '2 days ago',
-      status: 'sent'
-    }
-  ];
+  // Convert real-time messages to display format
+  const messages = realTimeMessages.map(message => ({
+    id: message.id,
+    sender: message.sender?.fullName || 'Unknown',
+    senderRole: message.sender?.role?.userRole || 'Unknown',
+    subject: message.subject,
+    preview: message.content?.substring(0, 100) + '...' || message.preview,
+    time: formatTime(message.created_at),
+    unread: !message.read,
+    type: message.type || 'general'
+  }));
+
+  const sentMessages = realTimeSentMessages.map(message => ({
+    id: message.id,
+    recipient: message.recipient?.fullName || 'Unknown',
+    subject: message.subject,
+    preview: message.content?.substring(0, 100) + '...' || message.preview,
+    time: formatTime(message.created_at),
+    status: 'sent'
+  }));
 
   const currentMessages = activeTab === 'inbox' ? messages : sentMessages;
   const filteredMessages = currentMessages.filter(message => {
@@ -112,12 +87,97 @@ const Messages = () => {
 
   const unreadCount = messages.filter(m => m.unread).length;
 
+  const handleMessageClick = (message) => {
+    setSelectedMessage(message);
+    if (message.unread) {
+      markAsRead(message.id);
+    }
+  };
+
+  const handleSendMessage = () => {
+    if (!newMessage.trim() || !selectedMessage) return;
+    
+    // Send reply
+    sendMessage(
+      selectedMessage.sender, // This would be the actual recipient ID
+      `Re: ${selectedMessage.subject}`,
+      newMessage,
+      'reply'
+    );
+    
+    setNewMessage('');
+  };
+
+  const handleComposeMessage = () => {
+    if (!composeData.recipient.trim() || !composeData.subject.trim() || !composeData.content.trim()) return;
+    
+    // Send new message
+    sendMessage(
+      composeData.recipient,
+      composeData.subject,
+      composeData.content,
+      composeData.type
+    );
+    
+    // Reset form and close modal
+    setComposeData({
+      recipient: '',
+      subject: '',
+      content: '',
+      type: 'general'
+    });
+    setShowCompose(false);
+  };
+
+  const handleDeleteMessage = (messageId) => {
+    if (activeTab === 'inbox') {
+      deleteMessage(messageId);
+    } else {
+      deleteSentMessage(messageId);
+    }
+    if (selectedMessage?.id === messageId) {
+      setSelectedMessage(null);
+    }
+  };
+
   return (
     <Layout>
       <div className="max-w-6xl mx-auto">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Messages</h1>
-          <p className="text-gray-600">Communicate with reviewers and administrators</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <h1 className="text-3xl font-bold text-gray-900">Messages</h1>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => window.location.reload()}
+                    className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    <Wifi className="w-5 h-5" />
+                    <span>Refresh</span>
+                  </button>
+                </div>
+              </div>
+              <p className="text-gray-600">Communicate with reviewers and administrators</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowCompose(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+              >
+                <Send size={16} />
+                Compose
+              </button>
+              {unreadCount > 0 && (
+                <button
+                  onClick={markAllAsRead}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Mark All as Read
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -180,16 +240,35 @@ const Messages = () => {
                     {filteredMessages.map((message) => (
                       <div
                         key={message.id}
-                        onClick={() => setSelectedMessage(message)}
+                        onClick={() => handleMessageClick(message)}
                         className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
                           selectedMessage?.id === message.id ? 'bg-red-50 border-r-2 border-red-600' : ''
                         } ${message.unread ? 'bg-blue-50' : ''}`}
                       >
                         <div className="flex items-start justify-between mb-2">
-                          <h4 className="text-sm font-semibold text-gray-900 truncate">
-                            {activeTab === 'inbox' ? message.sender : message.recipient}
-                          </h4>
-                          <span className="text-xs text-gray-500">{message.time}</span>
+                          <div className="flex items-center gap-2 flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">
+                              {activeTab === 'inbox' ? message.sender : message.recipient}
+                            </h4>
+                            {message.unread && (
+                              <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">{message.time}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteMessage(message.id);
+                              }}
+                              className="text-gray-400 hover:text-red-600 transition-colors"
+                              title="Delete message"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
                         <p className="text-sm text-gray-600 mb-2 line-clamp-2">
                           {message.subject}
@@ -203,7 +282,9 @@ const Messages = () => {
                               {getTypeLabel(message.type)}
                             </span>
                             {message.unread && (
-                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                Live
+                              </span>
                             )}
                           </div>
                         )}
@@ -273,7 +354,11 @@ const Messages = () => {
                         />
                       </div>
                       <div className="flex justify-end">
-                        <button className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                        <button 
+                          onClick={handleSendMessage}
+                          disabled={!newMessage.trim()}
+                          className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
                           <Send size={16} />
                           Send Reply
                         </button>
@@ -292,6 +377,103 @@ const Messages = () => {
             )}
           </div>
         </div>
+
+        {/* Compose Message Modal */}
+        {showCompose && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden">
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-gray-900">Compose Message</h3>
+                  <button
+                    onClick={() => setShowCompose(false)}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    To
+                  </label>
+                  <input
+                    type="text"
+                    value={composeData.recipient}
+                    onChange={(e) => setComposeData({...composeData, recipient: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Enter recipient name or email"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Subject
+                  </label>
+                  <input
+                    type="text"
+                    value={composeData.subject}
+                    onChange={(e) => setComposeData({...composeData, subject: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Enter message subject"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message Type
+                  </label>
+                  <select
+                    value={composeData.type}
+                    onChange={(e) => setComposeData({...composeData, type: e.target.value})}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                  >
+                    <option value="general">General</option>
+                    <option value="review">Review</option>
+                    <option value="revision">Revision</option>
+                    <option value="meeting">Meeting</option>
+                    <option value="status">Status</option>
+                    <option value="security">Security</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Message
+                  </label>
+                  <textarea
+                    value={composeData.content}
+                    onChange={(e) => setComposeData({...composeData, content: e.target.value})}
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    placeholder="Type your message here..."
+                  />
+                </div>
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                <button
+                  onClick={() => setShowCompose(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleComposeMessage}
+                  disabled={!composeData.recipient.trim() || !composeData.subject.trim() || !composeData.content.trim()}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Send size={16} />
+                  Send Message
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </Layout>
   );

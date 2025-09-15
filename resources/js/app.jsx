@@ -5,6 +5,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { MessageProvider } from './contexts/MessageContext';
+import NotificationContainer from './Components/NotificationContainer';
 import Login from './Components/auth/login';
 
 // Role-based view components
@@ -57,11 +60,12 @@ const RoleBasedRedirect = () => {
   }
 };
 
-const App = () => {
+// App content component with notifications and messages
+const AppContent = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
+    <Router>
+      <NotificationContainer />
+      <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RoleBasedRedirect />} />
           
@@ -134,6 +138,17 @@ const App = () => {
           <Route path="/messages" element={<Navigate to="/proponent/messages" replace />} />
         </Routes>
       </Router>
+  );
+};
+
+const App = () => {
+  return (
+    <AuthProvider>
+      <NotificationProvider>
+        <MessageProvider>
+          <AppContent />
+        </MessageProvider>
+      </NotificationProvider>
     </AuthProvider>
   );
 };

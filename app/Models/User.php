@@ -27,6 +27,10 @@ class User extends Authenticatable
         'remember_token',
     ];
 
+    protected $appends = [
+        'fullName'
+    ];
+
     protected function casts(): array
     {
         return [
@@ -62,6 +66,21 @@ class User extends Authenticatable
     public function endorsements()
     {
         return $this->hasMany(Endorsement::class, 'endorserID', 'userID');
+    }
+
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class, 'userID', 'userID');
+    }
+
+    public function sentMessages()
+    {
+        return $this->hasMany(Message::class, 'senderID', 'userID');
+    }
+
+    public function receivedMessages()
+    {
+        return $this->hasMany(Message::class, 'recipientID', 'userID');
     }
 
     public function getFullNameAttribute()

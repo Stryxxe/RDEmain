@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../Components/Layout';
 import { Search, Eye, ChevronUp } from 'lucide-react';
 import apiService from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const Projects = () => {
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('title');
   const [projects, setProjects] = useState([]);
@@ -16,6 +18,13 @@ const Projects = () => {
     loadProjects();
   }, []);
 
+  // Refresh projects when user name changes (e.g., after profile update)
+  useEffect(() => {
+    if (user && user.fullName) {
+      loadProjects();
+    }
+  }, [user?.fullName]);
+
   const loadProjects = async () => {
     try {
       setLoading(true);
@@ -23,8 +32,6 @@ const Projects = () => {
       const response = await apiService.getProposals();
       
       if (response.success) {
-        console.log('Projects data:', response.data);
-        console.log('First project user data:', response.data[0]?.user);
         setProjects(response.data);
       } else {
         setError(response.message || 'Failed to load projects');
@@ -229,6 +236,7 @@ const Projects = () => {
                 {sortedProjects.map((project) => {
                   const progress = getProgressPercentage(project.statusID);
                   const budget = project.matrixOfCompliance?.proposedBudget || 0;
+                  
                   
                   return (
                     <tr key={project.proposalID} className="hover:bg-gray-50">

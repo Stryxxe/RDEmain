@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../Components/Layout';
 import { User, Mail, Building, Shield, Save } from 'lucide-react';
-import apiService from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const Account = () => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const { user, updateUser, loading } = useAuth();
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
@@ -18,29 +17,16 @@ const Account = () => {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    loadUserData();
-  }, []);
-
-  const loadUserData = async () => {
-    try {
-      setLoading(true);
-      const response = await apiService.getCurrentUser();
-      if (response) {
-        setUser(response);
-        setFormData({
-          firstName: response.firstName || '',
-          lastName: response.lastName || '',
-          email: response.email || '',
-          department: response.department?.name || '',
-          role: response.role?.userRole || ''
-        });
-      }
-    } catch (error) {
-      console.error('Failed to load user data:', error);
-    } finally {
-      setLoading(false);
+    if (user) {
+      setFormData({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        department: user.department?.name || '',
+        role: user.role?.userRole || ''
+      });
     }
-  };
+  }, [user]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -54,12 +40,18 @@ const Account = () => {
       setSaving(true);
       setMessage('');
       
-      // Here you would typically call an API to update user profile
-      // For now, we'll just simulate success
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      const result = await updateUser({
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        email: formData.email
+      });
       
-      setMessage('Profile updated successfully!');
-      setEditing(false);
+      if (result.success) {
+        setMessage('Profile updated successfully!');
+        setEditing(false);
+      } else {
+        setMessage(result.message || 'Failed to update profile. Please try again.');
+      }
     } catch (error) {
       console.error('Failed to update profile:', error);
       setMessage('Failed to update profile. Please try again.');
