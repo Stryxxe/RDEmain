@@ -62,14 +62,14 @@ const Resources = () => {
 
   return (
     <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
+        <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Resources</h1>
           <p className="text-gray-600">Download forms, templates, and guidelines for research proposals</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {resources.map((resource, index) => (
-            <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+            <div key={index} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow flex flex-col h-full">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -82,9 +82,9 @@ const Resources = () => {
                 </div>
               </div>
               
-              <p className="text-gray-600 text-sm mb-4">{resource.description}</p>
+              <p className="text-gray-600 text-sm mb-4 flex-grow">{resource.description}</p>
               
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-auto">
                 <button className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm">
                   <Download size={16} />
                   Download

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useMessages } from '../contexts/MessageContext';
+import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import usepLogo from '../../assets/logo.png';
 
 const Header = () => {
@@ -10,7 +11,9 @@ const Header = () => {
   const { notifications, unreadCount, markAsRead, refreshNotifications } = useNotifications();
   const { unreadCount: messageUnreadCount } = useMessages();
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const dropdownRef = useRef(null);
+  const profileDropdownRef = useRef(null);
   const navigate = useNavigate();
 
   const formatTime = (timestamp) => {
@@ -49,17 +52,21 @@ const Header = () => {
     navigate('/proponent/notification');
   };
 
-  // Close dropdown when clicking outside or pressing Escape
+  // Close dropdowns when clicking outside or pressing Escape
   useEffect(() => {
     function handleClickOutside(e) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
         setShowNotifications(false);
+      }
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target)) {
+        setShowProfileDropdown(false);
       }
     }
 
     function handleEscapeKey(e) {
       if (e.key === 'Escape') {
         setShowNotifications(false);
+        setShowProfileDropdown(false);
       }
     }
 
@@ -247,15 +254,41 @@ const Header = () => {
           </button>
         </div>
 
-        {/* Logout Button */}
-        <div className="relative">
+        {/* Profile Dropdown */}
+        <div className="relative" ref={profileDropdownRef}>
           <button
-            onClick={logout}
-            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 text-sm font-medium"
-            title="Logout"
+            onClick={() => setShowProfileDropdown(!showProfileDropdown)}
+            className="flex items-center gap-2 p-2 text-white hover:bg-red-700 rounded-lg transition-colors duration-200"
+            title="Profile Menu"
           >
-            Logout
+            <User className="w-6 h-6" />
+            <ChevronDown className="w-4 h-4" />
           </button>
+
+          {showProfileDropdown && (
+            <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+              <button
+                onClick={() => {
+                  setShowProfileDropdown(false);
+                  navigate('/proponent/account');
+                }}
+                className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <Settings className="w-4 h-4" />
+                Settings
+              </button>
+              <button
+                onClick={() => {
+                  setShowProfileDropdown(false);
+                  logout();
+                }}
+                className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

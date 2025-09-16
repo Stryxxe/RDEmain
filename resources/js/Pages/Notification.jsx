@@ -6,7 +6,7 @@ import { Bell, Check, X, Filter, Wifi, WifiOff, ChevronLeft, ChevronRight } from
 const Notification = () => {
   const [filter, setFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
-  const notificationsPerPage = 8;
+  const notificationsPerPage = 6;
   const { notifications, loading, unreadCount, markAsRead: markAsReadContext, markAllAsRead: markAllAsReadContext, removeNotification: removeNotificationContext, refreshNotifications } = useNotifications();
   const navigate = useNavigate();
 
@@ -133,11 +133,12 @@ const Notification = () => {
   // Use unreadCount from context instead of calculating locally
 
   return (
-    <div className="max-w-4xl mx-auto flex flex-col">
-        <div className="mb-8">
+    <div className="max-w-6xl mx-auto relative" style={{ minHeight: '1050px', paddingBottom: '30px' }}>
+        {/* Fixed Header Section */}
+        <div className="mb-4" style={{ position: 'relative', zIndex: 10 }}>
           <div className="flex justify-between items-center">
             <div>
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mb-1">
                 <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
                 <div className="flex items-center gap-2">
                   <button
@@ -163,8 +164,8 @@ const Notification = () => {
           </div>
         </div>
 
-        {/* Read/Unread Tabs */}
-        <div className="mb-6">
+        {/* Fixed Filter Section */}
+        <div className="mb-3" style={{ position: 'relative', zIndex: 10 }}>
           <div className="flex items-center gap-4">
             <div className="flex bg-gray-100 rounded-lg p-1">
               {[
@@ -175,14 +176,14 @@ const Notification = () => {
                 <button
                   key={tab.key}
                   onClick={() => setFilter(tab.key)}
-                  className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
+                  className={`px-4 py-2 rounded-md text-base font-medium transition-colors flex items-center gap-2 ${
                     filter === tab.key
                       ? 'bg-white text-red-600 shadow-sm'
                       : 'text-gray-600 hover:text-gray-900'
                   }`}
                 >
                   {tab.label}
-                  <span className={`px-2 py-1 text-xs rounded-full ${
+                  <span className={`px-2 py-1 text-sm rounded-full ${
                     filter === tab.key
                       ? 'bg-red-100 text-red-600'
                       : 'bg-gray-200 text-gray-600'
@@ -195,10 +196,10 @@ const Notification = () => {
           </div>
         </div>
 
-        {/* Type Filter */}
-        <div className="mb-6">
+        {/* Fixed Type Filter Section */}
+        <div className="mb-3" style={{ position: 'relative', zIndex: 10 }}>
           <div className="flex items-center gap-4">
-            <Filter className="w-5 h-5 text-gray-500" />
+            <Filter className="w-6 h-6 text-gray-500" />
             <div className="flex gap-2">
               {[
                 { key: 'proposal', label: 'Proposals' },
@@ -212,7 +213,7 @@ const Notification = () => {
                 <button
                   key={filterOption.key}
                   onClick={() => setFilter(filterOption.key)}
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
+                  className={`px-3 py-1 rounded-full text-sm font-medium transition-colors ${
                     filter === filterOption.key
                       ? 'bg-red-600 text-white'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -225,18 +226,23 @@ const Notification = () => {
           </div>
         </div>
 
-        {/* Notifications Container - Absolutely Fixed in Place */}
+        {/* Notifications Container - Absolutely Positioned Fixed Size */}
         <div 
-          className="bg-white rounded-lg shadow-sm border border-gray-200 notification-container-fixed"
+          className="bg-white rounded-lg shadow-sm border border-gray-200"
           style={{ 
-            position: 'relative',
+            position: 'absolute',
+            top: '220px', // Position below the fixed header and filters (reduced gap)
+            left: '-25%',
+            right: '-25%',
             height: '720px', 
             minHeight: '720px', 
             maxHeight: '720px',
-            width: '100%',
-            flexShrink: 0,
+            width: '150%',
             boxSizing: 'border-box',
-            overflow: 'hidden'
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+            zIndex: 5
           }}
         >
           {loading ? (
@@ -247,8 +253,8 @@ const Notification = () => {
               </div>
             </div>
           ) : filteredNotifications.length === 0 ? (
-            <div style={{ height: '100%' }} className="text-center py-12 flex flex-col items-center justify-center">
-              <Bell className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+            <div className="notification-empty-state py-12">
+              <Bell className="w-12 h-12 text-gray-300 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-2">No notifications</h3>
               <p className="text-gray-500">
                 {filter === 'unread' 
@@ -260,49 +266,63 @@ const Notification = () => {
               </p>
             </div>
           ) : (
-            <div style={{ height: '100%' }} className="divide-y divide-gray-100">
+            <div 
+              style={{ 
+                height: '100%', 
+                overflowY: 'auto',
+                overflowX: 'hidden',
+                padding: '16px 0'
+              }} 
+              className="divide-y divide-gray-100"
+            >
               {currentNotifications.map((notification) => (
                 <div
                   key={notification.id}
-                  className={`p-6 hover:bg-gray-50 transition-colors notification-item-fixed ${
+                  className={`hover:bg-gray-50 transition-colors ${
                     notification.unread ? 'bg-blue-50' : ''
                   }`}
+                  style={{
+                    height: '100px',
+                    minHeight: '100px',
+                    maxHeight: '100px',
+                    padding: '20px 24px',
+                    margin: '8px 16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    boxSizing: 'border-box',
+                    borderRadius: '8px',
+                    border: '1px solid #f3f4f6'
+                  }}
                 >
-                  <div className="flex items-start space-x-4 h-full">
+                  <div className="flex items-center space-x-4 w-full">
                     {getTypeIcon(notification.type)}
-                    <div className="flex-1 min-w-0 flex flex-col h-full">
-                      <div className="flex items-center gap-2 mb-2" style={{ height: '24px', minHeight: '24px', maxHeight: '24px' }}>
+                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <div className="flex items-center gap-2 mb-1">
                         {notification.unread && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></div>
                         )}
-                        <h4 className="text-sm font-semibold text-gray-900 line-clamp-1 overflow-hidden" style={{ height: '20px', minHeight: '20px', maxHeight: '20px' }}>
+                        <h4 className="text-sm font-semibold text-gray-900 truncate">
                           {notification.title}
                         </h4>
                         {notification.unread && (
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full flex-shrink-0">
                             Live
                           </span>
                         )}
                       </div>
-                      <div className="flex-1 flex flex-col justify-center" style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}>
-                        <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 overflow-hidden" style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}>
-                          {notification.message}
-                        </p>
-                      </div>
-                      <div className="mt-auto" style={{ height: '20px', minHeight: '20px', maxHeight: '20px' }}>
-                        <p className="text-xs text-gray-400" style={{ height: '16px', minHeight: '16px', maxHeight: '16px' }}>
-                          {notification.time}
-                        </p>
-                      </div>
+                      <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 overflow-hidden mb-1">
+                        {notification.message}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        {notification.time}
+                      </p>
                     </div>
-                    <div className="flex flex-col items-center gap-3 ml-4 flex-shrink-0">
+                    <div className="flex flex-col items-center gap-2 ml-4 flex-shrink-0">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           if (notification.unread) {
                             markAsRead(notification.id);
-                          } else {
-                            // If already read, clicking check does nothing or could mark as unread
                           }
                         }}
                         className={`p-2 rounded-full transition-colors ${
@@ -312,7 +332,7 @@ const Notification = () => {
                         }`}
                         title={notification.unread ? "Mark as read" : "Already read"}
                       >
-                        <Check size={18} />
+                        <Check size={16} />
                       </button>
                       <button
                         onClick={(e) => {
@@ -322,7 +342,7 @@ const Notification = () => {
                         className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
                         title="Delete notification"
                       >
-                        <X size={18} />
+                        <X size={16} />
                       </button>
                     </div>
                   </div>
@@ -332,9 +352,19 @@ const Notification = () => {
           )}
         </div>
 
-        {/* Pagination Controls */}
+        {/* Pagination Controls - Absolutely Positioned */}
         {!loading && filteredNotifications.length > 0 && totalPages > 1 && (
-          <div className="mt-6 flex items-center justify-between">
+          <div 
+            className="flex items-center justify-between bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200"
+            style={{
+              position: 'absolute',
+              top: '950px', // Position below the notification container with reduced gap
+              left: '-25%',
+              right: '-25%',
+              width: '150%',
+              zIndex: 10
+            }}
+          >
             <div className="text-sm text-gray-700">
               Showing {startIndex + 1} to {Math.min(endIndex, filteredNotifications.length)} of {filteredNotifications.length} notifications
             </div>
