@@ -25,7 +25,7 @@ const Sidebar = () => {
               }`}
             >
               <Search size={20} />
-              <span className="text-sm">Submit</span>
+              <span className="text-base">Submit</span>
             </Link>
           </li>
           <li>
@@ -38,7 +38,7 @@ const Sidebar = () => {
               }`}
             >
               <FileText size={20} />
-              <span className="text-sm">Projects</span>
+              <span className="text-base">Projects</span>
             </Link>
           </li>
           <li>
@@ -51,7 +51,7 @@ const Sidebar = () => {
               }`}
             >
               <Bell size={20} />
-              <span className="text-sm">Notifications</span>
+              <span className="text-base">Notifications</span>
             </Link>
           </li>
           <li>
@@ -64,7 +64,7 @@ const Sidebar = () => {
               }`}
             >
               <FolderOpen size={20} />
-              <span className="text-sm">Resources</span>
+              <span className="text-base">Resources</span>
             </Link>
           </li>
         </ul>
