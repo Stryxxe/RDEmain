@@ -111,7 +111,7 @@ const Header = () => {
         return (
           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
             <svg className={`${iconClass} text-blue-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.19 4a2 2 0 00-1.8 1.1L1 8.5v8a2 2 0 002 2h14a2 2 0 002-2v-8l-1.39-3.4A2 2 0 0015.81 4H4.19z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a7 7 0 00-7 7v4.29l-1.71 1.7a1 1 0 00-.29.7V16a1 1 0 001 1h16a1 1 0 001-1v-.31a1 1 0 00-.29-.7L19 13.29V9a7 7 0 00-7-7zM10 21a2 2 0 104 0" />
             </svg>
           </div>
         );
@@ -144,7 +144,7 @@ const Header = () => {
             className="relative p-2 text-white hover:bg-red-700 rounded-lg transition-colors duration-200"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.19 4a2 2 0 00-1.8 1.1L1 8.5v8a2 2 0 002 2h14a2 2 0 002-2v-8l-1.39-3.4A2 2 0 0015.81 4H4.19z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a7 7 0 00-7 7v4.29l-1.71 1.7a1 1 0 00-.29.7V16a1 1 0 001 1h16a1 1 0 001-1v-.31a1 1 0 00-.29-.7L19 13.29V9a7 7 0 00-7-7zM10 21a2 2 0 104 0" />
             </svg>
             {unreadCount > 0 && (
               <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
@@ -174,7 +174,7 @@ const Header = () => {
               {notifications.length === 0 ? (
                 <div className="p-4 text-center text-gray-500">
                   <svg className="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-5 5v-5zM4.19 4a2 2 0 00-1.8 1.1L1 8.5v8a2 2 0 002 2h14a2 2 0 002-2v-8l-1.39-3.4A2 2 0 0015.81 4H4.19z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a7 7 0 00-7 7v4.29l-1.71 1.7a1 1 0 00-.29.7V16a1 1 0 001 1h16a1 1 0 001-1v-.31a1 1 0 00-.29-.7L19 13.29V9a7 7 0 00-7-7zM10 21a2 2 0 104 0" />
                   </svg>
                   <p>No notifications</p>
                 </div>

@@ -285,10 +285,13 @@ const Projects = () => {
                       <td className="px-6 py-4">
                         <button 
                           onClick={() => handleViewDetails(project.proposalID)}
-                          className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"
+                          className="group relative inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg text-sm font-semibold shadow-lg hover:shadow-xl hover:from-red-600 hover:to-red-700 transform hover:scale-105 transition-all duration-200 border border-red-500 hover:border-red-600"
                         >
-                          <Eye size={16} />
-                          View Details
+                          <div className="flex items-center gap-2">
+                            <Eye size={16} className="group-hover:scale-110 transition-transform duration-200" />
+                            <span>View Details</span>
+                          </div>
+                          <div className="absolute inset-0 bg-white opacity-0 group-hover:opacity-10 rounded-lg transition-opacity duration-200"></div>
                         </button>
                       </td>
                     </tr>

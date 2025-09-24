@@ -1,4 +1,4 @@
-import { Search, FileText, FolderOpen, User } from 'lucide-react';
+import { Send, FileText, FolderOpen, User } from 'lucide-react';
 import { useLocation, Link } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -24,7 +24,7 @@ const Sidebar = () => {
                   : 'text-white hover:bg-red-700'
               }`}
             >
-              <Search size={20} />
+              <Send size={20} />
               <span className="text-base">Submit</span>
             </Link>
           </li>
