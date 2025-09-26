@@ -345,12 +345,12 @@ const TrackerDetail = () => {
   // Proposal data and ID available
 
   return (
-    <div className="w-full max-w-full mx-auto space-y-8 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
+    <div className="w-full max-w-full mx-auto space-y-4 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
       {/* Header */}
-      <div className="mb-8">
+      <div className="">
         <button
           onClick={() => navigate('/proponent/tracker')}
-          className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors duration-200 group"
+          className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-1 transition-colors duration-200 group"
         >
           <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
           <span className="font-medium">Back to Tracker</span>
