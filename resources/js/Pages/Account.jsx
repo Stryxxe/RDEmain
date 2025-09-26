@@ -65,7 +65,6 @@ const Account = () => {
         setMessage(result.message || 'Failed to update profile. Please try again.');
       }
     } catch (error) {
-      console.error('Failed to update profile:', error);
       setMessage('Failed to update profile. Please try again.');
     } finally {
       setSaving(false);

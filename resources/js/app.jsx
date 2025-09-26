@@ -64,7 +64,6 @@ const RoleBasedRedirect = () => {
 const AppContent = () => {
   return (
     <Router>
-      <NotificationContainer />
       <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RoleBasedRedirect />} />
@@ -74,6 +73,7 @@ const AppContent = () => {
             path="/admin" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <AdminView />
               </ProtectedRoute>
             } 
@@ -82,6 +82,7 @@ const AppContent = () => {
             path="/rdd" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <RDDView />
               </ProtectedRoute>
             } 
@@ -90,6 +91,7 @@ const AppContent = () => {
             path="/cm" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <CMView />
               </ProtectedRoute>
             } 
@@ -98,6 +100,7 @@ const AppContent = () => {
             path="/proponent/*" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <ProponentView />
               </ProtectedRoute>
             } 
@@ -106,6 +109,7 @@ const AppContent = () => {
             path="/op" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <OPView />
               </ProtectedRoute>
             } 
@@ -114,6 +118,7 @@ const AppContent = () => {
             path="/osuur" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <OSUORUView />
               </ProtectedRoute>
             } 
@@ -122,6 +127,7 @@ const AppContent = () => {
             path="/reviewer" 
             element={
               <ProtectedRoute>
+                <NotificationContainer />
                 <ReviewerView />
               </ProtectedRoute>
             } 

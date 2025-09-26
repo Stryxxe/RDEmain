@@ -17,18 +17,68 @@ const Header = () => {
   const navigate = useNavigate();
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
     const now = new Date();
-    const diff = now - new Date(timestamp);
-    const minutes = Math.floor(diff / 60000);
+    let notificationDate;
     
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+    try {
+      // Handle different timestamp formats
+      if (typeof timestamp === 'string') {
+        // Try parsing as ISO string first
+        notificationDate = new Date(timestamp);
+        
+        // If that fails, try parsing as a different format
+        if (isNaN(notificationDate.getTime())) {
+          // Try parsing as Unix timestamp (if it's a number string)
+          const numTimestamp = parseFloat(timestamp);
+          if (!isNaN(numTimestamp)) {
+            notificationDate = new Date(numTimestamp * 1000); // Convert from seconds to milliseconds
+          }
+        }
+      } else if (typeof timestamp === 'number') {
+        // Handle Unix timestamp (in seconds)
+        notificationDate = new Date(timestamp * 1000);
+      } else if (timestamp && typeof timestamp === 'object' && timestamp.date) {
+        // Handle Carbon object from Laravel
+        notificationDate = new Date(timestamp.date);
+      } else {
+        notificationDate = new Date(timestamp);
+      }
+      
+      // Check if the date is in the future (which would cause issues)
+      if (notificationDate > now) {
+        return 'Just now';
+      }
+      
+      // Check if the date is valid
+      if (isNaN(notificationDate.getTime())) {
+        return 'Unknown time';
+      }
+      
+      const diff = now - notificationDate;
+      const minutes = Math.floor(diff / 60000);
+      
+      if (minutes < 1) return 'Just now';
+      if (minutes < 60) return `${minutes}m ago`;
+      
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      
+      const days = Math.floor(hours / 24);
+      if (days < 7) return `${days}d ago`;
+      
+      const weeks = Math.floor(days / 7);
+      if (weeks < 4) return `${weeks}w ago`;
+      
+      const months = Math.floor(days / 30);
+      if (months < 12) return `${months}mo ago`;
+      
+      const years = Math.floor(days / 365);
+      return `${years}y ago`;
+    } catch (error) {
+      return 'Unknown time';
+    }
   };
 
   // Convert notifications to header format
@@ -194,9 +244,6 @@ const Header = () => {
                           <div className="flex items-start justify-between">
                             <div className="flex-1">
                               <div className="flex items-center gap-2 mb-1">
-                                {notification.unread && (
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                )}
                                 <h4 className="text-sm font-semibold text-gray-900">
                                   {notification.title}
                                 </h4>

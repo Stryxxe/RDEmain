@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMessages } from '../contexts/MessageContext';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, Send, Search, Wifi, WifiOff, User, Clock, AlertCircle } from 'lucide-react';
+import { MessageCircle, Send, Search, RefreshCw, User, Clock, AlertCircle } from 'lucide-react';
 
 const Messages = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,15 +44,43 @@ const Messages = () => {
         setAvailableCM(data);
         setCmLoading(false);
       }).catch(error => {
-        console.error('Failed to fetch available CM:', error);
         setCmLoading(false);
       });
     }
   }, [isProponent, fetchAvailableCM]);
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
     const now = new Date();
-    const diff = now - new Date(timestamp);
+    let notificationDate;
+    
+    // Handle different timestamp formats
+    if (typeof timestamp === 'string') {
+      // Try parsing as ISO string first
+      notificationDate = new Date(timestamp);
+      
+      // If that fails, try parsing as a different format
+      if (isNaN(notificationDate.getTime())) {
+        // Try parsing as Unix timestamp (if it's a number string)
+        const numTimestamp = parseFloat(timestamp);
+        if (!isNaN(numTimestamp)) {
+          notificationDate = new Date(numTimestamp * 1000); // Convert from seconds to milliseconds
+        }
+      }
+    } else if (typeof timestamp === 'number') {
+      // Handle Unix timestamp (in seconds)
+      notificationDate = new Date(timestamp * 1000);
+    } else {
+      notificationDate = new Date(timestamp);
+    }
+    
+    // Check if the date is valid
+    if (isNaN(notificationDate.getTime())) {
+      return 'Unknown time';
+    }
+    
+    const diff = now - notificationDate;
     const minutes = Math.floor(diff / 60000);
     
     if (minutes < 1) return 'Just now';
@@ -95,9 +123,6 @@ const Messages = () => {
   });
 
   const handleConversationClick = async (conversation) => {
-    console.log('Selected conversation:', conversation);
-    console.log('Other user:', conversation.otherUser);
-    console.log('User ID:', conversation.otherUser.userID);
     setSelectedConversation(conversation);
     await fetchConversation(conversation.otherUser.userID);
   };
@@ -111,19 +136,9 @@ const Messages = () => {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation || sendingMessage) return;
     
-    console.log('Starting to send message...');
-    console.log('Selected conversation:', selectedConversation);
-    console.log('New message:', newMessage);
-    
     setSendingMessage(true);
     try {
       const recipientID = String(selectedConversation.otherUser.userID);
-      console.log('Sending message with data:', {
-        recipientID: recipientID,
-        subject: `Re: ${selectedConversation.latestMessage.subject}`,
-        content: newMessage,
-        type: 'reply'
-      });
       
       const result = await sendMessage(
         recipientID,
@@ -132,7 +147,6 @@ const Messages = () => {
       'reply'
     );
     
-      console.log('Message sent successfully:', result);
     setNewMessage('');
       
       // Refresh the conversation to show the new message
@@ -140,9 +154,6 @@ const Messages = () => {
       
       // Message sent successfully (no popup)
     } catch (error) {
-      console.error('Failed to send message:', error);
-      console.error('Error details:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       // Show error feedback
       const errorMessage = error.response?.data?.error || error.message || 'Failed to send message. Please try again.';
       alert(`Failed to send message: ${errorMessage}`);
@@ -175,7 +186,7 @@ const Messages = () => {
                     }}
                     className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700"
                   >
-                    <Wifi className="w-5 h-5" />
+                    <RefreshCw className="w-5 h-5" />
                     <span>Refresh</span>
                   </button>
                 </div>
@@ -273,8 +284,7 @@ const Messages = () => {
                             await fetchConversation(availableCM.cm.userID);
                           }
                         } catch (error) {
-                          console.error('Failed to start conversation:', error);
-                          // No popup, just log the error
+                          // Error handling for starting conversation
                         }
                       }}
                       className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"

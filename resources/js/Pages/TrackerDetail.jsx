@@ -16,11 +16,9 @@ const TrackerDetail = () => {
   });
 
   useEffect(() => {
-    console.log('TrackerDetail - useEffect triggered with id:', id);
     if (id) {
       loadProposal();
     } else {
-      console.log('TrackerDetail - No ID provided, setting loading to false');
       setLoading(false);
     }
   }, [id]);
@@ -29,9 +27,7 @@ const TrackerDetail = () => {
     try {
       setLoading(true);
       setError('');
-      console.log('Loading proposal with ID:', id);
       const response = await apiService.getProposal(id);
-      console.log('API Response:', response);
       
       if (response.success) {
         setProposal(response.data);
@@ -39,7 +35,6 @@ const TrackerDetail = () => {
         setError(response.message || 'Failed to load proposal');
       }
     } catch (error) {
-      console.error('Failed to load proposal:', error);
       setError('Failed to load proposal. Please try again.');
     } finally {
       setLoading(false);
@@ -58,16 +53,21 @@ const TrackerDetail = () => {
   };
 
   const handleSubmitCompletion = () => {
-    console.log('Submitting completion files:', uploadedFiles);
+    // Submitting completion files
     setShowUploadModal(false);
   };
 
-  const getCompletionPercentage = () => {
-    const timelineStages = [
+  const getTimelineStages = () => {
+    if (!proposal) return [];
+    
+    const statusId = proposal.statusID;
+    
+    // Define all possible timeline stages based on the images
+    const allStages = [
       { id: 1, name: 'College Endorsement', status: 'completed' },
       { id: 2, name: 'R&D Division', status: 'completed' },
       { id: 3, name: 'Proposal Review', status: 'completed' },
-      { id: 4, name: 'Ethics Review', status: 'current' },
+      { id: 4, name: 'Ethics Review', status: 'pending' },
       { id: 5, name: 'OVPRDE', status: 'pending' },
       { id: 6, name: 'President', status: 'pending' },
       { id: 7, name: 'OSOURU', status: 'pending' },
@@ -75,9 +75,55 @@ const TrackerDetail = () => {
       { id: 9, name: 'Monitoring', status: 'pending' },
       { id: 10, name: 'For Completion', status: 'pending' }
     ];
+
+    // Update stages based on actual proposal status
+    switch (statusId) {
+      case 3: case 8: // Under Review
+        allStages[3].status = 'current'; // Ethics Review
+        break;
+      case 5: case 9: // Approved
+        allStages[3].status = 'completed'; // Ethics Review
+        allStages[4].status = 'completed'; // OVPRDE
+        allStages[5].status = 'completed'; // President
+        allStages[6].status = 'completed'; // OSOURU
+        allStages[7].status = 'current'; // Implementation
+        break;
+      case 6: case 10: // Rejected
+        allStages[3].status = 'rejected'; // Ethics Review
+        break;
+      case 11: // Ongoing
+        allStages[3].status = 'completed'; // Ethics Review
+        allStages[4].status = 'completed'; // OVPRDE
+        allStages[5].status = 'completed'; // President
+        allStages[6].status = 'completed'; // OSOURU
+        allStages[7].status = 'completed'; // Implementation
+        allStages[8].status = 'current'; // Monitoring
+        break;
+      case 12: // Completed
+        allStages.forEach(stage => stage.status = 'completed');
+        break;
+      default:
+        allStages[3].status = 'current'; // Ethics Review
+    }
+
+    return allStages;
+  };
+
+  const getCompletionPercentage = () => {
+    const timelineStages = getTimelineStages();
     const completedStages = timelineStages.filter(stage => stage.status === 'completed').length;
     const currentStage = timelineStages.find(stage => stage.status === 'current') ? 1 : 0;
+    const rejectedStage = timelineStages.find(stage => stage.status === 'rejected') ? 1 : 0;
+    
+    // If rejected, return 0%
+    if (rejectedStage) return 0;
+    
     return Math.round(((completedStages + currentStage * 0.5) / timelineStages.length) * 100);
+  };
+
+  const getCompletedStagesCount = () => {
+    const timelineStages = getTimelineStages();
+    return timelineStages.filter(stage => stage.status === 'completed').length;
   };
 
   if (loading) {
@@ -151,8 +197,7 @@ const TrackerDetail = () => {
   }
 
   // Debug logging
-  console.log('TrackerDetail - Proposal data:', proposal);
-  console.log('TrackerDetail - ID:', id);
+  // Proposal data and ID available
 
   return (
     <div className="w-full max-w-full mx-auto space-y-8 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
@@ -193,29 +238,62 @@ const TrackerDetail = () => {
             </div>
             <div className="flex flex-col items-end gap-3">
               <span className={`inline-flex px-4 py-2 text-sm font-semibold rounded-xl text-white shadow-lg ${
-                proposal.statusID === 1 ? 'bg-yellow-500' :
-                proposal.statusID === 2 ? 'bg-green-500' :
-                proposal.statusID === 3 ? 'bg-red-600' :
-                proposal.statusID === 4 ? 'bg-blue-500' :
-                proposal.statusID === 5 ? 'bg-green-600' : 'bg-gray-500'
+                proposal.statusID === 3 || proposal.statusID === 8 ? 'bg-yellow-500' : // Under Review
+                proposal.statusID === 5 || proposal.statusID === 9 ? 'bg-green-500' : // Approved
+                proposal.statusID === 6 || proposal.statusID === 10 ? 'bg-red-600' : // Rejected
+                proposal.statusID === 11 ? 'bg-blue-500' : // Ongoing
+                proposal.statusID === 12 ? 'bg-green-600' : // Completed
+                'bg-gray-500'
               }`}>
                 {proposal.status?.statusName || 'Unknown Status'}
               </span>
               {/* Progress Card */}
-              <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-2xl p-4 w-full lg:min-w-[240px] xl:min-w-[280px] lg:w-auto flex-shrink-0">
+              <div className={`bg-gradient-to-r rounded-2xl p-4 w-full lg:min-w-[240px] xl:min-w-[280px] lg:w-auto flex-shrink-0 ${
+                proposal.statusID === 6 || proposal.statusID === 10 ? 'from-red-50 to-red-100' : // Rejected
+                proposal.statusID === 12 ? 'from-green-50 to-green-100' : // Completed
+                proposal.statusID === 11 ? 'from-blue-50 to-blue-100' : // Ongoing
+                'from-red-50 to-red-100' // Default
+              }`}>
                 <div className="text-center">
-                  <div className="text-2xl sm:text-3xl font-bold text-red-600 mb-1">
+                  <div className={`text-2xl sm:text-3xl font-bold mb-1 ${
+                    proposal.statusID === 6 || proposal.statusID === 10 ? 'text-red-600' : // Rejected
+                    proposal.statusID === 12 ? 'text-green-600' : // Completed
+                    proposal.statusID === 11 ? 'text-blue-600' : // Ongoing
+                    'text-red-600' // Default
+                  }`}>
                     {getCompletionPercentage()}%
                   </div>
-                  <div className="text-sm text-red-700 font-medium mb-3">Project Progress</div>
-                  <div className="w-full bg-red-200 rounded-full h-2">
+                  <div className={`text-sm font-medium mb-3 ${
+                    proposal.statusID === 6 || proposal.statusID === 10 ? 'text-red-700' : // Rejected
+                    proposal.statusID === 12 ? 'text-green-700' : // Completed
+                    proposal.statusID === 11 ? 'text-blue-700' : // Ongoing
+                    'text-red-700' // Default
+                  }`}>
+                    Project Progress
+                  </div>
+                  <div className={`w-full rounded-full h-2 ${
+                    proposal.statusID === 6 || proposal.statusID === 10 ? 'bg-red-200' : // Rejected
+                    proposal.statusID === 12 ? 'bg-green-200' : // Completed
+                    proposal.statusID === 11 ? 'bg-blue-200' : // Ongoing
+                    'bg-red-200' // Default
+                  }`}>
                     <div
-                      className="bg-red-600 h-2 rounded-full transition-all duration-500"
+                      className={`h-2 rounded-full transition-all duration-500 ${
+                        proposal.statusID === 6 || proposal.statusID === 10 ? 'bg-red-600' : // Rejected
+                        proposal.statusID === 12 ? 'bg-green-600' : // Completed
+                        proposal.statusID === 11 ? 'bg-blue-600' : // Ongoing
+                        'bg-red-600' // Default
+                      }`}
                       style={{ width: `${getCompletionPercentage()}%` }}
                     ></div>
                   </div>
-                  <div className="text-xs text-red-600 mt-2">
-                    3 of 10 stages completed
+                  <div className={`text-xs mt-2 ${
+                    proposal.statusID === 6 || proposal.statusID === 10 ? 'text-red-600' : // Rejected
+                    proposal.statusID === 12 ? 'text-green-600' : // Completed
+                    proposal.statusID === 11 ? 'text-blue-600' : // Ongoing
+                    'text-red-600' // Default
+                  }`}>
+                    {getCompletedStagesCount()} of 10 stages completed
                   </div>
                 </div>
               </div>
@@ -241,24 +319,15 @@ const TrackerDetail = () => {
 
         {/* Timeline stages data */}
         {(() => {
-          const timelineStages = [
-            { id: 1, name: 'College Endorsement', status: 'completed' },
-            { id: 2, name: 'R&D Division', status: 'completed' },
-            { id: 3, name: 'Proposal Review', status: 'completed' },
-            { id: 4, name: 'Ethics Review', status: 'current' },
-            { id: 5, name: 'OVPRDE', status: 'pending' },
-            { id: 6, name: 'President', status: 'pending' },
-            { id: 7, name: 'OSOURU', status: 'pending' },
-            { id: 8, name: 'Implementation', status: 'pending' },
-            { id: 9, name: 'Monitoring', status: 'pending' },
-            { id: 10, name: 'For Completion', status: 'pending' }
-          ];
+          const timelineStages = getTimelineStages();
 
           const getStatusColor = (status) => {
             switch (status) {
               case 'completed':
                 return 'bg-green-500';
               case 'current':
+                return 'bg-blue-500';
+              case 'rejected':
                 return 'bg-red-500';
               default:
                 return 'bg-gray-300';
@@ -270,6 +339,8 @@ const TrackerDetail = () => {
               case 'completed':
                 return 'text-green-700';
               case 'current':
+                return 'text-blue-700';
+              case 'rejected':
                 return 'text-red-700';
               default:
                 return 'text-gray-600';
@@ -314,8 +385,9 @@ const TrackerDetail = () => {
                       {/* Stage Label */}
                       <div 
                         className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
-                          stage.status === 'current' ? 'bg-red-50 border border-red-200' :
+                          stage.status === 'current' ? 'bg-blue-50 border border-blue-200' :
                           stage.status === 'completed' ? 'bg-green-50 border border-green-200' :
+                          stage.status === 'rejected' ? 'bg-red-50 border border-red-200' :
                           'bg-gray-50 border border-gray-200'
                         } ${stage.name === 'For Completion' ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors duration-200' : ''}`}
                         onClick={stage.name === 'For Completion' ? handleCompletionClick : undefined}

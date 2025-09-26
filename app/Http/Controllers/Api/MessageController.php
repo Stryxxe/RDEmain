@@ -49,8 +49,7 @@ class MessageController extends Controller
 
     public function store(Request $request): JsonResponse
     {
-        // Debug: Log the request data
-        \Log::info('Message store request data:', $request->all());
+        // Process message store request
         
         try {
             $request->validate([
@@ -60,7 +59,6 @@ class MessageController extends Controller
                 'type' => ['sometimes', Rule::in(['general', 'proposal_update', 'system', 'review', 'revision', 'meeting', 'status', 'security', 'reply'])]
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::error('Message validation failed:', $e->errors());
             return response()->json([
                 'error' => 'Validation failed',
                 'details' => $e->errors()

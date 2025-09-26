@@ -33,8 +33,37 @@ const NotificationToast = ({ notification, onRemove, onMarkAsRead }) => {
   };
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
     const now = new Date();
-    const diff = now - new Date(timestamp);
+    let notificationDate;
+    
+    // Handle different timestamp formats
+    if (typeof timestamp === 'string') {
+      // Try parsing as ISO string first
+      notificationDate = new Date(timestamp);
+      
+      // If that fails, try parsing as a different format
+      if (isNaN(notificationDate.getTime())) {
+        // Try parsing as Unix timestamp (if it's a number string)
+        const numTimestamp = parseFloat(timestamp);
+        if (!isNaN(numTimestamp)) {
+          notificationDate = new Date(numTimestamp * 1000); // Convert from seconds to milliseconds
+        }
+      }
+    } else if (typeof timestamp === 'number') {
+      // Handle Unix timestamp (in seconds)
+      notificationDate = new Date(timestamp * 1000);
+    } else {
+      notificationDate = new Date(timestamp);
+    }
+    
+    // Check if the date is valid
+    if (isNaN(notificationDate.getTime())) {
+      return 'Unknown time';
+    }
+    
+    const diff = now - notificationDate;
     const minutes = Math.floor(diff / 60000);
     
     if (minutes < 1) return 'Just now';
@@ -65,12 +94,11 @@ const NotificationToast = ({ notification, onRemove, onMarkAsRead }) => {
             </p>
             <div className="flex items-center justify-between mt-2">
               <span className="text-xs text-gray-500">
-                {formatTime(notification.timestamp)}
+                {formatTime(notification.created_at)}
               </span>
               {!notification.read && (
                 <div className="flex items-center space-x-1">
                   <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                  <span className="text-xs text-blue-600 font-medium">Live</span>
                 </div>
               )}
             </div>

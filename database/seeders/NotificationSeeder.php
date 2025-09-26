@@ -292,7 +292,7 @@ class NotificationSeeder extends Seeder
                     'data' => $notificationData['data'],
                     'read' => $notificationData['read'],
                     'read_at' => $notificationData['read_at'] ?? null,
-                    'created_at' => now()->subDays(rand(0, 7))->subHours(rand(0, 23)),
+                    'created_at' => now()->subDays(rand(0, 30))->subHours(rand(0, 23))->subMinutes(rand(0, 59)),
                 ]);
             }
         }

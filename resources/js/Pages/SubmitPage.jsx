@@ -194,7 +194,6 @@ const SubmitPage = () => {
         setSubmitError(response.message || 'Failed to submit proposal');
       }
     } catch (error) {
-      console.error('Submit error:', error);
       setSubmitError(error.message || 'An error occurred while submitting the proposal');
     } finally {
       setIsSubmitting(false);

@@ -23,14 +23,11 @@ const Tracker = () => {
       const response = await apiService.getProposals();
       
       if (response.success) {
-        console.log('Tracker - Projects loaded:', response.data);
-        console.log('Tracker - First project structure:', response.data?.[0]);
         setProjects(response.data || []);
       } else {
         setError(response.message || 'Failed to load projects');
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
       setError('Failed to load projects. Please try again.');
     } finally {
       setLoading(false);
@@ -39,29 +36,27 @@ const Tracker = () => {
 
   const getStatusColor = (statusId) => {
     switch (statusId) {
-      case 1: return 'bg-red-100 text-red-800 border-red-200'; // Under Review
-      case 2: return 'bg-green-100 text-green-800 border-green-200'; // Approved
-      case 3: return 'bg-red-100 text-red-800 border-red-200'; // Rejected
-      case 4: return 'bg-orange-100 text-orange-800 border-orange-200'; // Ongoing
-      case 5: return 'bg-green-100 text-green-800 border-green-200'; // Completed
+      case 3: case 8: return 'bg-red-100 text-red-800 border-red-200'; // Under Review
+      case 5: case 9: return 'bg-green-100 text-green-800 border-green-200'; // Approved
+      case 6: case 10: return 'bg-red-100 text-red-800 border-red-200'; // Rejected
+      case 11: return 'bg-orange-100 text-orange-800 border-orange-200'; // Ongoing
+      case 12: return 'bg-green-100 text-green-800 border-green-200'; // Completed
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getProgressPercentage = (statusId) => {
     switch (statusId) {
-      case 1: return 20; // Under Review
-      case 2: return 40; // Approved
-      case 3: return 0;  // Rejected
-      case 4: return 60; // Ongoing
-      case 5: return 100; // Completed
+      case 3: case 8: return 25; // Under Review - Initial submission and review process
+      case 5: case 9: return 50; // Approved - Proposal approved, ready to start implementation
+      case 6: case 10: return 0;  // Rejected - No progress, needs revision
+      case 11: return 75; // Ongoing - Research work in progress
+      case 12: return 100; // Completed - Project finished
       default: return 0;
     }
   };
 
   const handleViewDetails = (projectId) => {
-    console.log('Tracker - handleViewDetails called with projectId:', projectId);
-    console.log('Tracker - navigating to:', `/proponent/tracker/${projectId}`);
     navigate(`/proponent/tracker/${projectId}`);
   };
 
@@ -306,9 +301,6 @@ const Tracker = () => {
                     <td className="px-4 py-3">
                       <button
                         onClick={() => {
-                          console.log('Tracker - Button clicked for project:', project);
-                          console.log('Tracker - Project.id:', project.id);
-                          console.log('Tracker - Project.proposalID:', project.proposalID);
                           handleViewDetails(project.proposalID || project.id);
                         }}
                         className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors duration-200"

@@ -1,5 +1,6 @@
 // API Service for ProponentView
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || window.location.origin;
+const API_BASE_URL = `${API_ORIGIN}/api`;
 
 class ApiService {
   constructor() { 
@@ -31,7 +32,7 @@ class ApiService {
       
       this.csrfInitialized = true;
     } catch (error) {
-      console.error('Error initializing CSRF:', error);
+      // Error handling for CSRF initialization
     }
   }
 
@@ -122,7 +123,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error fetching current user:', error);
       throw error;
     }
   }
@@ -141,7 +141,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error updating user profile:', error);
       throw error;
     }
   }
@@ -198,7 +197,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error creating proposal:', error);
       throw error;
     }
   }
@@ -213,7 +211,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error fetching proposals:', error);
       throw error;
     }
   }
@@ -231,7 +228,6 @@ class ApiService {
       const data = await this.handleResponse(response);
       return data;
     } catch (error) {
-      console.error('Error fetching proposal:', error);
       throw error;
     }
   }
@@ -247,7 +243,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error updating proposal:', error);
       throw error;
     }
   }
@@ -262,7 +257,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error deleting proposal:', error);
       throw error;
     }
   }
@@ -277,7 +271,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error fetching notifications:', error);
       throw error;
     }
   }
@@ -292,7 +285,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error fetching messages:', error);
       throw error;
     }
   }
@@ -308,7 +300,6 @@ class ApiService {
       
       return await this.handleResponse(response);
     } catch (error) {
-      console.error('Error sending message:', error);
       throw error;
     }
   }
