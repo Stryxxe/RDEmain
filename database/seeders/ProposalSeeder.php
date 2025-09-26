@@ -359,3 +359,4 @@ class ProposalSeeder extends Seeder
         $this->command->info('Proposal seeding completed successfully!');
     }
 }
+

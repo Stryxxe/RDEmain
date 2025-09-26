@@ -126,6 +126,151 @@ const TrackerDetail = () => {
     return timelineStages.filter(stage => stage.status === 'completed').length;
   };
 
+  const getStatusHistory = () => {
+    if (!proposal) return [];
+    
+    const timelineStages = getTimelineStages();
+    const statusId = proposal.statusID;
+    const baseDate = new Date(proposal.created_at);
+    
+    // Generate status history based on timeline stages
+    const statusHistory = [];
+    
+    // Always include initial submission
+    statusHistory.push({
+      date: baseDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric' 
+      }),
+      status: 'Proposal Submitted',
+      action: 'Research proposal submitted for initial review and processing.',
+      priority: 'high'
+    });
+    
+    // Add completed stages in reverse chronological order
+    const completedStages = timelineStages.filter(stage => stage.status === 'completed');
+    const currentStage = timelineStages.find(stage => stage.status === 'current');
+    const rejectedStage = timelineStages.find(stage => stage.status === 'rejected');
+    
+    // Add completed stages
+    completedStages.forEach((stage, index) => {
+      const stageDate = new Date(baseDate);
+      stageDate.setDate(stageDate.getDate() + (completedStages.length - index) * 2); // 2 days between each stage
+      
+      let action = '';
+      switch (stage.name) {
+        case 'College Endorsement':
+          action = 'Proposal endorsed by the college committee and forwarded for further review.';
+          break;
+        case 'R&D Division':
+          action = 'Technical assessment completed by R&D Division with positive evaluation.';
+          break;
+        case 'Proposal Review':
+          action = 'Initial proposal review completed with recommendations for improvement.';
+          break;
+        case 'Ethics Review':
+          action = 'Ethics committee review completed with compliance approval.';
+          break;
+        case 'OVPRDE':
+          action = 'Office of Vice President for Research and Development approval granted.';
+          break;
+        case 'President':
+          action = 'Presidential approval received for project implementation.';
+          break;
+        case 'OSOURU':
+          action = 'Office of Student Organizations and University Relations approval completed.';
+          break;
+        case 'Implementation':
+          action = 'Project implementation phase initiated and research work commenced.';
+          break;
+        case 'Monitoring':
+          action = 'Project monitoring and progress tracking phase activated.';
+          break;
+        case 'For Completion':
+          action = 'Project completed successfully with all deliverables submitted.';
+          break;
+        default:
+          action = `${stage.name} stage completed successfully.`;
+      }
+      
+      statusHistory.push({
+        date: stageDate.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        status: stage.name,
+        action: action,
+        priority: stage.name === 'Ethics Review' || stage.name === 'President' ? 'high' : 'medium'
+      });
+    });
+    
+    // Add current stage
+    if (currentStage) {
+      const currentDate = new Date(baseDate);
+      currentDate.setDate(currentDate.getDate() + (completedStages.length + 1) * 2);
+      
+      let action = '';
+      switch (currentStage.name) {
+        case 'Ethics Review':
+          action = 'Currently under ethics committee review for compliance and safety assessment.';
+          break;
+        case 'OVPRDE':
+          action = 'Under review by Office of Vice President for Research and Development.';
+          break;
+        case 'President':
+          action = 'Awaiting presidential approval for project authorization.';
+          break;
+        case 'OSOURU':
+          action = 'Under review by Office of Student Organizations and University Relations.';
+          break;
+        case 'Implementation':
+          action = 'Project implementation in progress with active research activities.';
+          break;
+        case 'Monitoring':
+          action = 'Project monitoring phase with regular progress assessments.';
+          break;
+        case 'For Completion':
+          action = 'Final completion phase with document preparation and submission.';
+          break;
+        default:
+          action = `Currently in ${currentStage.name} stage.`;
+      }
+      
+      statusHistory.push({
+        date: currentDate.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        status: currentStage.name,
+        action: action,
+        priority: 'high'
+      });
+    }
+    
+    // Add rejected stage if applicable
+    if (rejectedStage) {
+      const rejectedDate = new Date(baseDate);
+      rejectedDate.setDate(rejectedDate.getDate() + (completedStages.length + 1) * 2);
+      
+      statusHistory.push({
+        date: rejectedDate.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        }),
+        status: rejectedStage.name,
+        action: `Proposal rejected at ${rejectedStage.name} stage. Please review feedback and resubmit with necessary revisions.`,
+        priority: 'high'
+      });
+    }
+    
+    // Sort by date (most recent first)
+    return statusHistory.sort((a, b) => new Date(b.date) - new Date(a.date));
+  };
+
   if (loading) {
     return (
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -424,32 +569,7 @@ const TrackerDetail = () => {
         </div>
 
         {(() => {
-          const statusHistory = [
-            {
-              date: 'July 14, 2025',
-              status: 'College Endorsement',
-              action: 'Proposal submitted for initial review and endorsement by the college committee.',
-              priority: 'high'
-            },
-            {
-              date: 'July 12, 2025',
-              status: 'R&D Division Review',
-              action: 'Proposal forwarded to R&D Division for technical assessment and evaluation.',
-              priority: 'medium'
-            },
-            {
-              date: 'July 10, 2025',
-              status: 'Proposal Review',
-              action: 'Initial proposal review completed with minor revisions requested.',
-              priority: 'medium'
-            },
-            {
-              date: 'July 8, 2025',
-              status: 'Ethics Review',
-              action: 'Currently under ethics committee review for compliance and safety assessment.',
-              priority: 'high'
-            }
-          ];
+          const statusHistory = getStatusHistory();
 
           const getPriorityColor = (priority) => {
             switch (priority) {
