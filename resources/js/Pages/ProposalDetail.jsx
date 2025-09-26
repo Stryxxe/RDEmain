@@ -189,16 +189,26 @@ const ProposalDetail = () => {
   
 
   return (
-    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Enhanced Header */}
         <div className="mb-8">
-          <button
-            onClick={() => navigate('/proponent/projects')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-6 transition-colors duration-200 group"
-          >
-            <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
-            <span className="font-medium">Back to Projects</span>
-          </button>
+          <div className="flex items-center justify-between mb-6">
+            <button
+              onClick={() => navigate('/proponent/projects')}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors duration-200 group"
+            >
+              <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
+              <span className="font-medium">Back to Projects</span>
+            </button>
+            
+            <button
+              onClick={() => navigate(`/proponent/tracker/${id}`)}
+              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 group"
+            >
+              <Eye size={16} className="group-hover:scale-110 transition-transform duration-200" />
+              <span className="font-medium">Track Progress</span>
+            </button>
+          </div>
           
           <div className="bg-gradient-to-r from-red-50 to-orange-50 rounded-2xl p-8 border border-red-100">
             <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start gap-6">
