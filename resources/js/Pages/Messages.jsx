@@ -44,7 +44,6 @@ const Messages = () => {
         setAvailableCM(data);
         setCmLoading(false);
       }).catch(error => {
-        console.error('Failed to fetch available CM:', error);
         setCmLoading(false);
       });
     }
@@ -124,9 +123,6 @@ const Messages = () => {
   });
 
   const handleConversationClick = async (conversation) => {
-    console.log('Selected conversation:', conversation);
-    console.log('Other user:', conversation.otherUser);
-    console.log('User ID:', conversation.otherUser.userID);
     setSelectedConversation(conversation);
     await fetchConversation(conversation.otherUser.userID);
   };
@@ -140,19 +136,9 @@ const Messages = () => {
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedConversation || sendingMessage) return;
     
-    console.log('Starting to send message...');
-    console.log('Selected conversation:', selectedConversation);
-    console.log('New message:', newMessage);
-    
     setSendingMessage(true);
     try {
       const recipientID = String(selectedConversation.otherUser.userID);
-      console.log('Sending message with data:', {
-        recipientID: recipientID,
-        subject: `Re: ${selectedConversation.latestMessage.subject}`,
-        content: newMessage,
-        type: 'reply'
-      });
       
       const result = await sendMessage(
         recipientID,
@@ -161,7 +147,6 @@ const Messages = () => {
       'reply'
     );
     
-      console.log('Message sent successfully:', result);
     setNewMessage('');
       
       // Refresh the conversation to show the new message
@@ -169,9 +154,6 @@ const Messages = () => {
       
       // Message sent successfully (no popup)
     } catch (error) {
-      console.error('Failed to send message:', error);
-      console.error('Error details:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       // Show error feedback
       const errorMessage = error.response?.data?.error || error.message || 'Failed to send message. Please try again.';
       alert(`Failed to send message: ${errorMessage}`);
@@ -302,8 +284,7 @@ const Messages = () => {
                             await fetchConversation(availableCM.cm.userID);
                           }
                         } catch (error) {
-                          console.error('Failed to start conversation:', error);
-                          // No popup, just log the error
+                          // Error handling for starting conversation
                         }
                       }}
                       className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"

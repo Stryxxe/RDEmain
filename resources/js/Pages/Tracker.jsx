@@ -23,14 +23,11 @@ const Tracker = () => {
       const response = await apiService.getProposals();
       
       if (response.success) {
-        console.log('Tracker - Projects loaded:', response.data);
-        console.log('Tracker - First project structure:', response.data?.[0]);
         setProjects(response.data || []);
       } else {
         setError(response.message || 'Failed to load projects');
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
       setError('Failed to load projects. Please try again.');
     } finally {
       setLoading(false);
@@ -60,8 +57,6 @@ const Tracker = () => {
   };
 
   const handleViewDetails = (projectId) => {
-    console.log('Tracker - handleViewDetails called with projectId:', projectId);
-    console.log('Tracker - navigating to:', `/proponent/tracker/${projectId}`);
     navigate(`/proponent/tracker/${projectId}`);
   };
 
@@ -306,9 +301,6 @@ const Tracker = () => {
                     <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
                       <button
                         onClick={() => {
-                          console.log('Tracker - Button clicked for project:', project);
-                          console.log('Tracker - Project.id:', project.id);
-                          console.log('Tracker - Project.proposalID:', project.proposalID);
                           handleViewDetails(project.proposalID || project.id);
                         }}
                         className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors duration-200"

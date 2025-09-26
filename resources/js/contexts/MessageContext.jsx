@@ -31,7 +31,7 @@ export const MessageProvider = ({ children }) => {
       });
       setMessages(response.data.data || []);
     } catch (error) {
-      console.error('Failed to fetch messages:', error);
+      // Error handling for fetching messages
     } finally {
       setLoading(false);
     }
@@ -46,7 +46,7 @@ export const MessageProvider = ({ children }) => {
       });
       setSentMessages(response.data.data || []);
     } catch (error) {
-      console.error('Failed to fetch sent messages:', error);
+      // Error handling for fetching sent messages
     }
   };
 
@@ -59,7 +59,6 @@ export const MessageProvider = ({ children }) => {
       });
       setUnreadCount(response.data.count || 0);
     } catch (error) {
-      console.error('Failed to fetch unread count:', error);
       setUnreadCount(0);
     }
   };
@@ -73,8 +72,7 @@ export const MessageProvider = ({ children }) => {
       });
       setConversations(response.data.data || []);
     } catch (error) {
-      console.error('Failed to fetch conversations:', error);
-      console.error('Error details:', error.response?.data);
+      // Error handling for fetching conversations
     }
   };
 
@@ -88,7 +86,6 @@ export const MessageProvider = ({ children }) => {
       setCurrentConversation(response.data.data || []);
       return response.data.data || [];
     } catch (error) {
-      console.error('Failed to fetch conversation:', error);
       return [];
     }
   };
@@ -127,7 +124,7 @@ export const MessageProvider = ({ children }) => {
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
-      console.error('Failed to mark message as read:', error);
+      // Error handling for marking message as read
     }
   };
 
@@ -142,7 +139,7 @@ export const MessageProvider = ({ children }) => {
       );
       setUnreadCount(0);
     } catch (error) {
-      console.error('Failed to mark all messages as read:', error);
+      // Error handling for marking all messages as read
     }
   };
 
@@ -159,7 +156,7 @@ export const MessageProvider = ({ children }) => {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
     } catch (error) {
-      console.error('Failed to delete message:', error);
+      // Error handling for deleting message
     }
   };
 
@@ -171,21 +168,13 @@ export const MessageProvider = ({ children }) => {
       });
       setSentMessages(prev => prev.filter(message => message.id !== id));
     } catch (error) {
-      console.error('Failed to delete sent message:', error);
+      // Error handling for deleting sent message
     }
   };
 
   const sendMessage = async (recipientId, subject, content, type = 'general') => {
     try {
       const token = localStorage.getItem('token');
-      console.log('Token exists:', !!token);
-      console.log('Token length:', token ? token.length : 0);
-      console.log('Sending message with data:', {
-        recipientID: recipientId,
-        subject,
-        content,
-        type
-      });
       
       const response = await axios.post('/api/messages', {
         recipientID: recipientId,
@@ -195,8 +184,6 @@ export const MessageProvider = ({ children }) => {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
-      console.log('Message sent successfully:', response.data);
       
       // Refresh sent messages and conversations
       fetchSentMessages();
@@ -212,9 +199,6 @@ export const MessageProvider = ({ children }) => {
       
       return response.data;
     } catch (error) {
-      console.error('Failed to send message:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
       throw error;
     }
   };
@@ -256,7 +240,6 @@ export const MessageProvider = ({ children }) => {
       
       return true;
     } catch (error) {
-      console.error('Failed to clear all messages:', error);
       return false;
     }
   };

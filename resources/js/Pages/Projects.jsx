@@ -36,7 +36,6 @@ const Projects = () => {
         setError(response.message || 'Failed to load projects');
       }
     } catch (error) {
-      console.error('Failed to load projects:', error);
       setError('Failed to load projects. Please try again.');
     } finally {
       setLoading(false);

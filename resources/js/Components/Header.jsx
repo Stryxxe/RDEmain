@@ -77,7 +77,6 @@ const Header = () => {
       const years = Math.floor(days / 365);
       return `${years}y ago`;
     } catch (error) {
-      console.error('Error in Header formatTime:', error);
       return 'Unknown time';
     }
   };

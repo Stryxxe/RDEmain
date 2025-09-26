@@ -27,7 +27,6 @@ export const NotificationProvider = ({ children }) => {
           setDismissedToasts(new Set(dismissedArray));
         }
       } catch (error) {
-        console.error('Failed to load dismissed notifications:', error);
         setDismissedToasts(new Set());
       }
     };
@@ -47,7 +46,6 @@ export const NotificationProvider = ({ children }) => {
       
       setNotifications(response.data.data || []);
     } catch (error) {
-      console.error('Failed to fetch notifications:', error);
       // Set empty array on error to prevent undefined issues
       setNotifications([]);
     } finally {
@@ -65,7 +63,6 @@ export const NotificationProvider = ({ children }) => {
       });
       setUnreadCount(response.data.count || 0);
     } catch (error) {
-      console.error('Failed to fetch unread count:', error);
       setUnreadCount(0);
     }
   };
@@ -122,7 +119,7 @@ export const NotificationProvider = ({ children }) => {
         fetchUnreadCount();
       }, 500);
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
+      // Error handling for marking notification as read
     }
   };
 
@@ -137,7 +134,7 @@ export const NotificationProvider = ({ children }) => {
       );
       setUnreadCount(0);
     } catch (error) {
-      console.error('Failed to mark all notifications as read:', error);
+      // Error handling for marking all notifications as read
     }
   };
 
@@ -154,7 +151,7 @@ export const NotificationProvider = ({ children }) => {
         setUnreadCount(prev => Math.max(0, prev - 1));
       }
     } catch (error) {
-      console.error('Failed to delete notification:', error);
+      // Error handling for deleting notification
     }
   };
 
@@ -168,7 +165,7 @@ export const NotificationProvider = ({ children }) => {
         const dismissedArray = Array.from(newDismissed);
         localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedArray));
       } catch (error) {
-        console.error('Failed to save dismissed notifications:', error);
+        // Error handling for saving dismissed notifications
       }
       
       return newDismissed;
@@ -186,7 +183,7 @@ export const NotificationProvider = ({ children }) => {
     try {
       localStorage.removeItem('dismissedNotifications');
     } catch (error) {
-      console.error('Failed to clear dismissed notifications:', error);
+      // Error handling for clearing dismissed notifications
     }
   };
 
@@ -195,8 +192,6 @@ export const NotificationProvider = ({ children }) => {
     const toastNotifications = notifications.filter(notification => 
       !notification.read && !dismissedToasts.has(notification.id)
     );
-    console.log('getToastNotifications - all notifications:', notifications.map(n => ({ id: n.id, read: n.read, title: n.title })));
-    console.log('getToastNotifications - toast notifications:', toastNotifications.map(n => ({ id: n.id, read: n.read, title: n.title })));
     return toastNotifications;
   };
 
@@ -211,7 +206,7 @@ export const NotificationProvider = ({ children }) => {
         try {
           localStorage.setItem('dismissedNotifications', JSON.stringify(validDismissed));
         } catch (error) {
-          console.error('Failed to clean up dismissed notifications:', error);
+          // Error handling for cleaning up dismissed notifications
         }
       }
     }

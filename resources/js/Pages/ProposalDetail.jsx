@@ -35,7 +35,6 @@ const ProposalDetail = () => {
         setError(response.message || 'Failed to load proposal');
       }
     } catch (error) {
-      console.error('Failed to load proposal:', error);
       setError('Failed to load proposal. Please try again.');
     } finally {
       setLoading(false);

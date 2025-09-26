@@ -116,7 +116,7 @@ const ProposalDetail = () => {
 
   const handleSubmitCompletion = () => {
     // Here you would typically send the files to your backend
-    console.log('Submitting completion files:', uploadedFiles);
+    // Submitting completion files
     setShowUploadModal(false);
     // You might want to show a success message here
   };

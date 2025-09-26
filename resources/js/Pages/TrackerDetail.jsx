@@ -16,11 +16,9 @@ const TrackerDetail = () => {
   });
 
   useEffect(() => {
-    console.log('TrackerDetail - useEffect triggered with id:', id);
     if (id) {
       loadProposal();
     } else {
-      console.log('TrackerDetail - No ID provided, setting loading to false');
       setLoading(false);
     }
   }, [id]);
@@ -29,9 +27,7 @@ const TrackerDetail = () => {
     try {
       setLoading(true);
       setError('');
-      console.log('Loading proposal with ID:', id);
       const response = await apiService.getProposal(id);
-      console.log('API Response:', response);
       
       if (response.success) {
         setProposal(response.data);
@@ -39,7 +35,6 @@ const TrackerDetail = () => {
         setError(response.message || 'Failed to load proposal');
       }
     } catch (error) {
-      console.error('Failed to load proposal:', error);
       setError('Failed to load proposal. Please try again.');
     } finally {
       setLoading(false);
@@ -58,7 +53,7 @@ const TrackerDetail = () => {
   };
 
   const handleSubmitCompletion = () => {
-    console.log('Submitting completion files:', uploadedFiles);
+    // Submitting completion files
     setShowUploadModal(false);
   };
 
@@ -202,8 +197,7 @@ const TrackerDetail = () => {
   }
 
   // Debug logging
-  console.log('TrackerDetail - Proposal data:', proposal);
-  console.log('TrackerDetail - ID:', id);
+  // Proposal data and ID available
 
   return (
     <div className="w-full max-w-full mx-auto space-y-8 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
