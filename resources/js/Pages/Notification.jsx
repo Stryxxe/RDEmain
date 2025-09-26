@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationContext';
-import { Bell, Check, X, Filter, Wifi, WifiOff, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Bell, Check, X, Filter, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Notification = () => {
   const [filter, setFilter] = useState('all');
@@ -11,18 +11,69 @@ const Notification = () => {
   const navigate = useNavigate();
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
     const now = new Date();
-    const diff = now - new Date(timestamp);
-    const minutes = Math.floor(diff / 60000);
+    let notificationDate;
     
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    
-    const days = Math.floor(hours / 24);
-    return `${days}d ago`;
+    try {
+      // Handle different timestamp formats
+      if (typeof timestamp === 'string') {
+        // Try parsing as ISO string first
+        notificationDate = new Date(timestamp);
+        
+        // If that fails, try parsing as a different format
+        if (isNaN(notificationDate.getTime())) {
+          // Try parsing as Unix timestamp (if it's a number string)
+          const numTimestamp = parseFloat(timestamp);
+          if (!isNaN(numTimestamp)) {
+            notificationDate = new Date(numTimestamp * 1000); // Convert from seconds to milliseconds
+          }
+        }
+      } else if (typeof timestamp === 'number') {
+        // Handle Unix timestamp (in seconds)
+        notificationDate = new Date(timestamp * 1000);
+      } else if (timestamp && typeof timestamp === 'object' && timestamp.date) {
+        // Handle Carbon object from Laravel
+        notificationDate = new Date(timestamp.date);
+      } else {
+        notificationDate = new Date(timestamp);
+      }
+      
+      // Check if the date is in the future (which would cause issues)
+      if (notificationDate > now) {
+        return 'Just now';
+      }
+      
+      // Check if the date is valid
+      if (isNaN(notificationDate.getTime())) {
+        return 'Unknown time';
+      }
+      
+      const diff = now - notificationDate;
+      const minutes = Math.floor(diff / 60000);
+      
+      if (minutes < 1) return 'Just now';
+      if (minutes < 60) return `${minutes}m ago`;
+      
+      const hours = Math.floor(minutes / 60);
+      if (hours < 24) return `${hours}h ago`;
+      
+      const days = Math.floor(hours / 24);
+      if (days < 7) return `${days}d ago`;
+      
+      const weeks = Math.floor(days / 7);
+      if (weeks < 4) return `${weeks}w ago`;
+      
+      const months = Math.floor(days / 30);
+      if (months < 12) return `${months}mo ago`;
+      
+      const years = Math.floor(days / 365);
+      return `${years}y ago`;
+    } catch (error) {
+      console.error('Error in formatTime:', error);
+      return 'Unknown time';
+    }
   };
 
   // Convert notifications to display format
@@ -68,7 +119,7 @@ const Notification = () => {
   const handleNotificationClick = (notification) => {
     // Mark as read when clicked
     if (notification.unread) {
-      markAsRead(notification.id);
+      markAsReadContext(notification.id);
     }
     // Only navigate if it's a proposal notification, otherwise stay on the page
     if (notification.type === 'proposal') {
@@ -146,7 +197,7 @@ const Notification = () => {
                     disabled={loading}
                     className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
                   >
-                    <Wifi className="w-5 h-5" />
+                    <RefreshCw className="w-5 h-5" />
                     <span>{loading ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
                 </div>
@@ -298,17 +349,9 @@ const Notification = () => {
                     {getTypeIcon(notification.type)}
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div className="flex items-center gap-2 mb-1">
-                        {notification.unread && (
-                          <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></div>
-                        )}
                         <h4 className="text-sm font-semibold text-gray-900 truncate">
                           {notification.title}
                         </h4>
-                        {notification.unread && (
-                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full flex-shrink-0">
-                            Live
-                          </span>
-                        )}
                       </div>
                       <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 overflow-hidden mb-1">
                         {notification.message}

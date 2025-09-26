@@ -20,7 +20,9 @@ class Notification extends Model
     protected $casts = [
         'data' => 'array',
         'read' => 'boolean',
-        'read_at' => 'datetime'
+        'read_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
 
     public function user(): BelongsTo

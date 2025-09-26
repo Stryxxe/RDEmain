@@ -19,6 +19,8 @@ export const AuthProvider = ({ children }) => {
     // Check if user is already logged in
     const token = localStorage.getItem('token');
     if (token) {
+      // Ensure axios sends the bearer token by default
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       // Verify token with backend
       axios.get('/api/user', {
         headers: { Authorization: `Bearer ${token}` }
@@ -28,6 +30,7 @@ export const AuthProvider = ({ children }) => {
       })
       .catch(() => {
         localStorage.removeItem('token');
+        delete axios.defaults.headers.common['Authorization'];
       })
       .finally(() => {
         setLoading(false);
@@ -43,6 +46,7 @@ export const AuthProvider = ({ children }) => {
       const { token, user: userData } = response.data;
       
       localStorage.setItem('token', token);
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(userData);
       
       return { success: true };
@@ -56,6 +60,8 @@ export const AuthProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('token');
+    localStorage.removeItem('dismissedNotifications'); // Clear dismissed notifications on logout
+    delete axios.defaults.headers.common['Authorization'];
     setUser(null);
   };
 

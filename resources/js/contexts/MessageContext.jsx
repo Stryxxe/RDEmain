@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
+import { useAuth } from './AuthContext';
 
 const MessageContext = createContext();
 
@@ -18,6 +19,7 @@ export const MessageProvider = ({ children }) => {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const { user, loading: authLoading } = useAuth();
 
   // Fetch received messages from API
   const fetchMessages = async () => {
@@ -91,13 +93,24 @@ export const MessageProvider = ({ children }) => {
     }
   };
 
-  // Load messages on mount
+  // Load messages when authenticated and auth check finished
   useEffect(() => {
+    if (authLoading) return;
+    const token = localStorage.getItem('token');
+    if (!user || !token) {
+      // Clear any stale data if not authenticated
+      setMessages([]);
+      setSentMessages([]);
+      setConversations([]);
+      setCurrentConversation(null);
+      setUnreadCount(0);
+      return;
+    }
     fetchMessages();
     fetchSentMessages();
     fetchConversations();
     fetchUnreadCount();
-  }, []);
+  }, [user, authLoading]);
 
   const markAsRead = async (id) => {
     try {

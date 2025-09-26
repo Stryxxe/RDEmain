@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMessages } from '../contexts/MessageContext';
 import { useAuth } from '../contexts/AuthContext';
-import { MessageCircle, Send, Search, Wifi, WifiOff, User, Clock, AlertCircle } from 'lucide-react';
+import { MessageCircle, Send, Search, RefreshCw, User, Clock, AlertCircle } from 'lucide-react';
 
 const Messages = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -51,8 +51,37 @@ const Messages = () => {
   }, [isProponent, fetchAvailableCM]);
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
     const now = new Date();
-    const diff = now - new Date(timestamp);
+    let notificationDate;
+    
+    // Handle different timestamp formats
+    if (typeof timestamp === 'string') {
+      // Try parsing as ISO string first
+      notificationDate = new Date(timestamp);
+      
+      // If that fails, try parsing as a different format
+      if (isNaN(notificationDate.getTime())) {
+        // Try parsing as Unix timestamp (if it's a number string)
+        const numTimestamp = parseFloat(timestamp);
+        if (!isNaN(numTimestamp)) {
+          notificationDate = new Date(numTimestamp * 1000); // Convert from seconds to milliseconds
+        }
+      }
+    } else if (typeof timestamp === 'number') {
+      // Handle Unix timestamp (in seconds)
+      notificationDate = new Date(timestamp * 1000);
+    } else {
+      notificationDate = new Date(timestamp);
+    }
+    
+    // Check if the date is valid
+    if (isNaN(notificationDate.getTime())) {
+      return 'Unknown time';
+    }
+    
+    const diff = now - notificationDate;
     const minutes = Math.floor(diff / 60000);
     
     if (minutes < 1) return 'Just now';
@@ -175,7 +204,7 @@ const Messages = () => {
                     }}
                     className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700"
                   >
-                    <Wifi className="w-5 h-5" />
+                    <RefreshCw className="w-5 h-5" />
                     <span>Refresh</span>
                   </button>
                 </div>

@@ -18,6 +18,23 @@ class NotificationController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
             
+        // Transform the data to ensure proper timestamp formatting
+        $notifications->getCollection()->transform(function ($notification) {
+            return [
+                'id' => $notification->id,
+                'userID' => $notification->userID,
+                'type' => $notification->type,
+                'title' => $notification->title,
+                'message' => $notification->message,
+                'data' => $notification->data,
+                'read' => $notification->read,
+                'read_at' => $notification->read_at ? $notification->read_at->toISOString() : null,
+                'created_at' => $notification->created_at->toISOString(),
+                'updated_at' => $notification->updated_at->toISOString(),
+                'timestamp' => $notification->created_at->toISOString(), // For backward compatibility
+            ];
+        });
+            
         return response()->json($notifications);
     }
 

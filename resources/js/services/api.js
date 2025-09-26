@@ -1,5 +1,6 @@
 // API Service for ProponentView
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
+const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || window.location.origin;
+const API_BASE_URL = `${API_ORIGIN}/api`;
 
 class ApiService {
   constructor() { 

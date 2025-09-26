@@ -71,11 +71,11 @@ const Projects = () => {
   // Get status color
   const getStatusColor = (statusId) => {
     switch (statusId) {
-      case 1: return 'bg-red-500'; // Under Review
-      case 2: return 'bg-green-500'; // Approved
-      case 3: return 'bg-red-600'; // Rejected
-      case 4: return 'bg-orange-500'; // Ongoing
-      case 5: return 'bg-green-600'; // Completed
+      case 3: case 8: return 'bg-red-500'; // Under Review
+      case 5: case 9: return 'bg-green-500'; // Approved
+      case 6: case 10: return 'bg-red-600'; // Rejected
+      case 11: return 'bg-orange-500'; // Ongoing
+      case 12: return 'bg-green-600'; // Completed
       default: return 'bg-gray-500';
     }
   };
@@ -83,11 +83,11 @@ const Projects = () => {
   // Get progress bar color
   const getProgressColor = (statusId) => {
     switch (statusId) {
-      case 1: return 'bg-red-500'; // Under Review
-      case 2: return 'bg-green-500'; // Approved
-      case 3: return 'bg-red-600'; // Rejected
-      case 4: return 'bg-orange-500'; // Ongoing
-      case 5: return 'bg-green-600'; // Completed
+      case 3: case 8: return 'bg-red-500'; // Under Review
+      case 5: case 9: return 'bg-green-500'; // Approved
+      case 6: case 10: return 'bg-red-600'; // Rejected
+      case 11: return 'bg-orange-500'; // Ongoing
+      case 12: return 'bg-green-600'; // Completed
       default: return 'bg-gray-500';
     }
   };
@@ -95,11 +95,11 @@ const Projects = () => {
   // Get progress percentage based on status
   const getProgressPercentage = (statusId) => {
     switch (statusId) {
-      case 1: return 20; // Under Review
-      case 2: return 60; // Approved
-      case 3: return 0; // Rejected
-      case 4: return 80; // Ongoing
-      case 5: return 100; // Completed
+      case 3: case 8: return 25; // Under Review - Initial submission and review process
+      case 5: case 9: return 50; // Approved - Proposal approved, ready to start implementation
+      case 6: case 10: return 0;  // Rejected - No progress, needs revision
+      case 11: return 75; // Ongoing - Research work in progress
+      case 12: return 100; // Completed - Project finished
       default: return 0;
     }
   };
