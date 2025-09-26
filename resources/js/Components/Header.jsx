@@ -120,7 +120,7 @@ const Header = () => {
 
 
   return (
-    <header className="bg-red-900 text-white px-8 py-4 flex justify-between items-center shadow-md fixed top-0 left-0 right-0 z-40">
+    <header className="bg-red-900 text-white px-8 py-4 flex justify-between items-center shadow-md fixed top-0 inset-x-0 z-40">
       <div className="flex items-center">
         <div className="flex items-center gap-4">
            <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0">

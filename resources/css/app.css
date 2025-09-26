@@ -21,6 +21,11 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  padding-top: 72px; /* adjust to your header height */
+  background-color: #f9fafb; /* same as your page bg */
+ 
+  
 }
 
 #root {
@@ -60,6 +65,21 @@ body {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;  /* Chrome, Safari and Opera */
 }
+
+/* Ensure scrollbar is always visible */
+.scrollbar-container {
+  padding-right: 20px !important;
+  margin-right: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Main layout scrollbar fix */
+.main-layout {
+  width: 100%;         /* full width */
+  padding-right: 0;    /* don’t push into scrollbar */
+  box-sizing: border-box;
+}
+
 
 /* Fixed notification container - absolutely positioned to prevent layout shifts */
 .notification-container-fixed {

@@ -13,7 +13,6 @@ const SubmitPage = () => {
     reportTitle: '',
     description: '',
     objectives: '',
-    researchCenter: '',
     researchAgenda: [],
     dostSPs: [],
     sustainableDevelopmentGoals: [],
@@ -27,38 +26,24 @@ const SubmitPage = () => {
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const navigate = useNavigate();
 
-  const researchCenterOptions = [
-    { value: '', label: 'Select research center' },
-    { value: 'Center for Research and Development', label: 'Center for Research and Development' },
-    { value: 'Center for Technology Innovation', label: 'Center for Technology Innovation' },
-    { value: 'Center for Agricultural Research', label: 'Center for Agricultural Research' },
-    { value: 'Center for Environmental Studies', label: 'Center for Environmental Studies' },
-    { value: 'Center for Health Sciences', label: 'Center for Health Sciences' },
-    { value: 'Center for Engineering Research', label: 'Center for Engineering Research' },
-    { value: 'Center for Social Sciences', label: 'Center for Social Sciences' },
-    { value: 'Center for Business and Economics', label: 'Center for Business and Economics' }
-  ];
 
   const researchAgendaOptions = [
-    'Agriculture, Aquatic and Natural Resources',
-    'Industry, Energy and Emerging Technology',
-    'Health Research and Development',
-    'Basic Research',
-    'Social Sciences and Humanities',
-    'Cross-cutting Concerns'
+    'Agriculture, Aquatic, and Agro-Forestry',
+    'Business and Trade',
+    'Social Sciences and Education',
+    'Engineering and Technology',
+    'Environment and Natural Resources',
+    'Health and Wellness',
+    'Peace and Security'
   ];
 
   const dostSPsOptions = [
-    'Smart Agriculture',
-    'Smart Manufacturing',
-    'Smart Cities and Communities',
-    'Smart Health',
-    'Smart Education',
-    'Smart Environment',
-    'Smart Transportation',
-    'Smart Energy',
-    'Smart Information and Communications Technology',
-    'Smart Defense and Security'
+    'Publication',
+    'Patent',
+    'Product',
+    'People Services',
+    'Places and Partnership',
+    'Policies'
   ];
 
   const sdgOptions = [
@@ -81,11 +66,32 @@ const SubmitPage = () => {
     'Partnerships for the Goals'
   ];
 
+  const formatNumber = (value) => {
+    // Remove all non-numeric characters
+    const numericValue = value.replace(/[^0-9]/g, '');
+    // Add commas for thousands
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  const parseNumber = (formattedValue) => {
+    // Remove commas and return numeric value
+    return formattedValue.replace(/,/g, '');
+  };
+
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+    if (field === 'proposedBudget') {
+      // Format the budget with commas
+      const formattedValue = formatNumber(value);
+      setFormData(prev => ({
+        ...prev,
+        [field]: formattedValue
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [field]: value
+      }));
+    }
   };
 
   const handleFileSelect = (file) => {
@@ -126,9 +132,6 @@ const SubmitPage = () => {
     if (!formData.objectives.trim()) {
       errors.push('Objectives are required');
     }
-    if (!formData.researchCenter) {
-      errors.push('Research center is required');
-    }
     if (formData.researchAgenda.length === 0) {
       errors.push('At least one research agenda must be selected');
     }
@@ -138,7 +141,7 @@ const SubmitPage = () => {
     if (formData.sustainableDevelopmentGoals.length === 0) {
       errors.push('At least one SDG must be selected');
     }
-    if (!formData.proposedBudget || parseFloat(formData.proposedBudget) <= 0) {
+    if (!formData.proposedBudget || parseFloat(parseNumber(formData.proposedBudget)) <= 0) {
       errors.push('Valid proposed budget is required');
     }
 
@@ -159,7 +162,12 @@ const SubmitPage = () => {
     setSubmitSuccess(false);
 
     try {
-      const response = await apiService.createProposal(formData);
+      // Parse the budget value before sending to API
+      const submissionData = {
+        ...formData,
+        proposedBudget: parseNumber(formData.proposedBudget)
+      };
+      const response = await apiService.createProposal(submissionData);
       
       if (response.success) {
         setSubmitSuccess(true);
@@ -169,7 +177,6 @@ const SubmitPage = () => {
           reportTitle: '',
           description: '',
           objectives: '',
-          researchCenter: '',
           researchAgenda: [],
           dostSPs: [],
           sustainableDevelopmentGoals: [],
@@ -277,17 +284,6 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
-            <FormField
-              label="Research Center"
-              required
-              type="select"
-              value={formData.researchCenter}
-              onChange={(value) => handleInputChange('researchCenter', value)}
-              placeholder="Select research center"
-              options={researchCenterOptions}
-            />
-          </div>
 
           <div className="mb-8">
             <CheckboxGroup
@@ -296,19 +292,19 @@ const SubmitPage = () => {
               options={researchAgendaOptions}
               selectedValues={formData.researchAgenda}
               onChange={(value, checked) => handleCheckboxChange('researchAgenda', value, checked)}
-              hint="Select the RDE Agenda that aligns best with your study"
+              hint="Select the RDE Agenda that aligns best with your study."
               columns={2}
             />
           </div>
 
           <div className="mb-8">
             <CheckboxGroup
-              label="DOST SPs"
+              label="DOST 6P's"
               required
               options={dostSPsOptions}
               selectedValues={formData.dostSPs}
               onChange={(value, checked) => handleCheckboxChange('dostSPs', value, checked)}
-              hint="Select the most applicable category from the DOST SPs that best aligns with your study"
+              hint="Select the most applicable category from the DOST 6Ps that best aligns with your study"
               columns={1}
             />
           </div>
@@ -329,7 +325,7 @@ const SubmitPage = () => {
             <FormField
               label="Proposed Budget"
               required
-              type="number"
+              type="text"
               value={formData.proposedBudget}
               onChange={(value) => handleInputChange('proposedBudget', value)}
               placeholder="Enter proposed budget amount"

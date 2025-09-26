@@ -91,12 +91,16 @@ class ProposalController extends Controller
             $dostSPs = json_decode($request->dostSPs, true);
             $sustainableDevelopmentGoals = json_decode($request->sustainableDevelopmentGoals, true);
             
+            // Get user's department as research center
+            $userDepartment = $user->department;
+            $researchCenter = $userDepartment ? $userDepartment->name : 'Not specified';
+            
             // Create the proposal
             $proposal = Proposal::create([
                 'researchTitle' => $request->researchTitle,
                 'description' => $request->description,
                 'objectives' => $request->objectives,
-                'researchCenter' => $request->researchCenter,
+                'researchCenter' => $researchCenter,
                 'researchAgenda' => $researchAgenda,
                 'dostSPs' => $dostSPs,
                 'sustainableDevelopmentGoals' => $sustainableDevelopmentGoals,
@@ -108,7 +112,7 @@ class ProposalController extends Controller
                     'dostSPs' => $dostSPs,
                     'sustainableDevelopmentGoals' => $sustainableDevelopmentGoals,
                     'proposedBudget' => $request->proposedBudget,
-                    'researchCenter' => $request->researchCenter,
+                    'researchCenter' => $researchCenter,
                     'description' => $request->description,
                     'objectives' => $request->objectives
                 ]

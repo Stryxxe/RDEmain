@@ -148,9 +148,9 @@ const Tracker = () => {
   }
 
   return (
-    <div className="w-full max-w-full mx-auto space-y-8 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
+    <div className="w-full max-w-full mx-auto space-y-6 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
       {/* Header Section */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
         <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
           <div className="flex-1">
             <h1 className="text-3xl sm:text-4xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
@@ -185,24 +185,24 @@ const Tracker = () => {
         </div>
 
         {/* Search Bar */}
-        <div className="relative mt-6">
+        <div className="relative mt-4">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
             placeholder="Search projects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
           />
         </div>
       </div>
 
       {/* Projects Table */}
       {filteredAndSortedProjects.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
-          <div className="text-center py-12">
-            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock className="w-8 h-8 text-gray-400" />
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
+          <div className="text-center py-8">
+            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-6 h-6 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">
               {searchTerm ? 'No Projects Found' : 'No Projects Available'}
@@ -226,19 +226,19 @@ const Tracker = () => {
             <table className="w-full min-w-full">
               <thead>
                 <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-y border-gray-200">
-                  <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-24">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
                     PROJECT DETAILS
                   </th>
-                  <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-20">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
                     AUTHOR & RESEARCH CENTER
                   </th>
-                  <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-48">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
                     STATUS & PROGRESS
                   </th>
-                  <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-20">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
                     FUNDING
                   </th>
-                  <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-20">
+                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
                     ACTIONS
                   </th>
                 </tr>
@@ -246,7 +246,7 @@ const Tracker = () => {
               <tbody>
                 {filteredAndSortedProjects.map((project, index) => (
                   <tr key={project.proposalID || project.id || index} className={`hover:bg-gray-50 transition-colors duration-200 ${index !== filteredAndSortedProjects.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                    <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
+                    <td className="px-4 py-3">
                       <div className="flex items-center">
                         <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
                         <div>
@@ -264,13 +264,13 @@ const Tracker = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
+                    <td className="px-4 py-3">
                       <div>
                         <div className="text-sm font-medium text-gray-900">{project.author || 'Unknown Author'}</div>
                         <div className="text-xs text-gray-500">{project.researchCenter || 'Not specified'}</div>
                       </div>
                     </td>
-                    <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
+                    <td className="px-4 py-3">
                       <div className="space-y-2">
                         <div className="flex items-center">
                           <div className={`w-3 h-3 rounded-full mr-3 ${index === 0 ? 'bg-red-600 animate-pulse' : 'bg-green-500'}`}></div>
@@ -293,7 +293,7 @@ const Tracker = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
+                    <td className="px-4 py-3">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
                           {project.statusID === 2 ? 'Approved' : 'Pending'}
@@ -303,7 +303,7 @@ const Tracker = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
+                    <td className="px-4 py-3">
                       <button
                         onClick={() => {
                           console.log('Tracker - Button clicked for project:', project);
