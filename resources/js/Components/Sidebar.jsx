@@ -1,4 +1,4 @@
-import { Send, FileText, FolderOpen } from 'lucide-react';
+import { Send, FileText, FolderOpen, Clock } from 'lucide-react';
 import { useLocation, Link } from 'react-router-dom';
 
 const Sidebar = () => {
@@ -17,6 +17,19 @@ const Sidebar = () => {
         <ul className="space-y-2 px-4 flex-1">
           <li>
             <Link 
+              to="/proponent/submit" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                isActive('/proponent/submit') 
+                  ? 'bg-white text-red-800 font-semibold' 
+                  : 'text-white hover:bg-red-700'
+              }`}
+            >
+              <Send size={20} />
+              <span className="text-base">Submit</span>
+            </Link>
+          </li>
+          <li>
+            <Link 
               to="/proponent/tracker" 
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive('/proponent/tracker') 
@@ -24,8 +37,8 @@ const Sidebar = () => {
                   : 'text-white hover:bg-red-700'
               }`}
             >
-              <Send size={20} />
-              <span className="text-base">Submit</span>
+              <Clock size={20} />
+              <span className="text-base">Tracker</span>
             </Link>
           </li>
           <li>
