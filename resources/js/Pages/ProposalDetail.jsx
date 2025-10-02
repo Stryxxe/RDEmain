@@ -268,77 +268,74 @@ const ProposalDetail = () => {
           </div>
         </div>
 
-        {/* Enhanced Proposal Details */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Basic Information Card */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Basic Information</h2>
+        {/* Basic Information Card */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300 mb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Basic Information</h2>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gray-50 rounded-xl p-4">
+              <label className="block text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Research Center</label>
+              <p className="text-lg font-medium text-gray-900">{matrix.researchCenter || 'Not specified'}</p>
             </div>
             
-            <div className="space-y-6">
-              <div className="bg-gray-50 rounded-xl p-4">
-                <label className="block text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Research Center</label>
-                <p className="text-lg font-medium text-gray-900">{matrix.researchCenter || 'Not specified'}</p>
-              </div>
-              
-              <div className="bg-gray-50 rounded-xl p-4">
-                <label className="block text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Funding Status</label>
-                <div className="flex items-center gap-3">
-                  <div className={`w-3 h-3 rounded-full ${proposal.statusID === 2 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                  <p className="text-lg font-medium text-gray-900">
-                    {proposal.statusID === 2 ? 'Approved' : 'Pending RDD Approval'}
-                  </p>
-                </div>
-                {proposal.statusID !== 2 && matrix.proposedBudget && (
-                  <p className="text-sm text-gray-500 mt-2">
-                    Proposed: {formatCurrency(matrix.proposedBudget)}
-                  </p>
-                )}
-              </div>
-              
-              <div className="bg-gray-50 rounded-xl p-4">
-                <label className="block text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Submitted Date</label>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <label className="block text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Funding Status</label>
+              <div className="flex items-center gap-3">
+                <div className={`w-3 h-3 rounded-full ${proposal.statusID === 2 ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
                 <p className="text-lg font-medium text-gray-900">
-                  {new Date(proposal.created_at).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
+                  {proposal.statusID === 2 ? 'Approved' : 'Pending RDD Approval'}
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* Research Details Card */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Research Details</h2>
+              {proposal.statusID !== 2 && matrix.proposedBudget && (
+                <p className="text-sm text-gray-500 mt-2">
+                  Proposed: {formatCurrency(matrix.proposedBudget)}
+                </p>
+              )}
             </div>
             
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">Description</label>
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{matrix.description || 'Not specified'}</p>
-                </div>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <label className="block text-sm font-semibold text-gray-600 mb-2 uppercase tracking-wide">Submitted Date</label>
+              <p className="text-lg font-medium text-gray-900">
+                {new Date(proposal.created_at).toLocaleDateString('en-US', { 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Research Details Card */}
+        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300 mb-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900">Research Details</h2>
+          </div>
+          
+          <div className="space-y-6">
+            <div>
+              <label className="block text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">Description</label>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{matrix.description || 'Not specified'}</p>
               </div>
-              
-              <div>
-                <label className="block text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">Objectives</label>
-                <div className="bg-gray-50 rounded-xl p-4">
-                  <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{matrix.objectives || 'Not specified'}</p>
-                </div>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-semibold text-gray-600 mb-3 uppercase tracking-wide">Objectives</label>
+              <div className="bg-gray-50 rounded-xl p-4">
+                <p className="text-gray-900 whitespace-pre-wrap leading-relaxed">{matrix.objectives || 'Not specified'}</p>
               </div>
             </div>
           </div>
