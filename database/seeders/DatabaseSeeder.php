@@ -20,6 +20,7 @@ class DatabaseSeeder extends Seeder
             NotificationSeeder::class,
             MessageSeeder::class,
             ProposalSeeder::class,
+            AdditionalProposalSeeder::class,
         ]);
     }
 }

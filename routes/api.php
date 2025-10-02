@@ -51,8 +51,8 @@ Route::put('/user', function (Request $request) {
 
 // Proposal routes (temporarily without CSRF for testing)
 Route::middleware(['auth:sanctum'])->group(function () {
-    Route::apiResource('proposals', ProposalController::class);
     Route::get('/proposals/statistics', [ProposalController::class, 'statistics']);
+    Route::apiResource('proposals', ProposalController::class);
     
     // Notification routes
     Route::get('/notifications', [NotificationController::class, 'index']);

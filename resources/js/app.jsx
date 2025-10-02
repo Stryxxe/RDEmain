@@ -10,14 +10,9 @@ import { MessageProvider } from './contexts/MessageContext';
 import NotificationContainer from './Components/NotificationContainer';
 import Login from './Components/auth/login';
 
-// Role-based view components
-import AdminView from './Pages/RoleViews/AdminView';
-import RDDView from './Pages/RoleViews/RDDView';
-import CMView from './Pages/RoleViews/CMView';
-import ProponentView from './Pages/RoleViews/ProponentView';
-import OPView from './Pages/RoleViews/OPView';
-import OSUORUView from './Pages/RoleViews/OSUORUView';
-import ReviewerView from './Pages/RoleViews/ReviewerView';
+// Modular role-based view system
+import RoleBasedView from './Components/RoleBased/RoleBasedView';
+import RoleBasedRedirect from './Components/RoleBased/RoleBasedRedirect';
 
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
@@ -30,35 +25,7 @@ const ProtectedRoute = ({ children }) => {
   return user ? children : <Navigate to="/login" replace />;
 };
 
-// Role-based redirect component
-const RoleBasedRedirect = () => {
-  const { user } = useAuth();
-  
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
-  const role = user.role?.userRole;
-  
-  switch (role) {
-    case 'Admin':
-      return <Navigate to="/admin" replace />;
-    case 'RDD':
-      return <Navigate to="/rdd" replace />;
-    case 'CM':
-      return <Navigate to="/cm" replace />;
-    case 'Proponent':
-      return <Navigate to="/proponent" replace />;
-    case 'OP':
-      return <Navigate to="/op" replace />;
-    case 'OSUORU':
-      return <Navigate to="/osuur" replace />;
-    case 'Reviewer':
-      return <Navigate to="/reviewer" replace />;
-    default:
-      return <Navigate to="/login" replace />;
-  }
-};
+// Role-based redirect component is now imported from RoleBasedRedirect.jsx
 
 // App content component with notifications and messages
 const AppContent = () => {
@@ -68,31 +35,31 @@ const AppContent = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<RoleBasedRedirect />} />
           
-          {/* Role-based routes */}
+          {/* Modular role-based routes */}
           <Route 
-            path="/admin" 
+            path="/admin/*" 
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <AdminView />
+                <RoleBasedView role="Admin" />
               </ProtectedRoute>
             } 
           />
           <Route 
-            path="/rdd" 
+            path="/rdd/*" 
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <RDDView />
+                <RoleBasedView role="RDD" />
               </ProtectedRoute>
             } 
           />
           <Route 
-            path="/cm" 
+            path="/cm/*" 
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <CMView />
+                <RoleBasedView role="CM" />
               </ProtectedRoute>
             } 
           />
@@ -101,34 +68,34 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <ProponentView />
+                <RoleBasedView role="Proponent" />
               </ProtectedRoute>
             } 
           />
           <Route 
-            path="/op" 
+            path="/op/*" 
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <OPView />
+                <RoleBasedView role="OP" />
               </ProtectedRoute>
             } 
           />
           <Route 
-            path="/osuur" 
+            path="/osuur/*" 
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <OSUORUView />
+                <RoleBasedView role="OSUORU" />
               </ProtectedRoute>
             } 
           />
           <Route 
-            path="/reviewer" 
+            path="/reviewer/*" 
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <ReviewerView />
+                <RoleBasedView role="Reviewer" />
               </ProtectedRoute>
             } 
           />

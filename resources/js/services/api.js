@@ -91,11 +91,9 @@ class ApiService {
   // Helper method to get headers
   getHeaders() {
     const token = localStorage.getItem('token');
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     return {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'X-CSRF-TOKEN': csrfToken,
       ...(token && { 'Authorization': `Bearer ${token}` })
     };
   }
@@ -206,6 +204,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/proposals`, {
         method: 'GET',
+        credentials: 'include',
         headers: this.getHeaders()
       });
       
@@ -296,6 +295,65 @@ class ApiService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(messageData)
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Generic HTTP methods for compatibility with components
+  async get(url) {
+    try {
+      const response = await fetch(`${this.baseURL}${url}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include'
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async post(url, data = null) {
+    try {
+      const response = await fetch(`${this.baseURL}${url}`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: data ? JSON.stringify(data) : null,
+        credentials: 'include'
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async put(url, data = null) {
+    try {
+      const response = await fetch(`${this.baseURL}${url}`, {
+        method: 'PUT',
+        headers: this.getHeaders(),
+        body: data ? JSON.stringify(data) : null,
+        credentials: 'include'
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async delete(url) {
+    try {
+      const response = await fetch(`${this.baseURL}${url}`, {
+        method: 'DELETE',
+        headers: this.getHeaders(),
+        credentials: 'include'
       });
       
       return await this.handleResponse(response);

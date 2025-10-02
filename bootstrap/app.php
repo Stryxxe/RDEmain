@@ -18,10 +18,10 @@ return Application::configure(basePath: dirname(__DIR__))
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
         ]);
 
-        // Temporarily removed EnsureFrontendRequestsAreStateful from API routes for testing
-        // $middleware->api(prepend: [
-        //     \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
-        // ]);
+        // Add EnsureFrontendRequestsAreStateful to API routes for proper SPA authentication
+        $middleware->api(prepend: [
+            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+        ]);
 
         $middleware->alias([
             'cors' => \Fruitcake\Cors\HandleCors::class,

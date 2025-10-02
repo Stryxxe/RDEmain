@@ -1,37 +1,32 @@
 import React from 'react';
-import RoleBasedLayout from '../../Components/Layouts/RoleBasedLayout';
+import { Routes, Route } from 'react-router-dom';
+import CMLayout from '../../Components/CMLayout';
+import CMDashboard from './CM/CMDashboard';
+import CMReviewProposal from './CM/CMReviewProposal';
+import CMProgressReport from './CM/CMProgressReport';
+import CMSubmitReport from './CM/CMSubmitReport';
+import CMResources from './CM/CMResources';
+import CMAccount from './CM/CMAccount';
+import CMProposalDetail from './CM/CMProposalDetail';
+import CMNotifications from './CM/CMNotifications';
+import CMMessages from './CM/CMMessages';
 
 const CMView = () => {
   return (
-    <RoleBasedLayout roleName="College of Medicine">
-      <div className="bg-white rounded-lg shadow-lg p-6">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">College of Medicine Dashboard</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <div className="bg-blue-50 p-6 rounded-lg">
-            <h3 className="text-lg font-semibold text-blue-800 mb-2">Medical Research</h3>
-            <p className="text-blue-600">Review medical research proposals</p>
-          </div>
-          
-          <div className="bg-green-50 p-6 rounded-lg">
-            <h3 className="text-lg font-semibold text-green-800 mb-2">Faculty Proposals</h3>
-            <p className="text-green-600">Manage faculty research proposals</p>
-          </div>
-          
-          <div className="bg-purple-50 p-6 rounded-lg">
-            <h3 className="text-lg font-semibold text-purple-800 mb-2">Clinical Studies</h3>
-            <p className="text-purple-600">Oversee clinical research studies</p>
-          </div>
-        </div>
-        
-        <div className="mt-8">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">Medical Research Status</h3>
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <p className="text-gray-600">No active medical research projects</p>
-          </div>
-        </div>
-      </div>
-    </RoleBasedLayout>
+    <CMLayout>
+      <Routes>
+        <Route index element={<CMDashboard />} />
+        <Route path="dashboard" element={<CMDashboard />} />
+        <Route path="review-proposal" element={<CMReviewProposal />} />
+        <Route path="progress-report" element={<CMProgressReport />} />
+        <Route path="submit-report" element={<CMSubmitReport />} />
+        <Route path="resources" element={<CMResources />} />
+        <Route path="account" element={<CMAccount />} />
+        <Route path="proposal/:id" element={<CMProposalDetail />} />
+        <Route path="notifications" element={<CMNotifications />} />
+        <Route path="messages" element={<CMMessages />} />
+      </Routes>
+    </CMLayout>
   );
 };
 

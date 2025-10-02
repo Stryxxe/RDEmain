@@ -19,10 +19,23 @@ class ProposalController extends Controller
     {
         $user = Auth::user();
         
-        $proposals = Proposal::where('userID', $user->userID)
-            ->with(['status', 'files', 'user'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        // Load the role relationship if not already loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // For CM users, show proposals from users in the same department; for others, show only their own
+        $query = Proposal::with(['status', 'files', 'user.department', 'user.role']);
+        if ($user->role && $user->role->userRole !== 'CM') {
+            $query->where('userID', $user->userID);
+        } else {
+            // For CM users, filter by department
+            $query->whereHas('user', function($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $proposals = $query->orderBy('proposalID', 'asc')->get();
 
         return response()->json([
             'success' => true,
@@ -37,10 +50,23 @@ class ProposalController extends Controller
     {
         $user = Auth::user();
         
-        $proposal = Proposal::where('proposalID', $id)
-            ->where('userID', $user->userID)
-            ->with(['status', 'files', 'user'])
-            ->first();
+        // Load the role relationship if not already loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // For CM users, show proposals from users in the same department; for others, show only their own
+        $query = Proposal::where('proposalID', $id)->with(['status', 'files', 'user.department', 'user.role']);
+        if ($user->role && $user->role->userRole !== 'CM') {
+            $query->where('userID', $user->userID);
+        } else {
+            // For CM users, filter by department
+            $query->whereHas('user', function($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $proposal = $query->first();
 
         if (!$proposal) {
             return response()->json([
@@ -301,13 +327,29 @@ class ProposalController extends Controller
     {
         $user = Auth::user();
         
+        // Load the role relationship if not already loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // For CM users, show proposals from users in the same department; for others, show only their own
+        $query = Proposal::query();
+        if ($user->role && $user->role->userRole !== 'CM') {
+            $query->where('userID', $user->userID);
+        } else {
+            // For CM users, filter by department
+            $query->whereHas('user', function($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
         $stats = [
-            'total' => Proposal::where('userID', $user->userID)->count(),
-            'under_review' => Proposal::where('userID', $user->userID)->where('statusID', 1)->count(),
-            'approved' => Proposal::where('userID', $user->userID)->where('statusID', 2)->count(),
-            'rejected' => Proposal::where('userID', $user->userID)->where('statusID', 3)->count(),
-            'ongoing' => Proposal::where('userID', $user->userID)->where('statusID', 4)->count(),
-            'completed' => Proposal::where('userID', $user->userID)->where('statusID', 5)->count()
+            'total' => $query->count(),
+            'under_review' => (clone $query)->where('statusID', 1)->count(),
+            'approved' => (clone $query)->where('statusID', 2)->count(),
+            'rejected' => (clone $query)->where('statusID', 3)->count(),
+            'ongoing' => (clone $query)->where('statusID', 4)->count(),
+            'completed' => (clone $query)->where('statusID', 5)->count()
         ];
 
         return response()->json([

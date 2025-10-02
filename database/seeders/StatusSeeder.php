@@ -35,8 +35,11 @@ class StatusSeeder extends Seeder
             ]
         ];
 
-        foreach ($statuses as $status) {
-            Status::create($status);
+        foreach ($statuses as $index => $status) {
+            Status::updateOrCreate(
+                ['statusID' => $index + 1],
+                $status
+            );
         }
     }
 }

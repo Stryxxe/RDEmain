@@ -5,11 +5,10 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
     server: {
         host: '127.0.0.1',
-        port: 5176,
+        port: 5177,
         cors: true,
         hmr: {
             host: '127.0.0.1',
-            port: 5176,
         },
     },
     define: {

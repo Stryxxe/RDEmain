@@ -15,11 +15,38 @@ class ProposalSeeder extends Seeder
      */
     public function run(): void
     {
-        // Get the proponent user
-        $proponent = User::where('email', 'proponent@usep.edu.ph')->first();
+        // Get users from different departments
+        $sarahJohnson = User::where('email', 'sarah.johnson@usep.edu.ph')->first(); // ICT Center
+        $mariaCruz = User::where('email', 'maria.cruz@usep.edu.ph')->first(); // Environmental Center
+        $juanSantos = User::where('email', 'juan.santos@usep.edu.ph')->first(); // Indigenous Center
+        $anaReyes = User::where('email', 'ana.reyes@usep.edu.ph')->first(); // Renewable Energy Center
+        $carlosMendoza = User::where('email', 'carlos.mendoza@usep.edu.ph')->first(); // Health Center
+        $elenaTorres = User::where('email', 'elena.torres@usep.edu.ph')->first(); // Tourism Center
+        $robertoGarcia = User::where('email', 'roberto.garcia@usep.edu.ph')->first(); // Disaster Center
+        $patriciaLopez = User::where('email', 'patricia.lopez@usep.edu.ph')->first(); // Water Center
+        $miguelFernandez = User::where('email', 'miguel.fernandez@usep.edu.ph')->first(); // Community Center
+        $sofiaHerrera = User::where('email', 'sofia.herrera@usep.edu.ph')->first(); // EduTech Center
+        $rafaelCastillo = User::where('email', 'rafael.castillo@usep.edu.ph')->first(); // Cultural Center
+        $isabelMorales = User::where('email', 'isabel.morales@usep.edu.ph')->first(); // Telemedicine Center
+        $franciscoJimenez = User::where('email', 'francisco.jimenez@usep.edu.ph')->first(); // Nutrition Center
+        $elenaDiaz = User::where('email', 'elena.diaz@usep.edu.ph')->first(); // Materials Center
+        $gabrielOrtega = User::where('email', 'gabriel.ortega@usep.edu.ph')->first(); // Agriculture Center
+        $victoriaSilva = User::where('email', 'victoria.silva@usep.edu.ph')->first(); // Marine Center
+        $alejandroVega = User::where('email', 'alejandro.vega@usep.edu.ph')->first(); // Urban Center
+        $beatrizRomero = User::where('email', 'beatriz.romero@usep.edu.ph')->first(); // Digital Center
+        $danielNavarro = User::where('email', 'daniel.navarro@usep.edu.ph')->first(); // Social Center
+        $marianaPerez = User::where('email', 'mariana.perez@usep.edu.ph')->first(); // Sustainable Center
+        $ricardoGutierrez = User::where('email', 'ricardo.gutierrez@usep.edu.ph')->first(); // College of Medicine
+        $carmenVillanueva = User::where('email', 'carmen.villanueva@usep.edu.ph')->first(); // College of Engineering
+        $eduardoMendoza = User::where('email', 'eduardo.mendoza@usep.edu.ph')->first(); // College of Education
+        $antonioRivera = User::where('email', 'antonio.rivera@usep.edu.ph')->first(); // College of Arts and Sciences
+        $carmenLopez = User::where('email', 'carmen.lopez@usep.edu.ph')->first(); // College of Business
+        $luisMartinez = User::where('email', 'luis.martinez@usep.edu.ph')->first(); // College of Agriculture
+        $rosaGonzales = User::where('email', 'rosa.gonzales@usep.edu.ph')->first(); // College of Nursing
+        $joseRamirez = User::where('email', 'jose.ramirez@usep.edu.ph')->first(); // College of Computer Studies
         
-        if (!$proponent) {
-            $this->command->error('Proponent user not found. Please run UserSeeder first.');
+        if (!$sarahJohnson || !$mariaCruz || !$juanSantos || !$anaReyes || !$carlosMendoza || !$elenaTorres) {
+            $this->command->error('Required proponent users not found. Please run UserSeeder first.');
             return;
         }
 
@@ -61,7 +88,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(15),
                 'statusID' => $underReview->statusID,
-                'userID' => $proponent->userID
+                'userID' => $sarahJohnson->userID // ICT Center proponent
             ],
             [
                 'researchTitle' => 'Assessment of Microplastic Contamination in Davao Gulf and Its Impact on Marine Biodiversity',
@@ -92,7 +119,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(8),
                 'statusID' => $approved->statusID,
-                'userID' => $proponent->userID
+                'userID' => $mariaCruz->userID // Environmental Center proponent
             ],
             [
                 'researchTitle' => 'Development of Indigenous Language Learning Mobile Application for Mindanao Languages',
@@ -123,7 +150,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(25),
                 'statusID' => $ongoing->statusID,
-                'userID' => $proponent->userID
+                'userID' => $juanSantos->userID // Indigenous Center proponent
             ],
             [
                 'researchTitle' => 'Renewable Energy Integration in Off-Grid Communities of Davao Oriental',
@@ -154,7 +181,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(5),
                 'statusID' => $rejected->statusID,
-                'userID' => $proponent->userID
+                'userID' => $anaReyes->userID // Renewable Energy Center proponent
             ],
             [
                 'researchTitle' => 'Digital Health Monitoring System for Elderly Care in Davao City',
@@ -185,7 +212,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(12),
                 'statusID' => $completed->statusID,
-                'userID' => $proponent->userID
+                'userID' => $carlosMendoza->userID // Health Center proponent
             ],
             [
                 'researchTitle' => 'Sustainable Tourism Development Framework for Davao Region Heritage Sites',
@@ -216,7 +243,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(3),
                 'statusID' => $underReview->statusID,
-                'userID' => $proponent->userID
+                'userID' => $elenaTorres->userID // Tourism Center proponent
             ],
             [
                 'researchTitle' => 'Machine Learning-Based Early Warning System for Landslide Prediction in Davao Region',
@@ -247,7 +274,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(20),
                 'statusID' => $approved->statusID,
-                'userID' => $proponent->userID
+                'userID' => $robertoGarcia->userID // Disaster Center proponent
             ],
             [
                 'researchTitle' => 'Community-Based Waste Management System for Davao City Barangays',
@@ -278,7 +305,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(7),
                 'statusID' => $ongoing->statusID,
-                'userID' => $proponent->userID
+                'userID' => $mariaCruz->userID // Environmental Center proponent (second proposal)
             ],
             [
                 'researchTitle' => 'Development of Low-Cost Water Purification System for Rural Communities',
@@ -309,7 +336,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(1),
                 'statusID' => $underReview->statusID,
-                'userID' => $proponent->userID
+                'userID' => $patriciaLopez->userID // Water Center proponent
             ],
             [
                 'researchTitle' => 'Digital Literacy Program for Senior Citizens in Davao City',
@@ -340,7 +367,7 @@ class ProposalSeeder extends Seeder
                 ],
                 'uploadedAt' => Carbon::now()->subDays(18),
                 'statusID' => $completed->statusID,
-                'userID' => $proponent->userID
+                'userID' => $miguelFernandez->userID // Community Center proponent
             ]
         ];
 
@@ -359,4 +386,5 @@ class ProposalSeeder extends Seeder
         $this->command->info('Proposal seeding completed successfully!');
     }
 }
+
 
