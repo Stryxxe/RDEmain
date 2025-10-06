@@ -180,39 +180,39 @@ class OptimizedApiService {
 
   // Specific API methods
   async getNotifications(params = {}) {
-    return this.get('/api/notifications', params);
+    return this.get('/notifications', params);
   }
 
   async getNotificationUnreadCount() {
-    return this.get('/api/notifications/unread-count');
+    return this.get('/notifications/unread-count');
   }
 
   async getMessages(params = {}) {
-    return this.get('/api/messages', params);
+    return this.get('/messages', params);
   }
 
   async getSentMessages(params = {}) {
-    return this.get('/api/messages/sent', params);
+    return this.get('/messages/sent', params);
   }
 
   async getMessageUnreadCount() {
-    return this.get('/api/messages/unread-count');
+    return this.get('/messages/unread-count');
   }
 
   async getConversations() {
-    return this.get('/api/messages/conversations');
+    return this.get('/messages/conversations');
   }
 
   async getConversation(otherUserId) {
-    return this.get(`/api/messages/conversation/${otherUserId}`);
+    return this.get(`/messages/conversation/${otherUserId}`);
   }
 
   async getAvailableCM() {
-    return this.get('/api/messages/available-cm');
+    return this.get('/messages/available-cm');
   }
 
   async sendMessage(recipientId, subject, content, type = 'general') {
-    return this.post('/api/messages', {
+    return this.post('/messages', {
       recipientID: recipientId,
       subject,
       content,
@@ -221,31 +221,31 @@ class OptimizedApiService {
   }
 
   async markMessageAsRead(messageId) {
-    return this.put(`/api/messages/${messageId}/read`);
+    return this.put(`/messages/${messageId}/read`);
   }
 
   async markAllMessagesAsRead() {
-    return this.put('/api/messages/mark-all-read');
+    return this.put('/messages/mark-all-read');
   }
 
   async deleteMessage(messageId) {
-    return this.delete(`/api/messages/${messageId}`);
+    return this.delete(`/messages/${messageId}`);
   }
 
   async clearAllMessages() {
-    return this.delete('/api/messages/clear-all');
+    return this.delete('/messages/clear-all');
   }
 
   async markNotificationAsRead(notificationId) {
-    return this.put(`/api/notifications/${notificationId}/read`);
+    return this.put(`/notifications/${notificationId}/read`);
   }
 
   async markAllNotificationsAsRead() {
-    return this.put('/api/notifications/mark-all-read');
+    return this.put('/notifications/mark-all-read');
   }
 
   async deleteNotification(notificationId) {
-    return this.delete(`/api/notifications/${notificationId}`);
+    return this.delete(`/notifications/${notificationId}`);
   }
 }
 

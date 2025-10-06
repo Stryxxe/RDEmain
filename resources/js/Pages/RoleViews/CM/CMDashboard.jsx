@@ -38,7 +38,7 @@ const CMDashboard = () => {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/proposals');
+      const response = await axios.get('/proposals');
       if (response.data.success) {
         setProposals(response.data.data);
       }
@@ -51,7 +51,7 @@ const CMDashboard = () => {
 
   const fetchStatistics = async () => {
     try {
-      const response = await axios.get('/api/proposals/statistics');
+      const response = await axios.get('/proposals/statistics');
       if (response.data.success) {
         setStats(response.data.data);
       }

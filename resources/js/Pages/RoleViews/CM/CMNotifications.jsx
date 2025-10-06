@@ -23,7 +23,7 @@ const CMNotifications = () => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/notifications');
+      const response = await axios.get('/notifications');
       if (response.data.success) {
         setNotifications(response.data.data);
       }
@@ -51,7 +51,7 @@ const CMNotifications = () => {
 
   const markAsRead = async (notificationId) => {
     try {
-      await axios.put(`/api/notifications/${notificationId}/read`);
+      await axios.put(`/notifications/${notificationId}/read`);
       setNotifications(prev => 
         prev.map(notif => 
           notif.id === notificationId 
@@ -66,7 +66,7 @@ const CMNotifications = () => {
 
   const markAllAsRead = async () => {
     try {
-      await axios.put('/api/notifications/mark-all-read');
+      await axios.put('/notifications/mark-all-read');
       setNotifications(prev => 
         prev.map(notif => ({ ...notif, read_at: new Date().toISOString() }))
       );
@@ -77,7 +77,7 @@ const CMNotifications = () => {
 
   const deleteNotification = async (notificationId) => {
     try {
-      await axios.delete(`/api/notifications/${notificationId}`);
+      await axios.delete(`/notifications/${notificationId}`);
       setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
     } catch (error) {
       console.error('Error deleting notification:', error);

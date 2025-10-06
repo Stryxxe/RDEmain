@@ -42,7 +42,7 @@ const CMMessages = () => {
   const fetchConversations = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/messages/conversations');
+      const response = await axios.get('/messages/conversations');
       if (response.data.data) {
         setConversations(response.data.data);
       }
@@ -80,7 +80,7 @@ const CMMessages = () => {
 
   const fetchConversation = async (otherUserId) => {
     try {
-      const response = await axios.get(`/api/messages/conversation/${otherUserId}`);
+      const response = await axios.get(`/messages/conversation/${otherUserId}`);
       if (response.data.data) {
         setCurrentConversation(response.data.data);
         return response.data.data;
@@ -98,7 +98,7 @@ const CMMessages = () => {
     try {
       const recipientID = String(selectedConversation.otherUser.userID);
       
-      const result = await axios.post('/api/messages', {
+      const result = await axios.post('/messages', {
         recipientID: recipientID,
         subject: `Re: ${selectedConversation.latestMessage.subject}`,
         content: newMessage,
@@ -240,7 +240,7 @@ const CMMessages = () => {
               onClick={async () => {
                 if (confirm('Are you sure you want to clear all conversations? This will delete all messages.')) {
                   try {
-                    await axios.delete('/api/messages/clear-all');
+                    await axios.delete('/messages/clear-all');
                     clearConversation();
                     await fetchConversations();
                   } catch (error) {

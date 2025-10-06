@@ -43,7 +43,7 @@ const CMReviewProposal = () => {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/api/proposals');
+      const response = await axios.get('/proposals');
       if (response.data.success) {
         setProposals(response.data.data);
       }

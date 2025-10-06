@@ -57,7 +57,7 @@ const CMProposalDetail = () => {
     try {
       setLoading(true);
       console.log('Fetching proposal with ID:', id);
-      const response = await axios.get(`/api/proposals/${id}`);
+      const response = await axios.get(`/proposals/${id}`);
       console.log('API Response:', response.data);
       if (response.data.success) {
         setProposal(response.data.data);

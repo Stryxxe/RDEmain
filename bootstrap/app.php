@@ -26,6 +26,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'cors' => \Fruitcake\Cors\HandleCors::class,
             'request.deduplication' => \App\Http\Middleware\RequestDeduplication::class,
+            'verify.csrf' => \App\Http\Middleware\VerifyCsrfToken::class,
         ]);
 
         //

@@ -22,7 +22,7 @@ export const AuthProvider = ({ children }) => {
       // Ensure axios sends the bearer token by default
       axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       // Verify token with backend
-      axios.get('/api/user', {
+      axios.get('/user', {
         headers: { Authorization: `Bearer ${token}` }
       })
       .then(response => {
@@ -42,7 +42,15 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     try {
-      const response = await axios.post('/api/login', credentials);
+      // For API routes, we don't need CSRF for login - just use bearer token auth
+      const response = await axios.post('/login', credentials, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        withCredentials: false
+      });
+      
       const { token, user: userData } = response.data;
       
       localStorage.setItem('token', token);
@@ -51,11 +59,20 @@ export const AuthProvider = ({ children }) => {
       
       return { success: true };
     } catch (error) {
+      console.error('Login error:', error.response?.data); // Debug log
       return { 
         success: false, 
         message: error.response?.data?.message || 'Login failed' 
       };
     }
+  };
+
+  // Helper function to get cookie value
+  const getCookieValue = (name) => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
   };
 
   const logout = () => {
@@ -67,7 +84,7 @@ export const AuthProvider = ({ children }) => {
 
   const updateUser = async (userData) => {
     try {
-      const response = await axios.put('/api/user', userData, {
+      const response = await axios.put('/user', userData, {
         headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
       });
       setUser(response.data);

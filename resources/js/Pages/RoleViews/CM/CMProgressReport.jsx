@@ -26,7 +26,7 @@ const CMProgressReport = () => {
       setLoading(true);
       // This would be a new API endpoint for progress reports
       // For now, we'll use proposals as a placeholder
-      const response = await axios.get('/api/proposals');
+      const response = await axios.get('/proposals');
       if (response.data.success) {
         setReports(response.data.data);
       }

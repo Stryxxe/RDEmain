@@ -113,7 +113,7 @@ export const NotificationProvider = ({ children }) => {
       setLoading(true);
       const token = localStorage.getItem('token');
       if (!token) { setNotifications([]); return; }
-      const response = await axios.get('/api/notifications', {
+      const response = await axios.get('/notifications', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -131,7 +131,7 @@ export const NotificationProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('token');
       if (!token) { setUnreadCount(0); return; }
-      const response = await axios.get('/api/notifications/unread-count', {
+      const response = await axios.get('/notifications/unread-count', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUnreadCount(response.data.count || 0);
@@ -228,7 +228,7 @@ export const NotificationProvider = ({ children }) => {
   const markAsRead = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`/api/notifications/${id}/read`, {}, {
+      await axios.put(`/notifications/${id}/read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
@@ -255,7 +255,7 @@ export const NotificationProvider = ({ children }) => {
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put('/api/notifications/mark-all-read', {}, {
+      await axios.put('/notifications/mark-all-read', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setNotifications(prev =>
@@ -270,7 +270,7 @@ export const NotificationProvider = ({ children }) => {
   const removeNotification = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/notifications/${id}`, {
+      await axios.delete(`/notifications/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setNotifications(prev => prev.filter(notification => notification.id !== id));

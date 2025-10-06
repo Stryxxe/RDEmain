@@ -106,7 +106,7 @@ export const MessageProvider = ({ children }) => {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/messages', {
+      const response = await axios.get('/messages', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(response.data.data || []);
@@ -121,7 +121,7 @@ export const MessageProvider = ({ children }) => {
   const fetchSentMessages = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/messages/sent', {
+      const response = await axios.get('/messages/sent', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSentMessages(response.data.data || []);
@@ -134,7 +134,7 @@ export const MessageProvider = ({ children }) => {
   const fetchUnreadCount = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/messages/unread-count', {
+      const response = await axios.get('/messages/unread-count', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setUnreadCount(response.data.count || 0);
@@ -147,7 +147,7 @@ export const MessageProvider = ({ children }) => {
   const fetchConversations = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/messages/conversations', {
+      const response = await axios.get('/messages/conversations', {
         headers: { Authorization: `Bearer ${token}` }
       });
       setConversations(response.data.data || []);
@@ -160,7 +160,7 @@ export const MessageProvider = ({ children }) => {
   const fetchConversation = async (otherUserId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get(`/api/messages/conversation/${otherUserId}`, {
+      const response = await axios.get(`/messages/conversation/${otherUserId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setCurrentConversation(response.data.data || []);
@@ -245,7 +245,7 @@ export const MessageProvider = ({ children }) => {
   const markAsRead = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put(`/api/messages/${id}/read`, {}, {
+      await axios.put(`/messages/${id}/read`, {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(prev =>
@@ -264,7 +264,7 @@ export const MessageProvider = ({ children }) => {
   const markAllAsRead = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.put('/api/messages/mark-all-read', {}, {
+      await axios.put('/messages/mark-all-read', {}, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(prev =>
@@ -279,7 +279,7 @@ export const MessageProvider = ({ children }) => {
   const deleteMessage = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/messages/${id}`, {
+      await axios.delete(`/messages/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setMessages(prev => prev.filter(message => message.id !== id));
@@ -296,7 +296,7 @@ export const MessageProvider = ({ children }) => {
   const deleteSentMessage = async (id) => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete(`/api/messages/${id}`, {
+      await axios.delete(`/messages/${id}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setSentMessages(prev => prev.filter(message => message.id !== id));
@@ -309,7 +309,7 @@ export const MessageProvider = ({ children }) => {
     try {
       const token = localStorage.getItem('token');
       
-      const response = await axios.post('/api/messages', {
+      const response = await axios.post('/messages', {
         recipientID: recipientId,
         subject,
         content,
@@ -342,7 +342,7 @@ export const MessageProvider = ({ children }) => {
   const fetchAvailableCM = async () => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.get('/api/messages/available-cm', {
+      const response = await axios.get('/messages/available-cm', {
         headers: { Authorization: `Bearer ${token}` }
       });
       return response.data;
@@ -362,7 +362,7 @@ export const MessageProvider = ({ children }) => {
   const clearAllMessages = async () => {
     try {
       const token = localStorage.getItem('token');
-      await axios.delete('/api/messages/clear-all', {
+      await axios.delete('/messages/clear-all', {
         headers: { Authorization: `Bearer ${token}` }
       });
       
