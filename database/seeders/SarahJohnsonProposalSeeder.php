@@ -58,7 +58,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 9: Industry, Innovation and Infrastructure', 'SDG 10: Reduced Inequalities'],
                     'proposedBudget' => 1200000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(2),
+                'uploadedAt' => Carbon::now()->subDays(32),
                 'statusID' => $underReview->statusID,
                 'userID' => $sarahJohnson->userID
             ],
@@ -89,7 +89,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 9: Industry, Innovation and Infrastructure', 'SDG 16: Peace, Justice and Strong Institutions'],
                     'proposedBudget' => 950000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(5),
+                'uploadedAt' => Carbon::now()->subDays(47),
                 'statusID' => $approved->statusID,
                 'userID' => $sarahJohnson->userID
             ],
@@ -120,7 +120,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 9: Industry, Innovation and Infrastructure', 'SDG 11: Sustainable Cities and Communities', 'SDG 7: Affordable and Clean Energy'],
                     'proposedBudget' => 1800000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(8),
+                'uploadedAt' => Carbon::now()->subDays(52),
                 'statusID' => $ongoing->statusID,
                 'userID' => $sarahJohnson->userID
             ],
@@ -151,7 +151,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 3: Good Health and Well-being', 'SDG 10: Reduced Inequalities', 'SDG 9: Industry, Innovation and Infrastructure'],
                     'proposedBudget' => 1100000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(12),
+                'uploadedAt' => Carbon::now()->subDays(88),
                 'statusID' => $completed->statusID,
                 'userID' => $sarahJohnson->userID
             ],
@@ -182,7 +182,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 8: Decent Work and Economic Growth', 'SDG 9: Industry, Innovation and Infrastructure', 'SDG 16: Peace, Justice and Strong Institutions'],
                     'proposedBudget' => 750000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(15),
+                'uploadedAt' => Carbon::now()->subDays(18),
                 'statusID' => $rejected->statusID,
                 'userID' => $sarahJohnson->userID
             ],
@@ -213,7 +213,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 9: Industry, Innovation and Infrastructure', 'SDG 10: Reduced Inequalities'],
                     'proposedBudget' => 1500000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(1),
+                'uploadedAt' => Carbon::now()->subDays(20),
                 'statusID' => $underReview->statusID,
                 'userID' => $sarahJohnson->userID
             ],
@@ -244,7 +244,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 2: Zero Hunger', 'SDG 9: Industry, Innovation and Infrastructure', 'SDG 12: Responsible Consumption and Production'],
                     'proposedBudget' => 1300000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(6),
+                'uploadedAt' => Carbon::now()->subDays(58),
                 'statusID' => $ongoing->statusID,
                 'userID' => $sarahJohnson->userID
             ]
@@ -265,3 +265,4 @@ class SarahJohnsonProposalSeeder extends Seeder
         $this->command->info('Sarah Johnson proposal seeding completed successfully!');
     }
 }
+

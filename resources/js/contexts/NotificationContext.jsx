@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 
 const NotificationContext = createContext();
@@ -16,6 +16,79 @@ export const NotificationProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [dismissedToasts, setDismissedToasts] = useState(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+
+  // Auto-refresh state
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const refreshTimeoutRef = useRef(null);
+  const isActiveRef = useRef(true);
+  const lastActivityRef = useRef(Date.now());
+
+  // Smart refresh interval calculation for notifications
+  const getSmartRefreshInterval = useCallback(() => {
+    if (!autoRefreshEnabled) return null;
+    
+    const now = Date.now();
+    const timeSinceActivity = now - lastActivityRef.current;
+    const hasUnreadContent = unreadCount > 0;
+    const isTabVisible = !document.hidden;
+    
+    // If tab is hidden, refresh less frequently
+    if (!isTabVisible) return 180000; // 3 minutes
+    
+    // If there's unread content, refresh more frequently
+    if (hasUnreadContent) return 15000; // 15 seconds
+    
+    // If user was recently active, refresh moderately
+    if (timeSinceActivity < 60000) return 45000; // 45 seconds
+    
+    // Default refresh interval
+    return 90000; // 1.5 minutes
+  }, [autoRefreshEnabled, unreadCount]);
+
+  // Update activity timestamp
+  const updateActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
+
+  // Refresh all notification data
+  const refreshAllNotifications = useCallback(async () => {
+    if (isRefreshing || !isActiveRef.current) return;
+    
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchNotifications(),
+        fetchUnreadCount()
+      ]);
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing]);
+
+  // Set up auto-refresh
+  const setupAutoRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    if (!autoRefreshEnabled) return;
+
+    const interval = getSmartRefreshInterval();
+    if (interval) {
+      refreshTimeoutRef.current = setTimeout(() => {
+        if (isActiveRef.current) {
+          refreshAllNotifications().then(() => {
+            setupAutoRefresh(); // Schedule next refresh
+          });
+        }
+      }, interval);
+    }
+  }, [autoRefreshEnabled, getSmartRefreshInterval, refreshAllNotifications]);
 
   // Load dismissed notifications from localStorage on mount
   useEffect(() => {
@@ -71,10 +144,66 @@ export const NotificationProvider = ({ children }) => {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token) {
+      isActiveRef.current = true;
       fetchNotifications();
       fetchUnreadCount();
+    } else {
+      isActiveRef.current = false;
     }
   }, []);
+
+  // Set up auto-refresh when token is available
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      setupAutoRefresh();
+    }
+    
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [setupAutoRefresh]);
+
+  // Re-setup auto-refresh when dependencies change
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      setupAutoRefresh();
+    }
+  }, [unreadCount, autoRefreshEnabled, setupAutoRefresh]);
+
+  // Track user activity for smart refresh
+  useEffect(() => {
+    const handleActivity = () => {
+      updateActivity();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        updateActivity();
+        // Refresh immediately when tab becomes visible
+        const token = localStorage.getItem('token');
+        if (token) {
+          refreshAllNotifications();
+        }
+      }
+    };
+
+    // Add event listeners for activity tracking
+    document.addEventListener('mousedown', handleActivity);
+    document.addEventListener('keydown', handleActivity);
+    document.addEventListener('scroll', handleActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('mousedown', handleActivity);
+      document.removeEventListener('keydown', handleActivity);
+      document.removeEventListener('scroll', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [updateActivity, refreshAllNotifications]);
 
   // React to token changes across the app
   useEffect(() => {
@@ -216,13 +345,19 @@ export const NotificationProvider = ({ children }) => {
     notifications,
     loading,
     unreadCount,
+    isRefreshing,
+    lastRefresh,
+    autoRefreshEnabled,
     removeNotification,
     markAsRead,
     markAllAsRead,
     refreshNotifications,
+    refreshAllNotifications,
     dismissToast,
     getToastNotifications,
     clearDismissedToasts,
+    setAutoRefreshEnabled,
+    updateActivity,
   };
 
   return (

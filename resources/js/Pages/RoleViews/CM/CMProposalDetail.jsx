@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
 import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
+import apiService from '../../../services/api';
 
 const CMProposalDetail = () => {
   const { id } = useParams();
@@ -11,6 +12,9 @@ const CMProposalDetail = () => {
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isEndorsed, setIsEndorsed] = useState(false);
+  const [endorsementData, setEndorsementData] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   console.log('CMProposalDetail rendered with ID:', id);
   console.log('Current user:', user);
@@ -18,6 +22,36 @@ const CMProposalDetail = () => {
   useEffect(() => {
     fetchProposal();
   }, [id]);
+
+  // Check endorsement status when proposal is loaded
+  useEffect(() => {
+    const checkEndorsementStatus = async () => {
+      if (!proposal) return;
+      
+      try {
+        const response = await apiService.getEndorsementsByProposal(proposal.proposalID);
+        
+        if (response.success && response.data.length > 0) {
+          setIsEndorsed(true);
+          setEndorsementData(response.data[0]);
+        } else {
+          setIsEndorsed(false);
+          setEndorsementData(null);
+        }
+      } catch (error) {
+        console.error('Error checking endorsement status:', error);
+        setIsEndorsed(false);
+        setEndorsementData(null);
+      }
+    };
+
+    checkEndorsementStatus();
+  }, [proposal, refreshKey]);
+
+  // Force refresh function
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   const fetchProposal = async () => {
     try {
@@ -81,17 +115,18 @@ const CMProposalDetail = () => {
     );
   }
 
-  // Dynamic timeline based on actual proposal status
+  // Dynamic timeline based on actual proposal status and endorsement status
   const getTimelineStages = () => {
     if (!proposal) return [];
     
     const statusId = proposal.statusID;
     
-    // Define all possible timeline stages
+    // Define all possible timeline stages (ordered from start to finish)
     const allStages = [
-      { id: 1, name: 'College Endorsement', status: 'completed' },
-      { id: 2, name: 'R&D Division', status: 'completed' },
-      { id: 3, name: 'Proposal Review', status: 'completed' },
+      { id: 0, name: 'Proposal Submitted', status: 'pending' },
+      { id: 1, name: 'College Endorsement', status: 'pending' },
+      { id: 2, name: 'R&D Division', status: 'pending' },
+      { id: 3, name: 'Proposal Review', status: 'pending' },
       { id: 4, name: 'Ethics Review', status: 'pending' },
       { id: 5, name: 'OVPRDE', status: 'pending' },
       { id: 6, name: 'President', status: 'pending' },
@@ -101,54 +136,68 @@ const CMProposalDetail = () => {
       { id: 10, name: 'For Completion', status: 'pending' }
     ];
 
-    // Update stages based on actual proposal status
+    // Update stages based on actual proposal status (matching StatusSeeder IDs)
     switch (statusId) {
-      case 1: // Under Review (from StatusSeeder)
-        allStages[0].status = 'completed';
-        allStages[1].status = 'completed';
-        allStages[2].status = 'current';
+      case 1: // Under Review - Proposal submitted, waiting for College Endorsement
+        allStages[0].status = 'completed'; // Proposal Submitted
+        // Check if endorsed to determine College Endorsement status
+        if (isEndorsed) {
+          allStages[1].status = 'completed'; // College Endorsement - completed
+          allStages[2].status = 'current';   // R&D Division - next stage
+        } else {
+          allStages[1].status = 'current';   // College Endorsement - current
+        }
         break;
-      case 2: // Approved
-        allStages[0].status = 'completed';
-        allStages[1].status = 'completed';
-        allStages[2].status = 'completed';
-        allStages[3].status = 'completed';
-        allStages[4].status = 'completed';
-        allStages[5].status = 'completed';
-        allStages[6].status = 'completed';
-        allStages[7].status = 'current';
+      case 2: // Approved - All stages up to Implementation completed, Implementation current
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'current';   // Implementation
         break;
-      case 3: // Rejected
-        allStages[0].status = 'completed';
-        allStages[1].status = 'completed';
-        allStages[2].status = 'completed';
-        allStages[3].status = 'rejected';
+      case 3: // Rejected - College Endorsement completed, R&D Division rejected
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'rejected';  // R&D Division
         break;
-      case 4: // Ongoing
-        allStages[0].status = 'completed';
-        allStages[1].status = 'completed';
-        allStages[2].status = 'completed';
-        allStages[3].status = 'completed';
-        allStages[4].status = 'completed';
-        allStages[5].status = 'completed';
-        allStages[6].status = 'completed';
-        allStages[7].status = 'completed';
-        allStages[8].status = 'current';
+      case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'completed'; // Implementation
+        allStages[9].status = 'current';   // Monitoring
         break;
-      case 5: // Completed
-        allStages[0].status = 'completed';
-        allStages[1].status = 'completed';
-        allStages[2].status = 'completed';
-        allStages[3].status = 'completed';
-        allStages[4].status = 'completed';
-        allStages[5].status = 'completed';
-        allStages[6].status = 'completed';
-        allStages[7].status = 'completed';
-        allStages[8].status = 'completed';
-        allStages[9].status = 'completed';
+      case 5: // Completed - All stages completed
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'completed'; // Implementation
+        allStages[9].status = 'completed'; // Monitoring
+        allStages[10].status = 'completed'; // For Completion
         break;
       default:
-        allStages[2].status = 'current';
+        // Check if endorsed to determine College Endorsement status
+        if (isEndorsed) {
+          allStages[0].status = 'completed'; // Proposal Submitted
+          allStages[1].status = 'completed'; // College Endorsement - completed
+          allStages[2].status = 'current';   // R&D Division - next stage
+        } else {
+          allStages[1].status = 'current'; // College Endorsement - current
+        }
     }
 
     return allStages;
@@ -164,69 +213,100 @@ const CMProposalDetail = () => {
     // Generate status history based on timeline stages
     const statusHistory = [];
     
-    // Always include initial submission
-    statusHistory.push({
-      date: baseDate.toLocaleDateString('en-US', { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      }),
-      status: 'Proposal Submitted',
-      action: 'Research proposal submitted for initial review and processing.',
-      priority: 'high'
-    });
-    
-    // Add completed stages in reverse chronological order
+    // Get stages in chronological order
     const completedStages = timelineStages.filter(stage => stage.status === 'completed');
     const currentStage = timelineStages.find(stage => stage.status === 'current');
     const rejectedStage = timelineStages.find(stage => stage.status === 'rejected');
     
-    // Add completed stages
-    completedStages.forEach((stage, index) => {
+    // Create a proper chronological timeline
+    const timelineEntries = [];
+    
+    // 1. Add initial proposal submission (always first)
+    timelineEntries.push({
+      date: baseDate,
+      status: 'Proposal Submitted',
+      action: 'Proposal submitted successfully and is now under review.',
+      priority: 'medium',
+      type: 'completed'
+    });
+    
+    // 2. Add completed stages in chronological order (excluding Proposal Submitted to avoid duplication)
+    completedStages.filter(stage => stage.name !== 'Proposal Submitted').forEach((stage, index) => {
       const stageDate = new Date(baseDate);
-      stageDate.setDate(stageDate.getDate() + (index + 1) * 2); // 2 days between stages
+      // Add realistic time progression: 1-2 weeks between stages
+      const daysToAdd = (index + 1) * 7 + Math.floor(Math.random() * 7);
+      stageDate.setDate(stageDate.getDate() + daysToAdd);
       
-      statusHistory.push({
-        date: stageDate.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        }),
+      // Add random time during business hours (9 AM - 5 PM)
+      const randomHour = 9 + Math.floor(Math.random() * 8);
+      const randomMinute = Math.floor(Math.random() * 60);
+      stageDate.setHours(randomHour, randomMinute, 0, 0);
+      
+      timelineEntries.push({
+        date: stageDate,
         status: stage.name,
         action: `${stage.name} completed successfully.`,
-        priority: 'medium'
+        priority: 'medium',
+        type: 'completed'
       });
     });
     
-    // Add current stage
-    if (currentStage) {
-      const currentDate = new Date();
-      statusHistory.unshift({
-        date: currentDate.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        }),
-        status: currentStage.name,
-        action: `Currently in ${currentStage.name} stage.`,
-        priority: 'high'
+    // 3. Add endorsement entry if proposal has been endorsed
+    if (isEndorsed && endorsementData) {
+      const endorsementDate = new Date(endorsementData.endorsementDate);
+      timelineEntries.push({
+        date: endorsementDate,
+        status: 'College Endorsement',
+        action: `Proposal endorsed by ${endorsementData.endorser?.fullName || 'Center Manager'}.`,
+        priority: 'high',
+        type: 'endorsement'
       });
     }
     
-    // Add rejected stage
-    if (rejectedStage) {
-      const rejectedDate = new Date();
-      statusHistory.unshift({
-        date: rejectedDate.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        }),
-        status: rejectedStage.name,
-        action: `Proposal rejected at ${rejectedStage.name} stage.`,
-        priority: 'high'
+    // 4. Add current stage (most recent)
+    if (currentStage) {
+      const currentDate = new Date();
+      timelineEntries.push({
+        date: currentDate,
+        status: currentStage.name,
+        action: `Currently in ${currentStage.name} stage.`,
+        priority: 'high',
+        type: 'current'
       });
     }
+    
+    // 5. Add rejected stage (if applicable)
+    if (rejectedStage) {
+      const rejectedDate = new Date();
+      timelineEntries.push({
+        date: rejectedDate,
+        status: rejectedStage.name,
+        action: `Proposal rejected at ${rejectedStage.name} stage.`,
+        priority: 'high',
+        type: 'rejected'
+      });
+    }
+    
+    // Sort by date (newest first for display)
+    timelineEntries.sort((a, b) => b.date - a.date);
+    
+    // Format the entries for display
+    timelineEntries.forEach(entry => {
+      statusHistory.push({
+        date: entry.date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        }),
+        status: entry.status,
+        action: entry.action,
+        priority: entry.priority,
+        type: entry.type
+      });
+    });
     
     return statusHistory;
   };
@@ -305,17 +385,45 @@ const CMProposalDetail = () => {
               <span className="font-medium">Back to Projects</span>
             </button>
 
-            {/* Endorse Button */}
-            <button
-              onClick={handleEndorse}
-              className="flex items-center bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Endorse Project
-            </button>
+            {/* Endorse Button or Endorsement Status */}
+            {(() => {
+              const timelineStages = getTimelineStages();
+              const collegeEndorsementStage = timelineStages.find(stage => stage.name === 'College Endorsement');
+              const isCurrentStage = collegeEndorsementStage?.status === 'current';
+              
+              if (isEndorsed) {
+                return (
+                  <div className="flex items-center space-x-4">
+                    <div className="flex items-center px-6 py-3 bg-green-100 text-green-800 rounded-xl font-semibold">
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Project Endorsed
+                    </div>
+                    {endorsementData && (
+                      <div className="text-sm text-gray-600">
+                        Endorsed on: {new Date(endorsementData.endorsementDate).toLocaleDateString()}
+                      </div>
+                    )}
+                  </div>
+                );
+              } else if (isCurrentStage) {
+                return (
+                  <button
+                    onClick={handleEndorse}
+                    className="flex items-center bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                  >
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Endorse Project
+                  </button>
+                );
+              }
+              return null;
+            })()}
           </div>
+
 
           {/* Project Title and Info */}
           <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
@@ -491,16 +599,18 @@ const CMProposalDetail = () => {
                         <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
                         <div>
                           <div className="text-sm font-medium text-gray-900">{entry.date}</div>
-                          <div className="text-xs text-gray-500">Recently updated</div>
+                          <div className="text-xs text-gray-500">
+                            {index === 0 ? 'Latest update' : 
+                             index === statusHistory.length - 1 ? 'Initial submission' : 
+                             'Stage completed'}
+                          </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-8 py-6">
                       <div className="flex items-center">
-                        <div className={`w-3 h-3 rounded-full mr-3 ${index === 0 ? 'bg-red-600 animate-pulse' : 'bg-green-500'
-                          }`}></div>
-                        <span className={`text-sm font-medium ${index === 0 ? 'text-red-700' : 'text-gray-900'
-                          }`}>
+                        <div className={`w-3 h-3 rounded-full mr-3 ${index === 0 ? 'bg-red-600 animate-pulse' : 'bg-green-500'}`}></div>
+                        <span className={`text-sm font-medium ${index === 0 ? 'text-red-700' : 'text-gray-900'}`}>
                           {entry.status}
                         </span>
                       </div>
@@ -522,19 +632,90 @@ const CMProposalDetail = () => {
           </div>
         </div>
 
-        {/* PDF Viewer */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-6">Proposal Document</h2>
-          {proposal.revisionFile ? (
+        {/* Attached Files Section */}
+        {proposal.files && proposal.files.length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900">Attached Files</h2>
+              <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
+                {proposal.files.length} file{proposal.files.length !== 1 ? 's' : ''}
+              </span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {proposal.files.map((file) => (
+                <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
+                  <div className="flex items-start gap-4">
+                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                      <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">{file.fileName}</h3>
+                      <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => window.open(`/storage/${file.filePath}`, '_blank')}
+                          className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
+                          title="View file"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          View
+                        </button>
+                        <button
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = `/storage/${file.filePath}`;
+                            link.download = file.fileName;
+                            link.target = '_blank';
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                          }}
+                          className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
+                          title="Download file"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                          Download
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* PDF Viewer - Legacy support for revisionFile */}
+        {proposal.revisionFile && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6">Legacy Proposal Document</h2>
             <PDFViewer pdfPath={proposal.revisionFile} title="Proposal Document" />
-          ) : (
+          </div>
+        )}
+
+        {/* No Files Message */}
+        {(!proposal.files || proposal.files.length === 0) && !proposal.revisionFile && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="text-center py-12">
               <div className="text-gray-400 text-6xl mb-4">📄</div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Document Available</h3>
-              <p className="text-gray-600">This proposal doesn't have an uploaded document yet.</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Documents Available</h3>
+              <p className="text-gray-600">This proposal doesn't have any uploaded documents yet.</p>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );

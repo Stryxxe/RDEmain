@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
+import { useMessages } from '../../../contexts/MessageContext';
+import { RefreshCw } from 'lucide-react';
+import AutoRefreshControls from '../../../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 
 const CMProgressReport = () => {
   const { user } = useAuth();
+  const { refreshAllNotifications } = useNotifications();
+  const { refreshAllMessages } = useMessages();
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     fetchProgressReports();
@@ -26,6 +34,21 @@ const CMProgressReport = () => {
       console.error('Error fetching progress reports:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchProgressReports(),
+        refreshAllNotifications(),
+        refreshAllMessages()
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -137,9 +160,22 @@ const CMProgressReport = () => {
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
             Progress Reports
           </h1>
-          <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+          <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-6">
             Monitor and track project progress across divisions
           </p>
+          
+          {/* Manual Refresh Button */}
+          <div className="flex flex-wrap justify-center items-center gap-4">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh progress reports and notifications"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

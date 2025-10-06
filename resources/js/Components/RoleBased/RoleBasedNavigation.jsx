@@ -48,8 +48,13 @@ const RoleBasedNavigation = ({ role, className = '' }) => {
     }
   };
 
-  // Filter out routes that don't have labels (like parameterized routes) and exclude Account from sidebar
-  const navigationRoutes = config.routes.filter(route => route.label && route.label !== 'Account');
+  // Filter out routes that don't have labels, parameterized routes, hidden routes, and exclude Account from sidebar
+  const navigationRoutes = config.routes.filter(route => 
+    route.label && 
+    route.label !== 'Account' && 
+    !route.path.includes(':') && // Exclude parameterized routes like 'proposal/:id'
+    !route.hidden // Exclude hidden routes
+  );
 
   return (
     <nav className={`flex flex-col ${className}`}>

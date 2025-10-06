@@ -26,36 +26,60 @@ class UserSeeder extends Seeder
         $rddDept = Department::where('name', 'Research and Development Division')->first();
         $academicDept = Department::where('name', 'Academic Affairs')->first();
         $osuurDept = Department::where('name', 'Office of Student Affairs and University Relations Unit')->first();
-        $cmDept = Department::where('name', 'College of Medicine')->first();
+        $cmDept = Department::where('name', 'College of Medicine')->first() 
+                 ?? Department::where('name', 'College of Technology')->first();
         $engineeringDept = Department::where('name', 'College of Engineering')->first();
         $educationDept = Department::where('name', 'College of Education')->first();
         $artsDept = Department::where('name', 'College of Arts and Sciences')->first();
         $businessDept = Department::where('name', 'College of Business Administration')->first();
-        $agricultureDept = Department::where('name', 'College of Agriculture')->first();
-        $nursingDept = Department::where('name', 'College of Nursing')->first();
-        $computerDept = Department::where('name', 'College of Computer Studies')->first();
+        $agricultureDept = Department::where('name', 'College of Agriculture')->first() 
+                          ?? Department::where('name', 'College of Applied Economics')->first();
+        $nursingDept = Department::where('name', 'College of Nursing')->first() 
+                      ?? Department::where('name', 'College of Technology')->first();
+        $computerDept = Department::where('name', 'College of Computer Studies')->first() 
+                       ?? Department::where('name', 'College of Information and Computing')->first();
         
-        // Research Centers
-        $ictCenter = Department::where('name', 'Center for Information and Communications Technology')->first();
-        $envCenter = Department::where('name', 'Center for Environmental Studies and Research')->first();
-        $indigenousCenter = Department::where('name', 'Center for Indigenous Studies and Cultural Heritage')->first();
-        $renewableCenter = Department::where('name', 'Center for Renewable Energy and Sustainability')->first();
-        $healthCenter = Department::where('name', 'Center for Health Informatics and Telemedicine')->first();
-        $tourismCenter = Department::where('name', 'Center for Tourism and Hospitality Studies')->first();
-        $disasterCenter = Department::where('name', 'Center for Disaster Risk Reduction and Management')->first();
-        $waterCenter = Department::where('name', 'Center for Water Resources and Environmental Engineering')->first();
-        $communityCenter = Department::where('name', 'Center for Community Development and Social Services')->first();
-        $eduTechCenter = Department::where('name', 'Center for Educational Technology and Innovation')->first();
-        $culturalCenter = Department::where('name', 'Center for Cultural Studies and Heritage Preservation')->first();
-        $telemedicineCenter = Department::where('name', 'Center for Telemedicine and Digital Health')->first();
-        $nutritionCenter = Department::where('name', 'Center for Public Health and Nutrition')->first();
-        $materialsCenter = Department::where('name', 'Center for Materials Science and Engineering')->first();
-        $agricultureCenter = Department::where('name', 'Center for Agricultural Research and Development')->first();
-        $marineCenter = Department::where('name', 'Center for Marine Biology and Oceanography')->first();
-        $urbanCenter = Department::where('name', 'Center for Urban Planning and Development')->first();
-        $digitalCenter = Department::where('name', 'Center for Digital Innovation and Technology')->first();
-        $socialCenter = Department::where('name', 'Center for Social Sciences and Humanities Research')->first();
-        $sustainableCenter = Department::where('name', 'Center for Sustainable Development Studies')->first();
+        // Research Centers - Use existing departments as fallback
+        $ictCenter = Department::where('name', 'Center for Information and Communications Technology')->first() 
+                    ?? Department::where('name', 'College of Information and Computing')->first();
+        $envCenter = Department::where('name', 'Center for Environmental Studies and Research')->first() 
+                    ?? Department::where('name', 'College of Technology')->first();
+        $indigenousCenter = Department::where('name', 'Center for Indigenous Studies and Cultural Heritage')->first() 
+                           ?? Department::where('name', 'College of Arts and Sciences')->first();
+        $renewableCenter = Department::where('name', 'Center for Renewable Energy and Sustainability')->first() 
+                          ?? Department::where('name', 'College of Technology')->first();
+        $healthCenter = Department::where('name', 'Center for Health Informatics and Telemedicine')->first() 
+                       ?? Department::where('name', 'College of Technology')->first();
+        $tourismCenter = Department::where('name', 'Center for Tourism and Hospitality Studies')->first() 
+                        ?? Department::where('name', 'College of Business Administration')->first();
+        $disasterCenter = Department::where('name', 'Center for Disaster Risk Reduction and Management')->first() 
+                         ?? Department::where('name', 'College of Technology')->first();
+        $waterCenter = Department::where('name', 'Center for Water Resources and Environmental Engineering')->first() 
+                      ?? Department::where('name', 'College of Engineering')->first();
+        $communityCenter = Department::where('name', 'Center for Community Development and Social Services')->first() 
+                          ?? Department::where('name', 'College of Applied Economics')->first();
+        $eduTechCenter = Department::where('name', 'Center for Educational Technology and Innovation')->first() 
+                        ?? Department::where('name', 'College of Education')->first();
+        $culturalCenter = Department::where('name', 'Center for Cultural Studies and Heritage Preservation')->first() 
+                         ?? Department::where('name', 'College of Arts and Sciences')->first();
+        $telemedicineCenter = Department::where('name', 'Center for Telemedicine and Digital Health')->first() 
+                             ?? Department::where('name', 'College of Technology')->first();
+        $nutritionCenter = Department::where('name', 'Center for Public Health and Nutrition')->first() 
+                          ?? Department::where('name', 'College of Technology')->first();
+        $materialsCenter = Department::where('name', 'Center for Materials Science and Engineering')->first() 
+                          ?? Department::where('name', 'College of Engineering')->first();
+        $agricultureCenter = Department::where('name', 'Center for Agricultural Research and Development')->first() 
+                            ?? Department::where('name', 'College of Applied Economics')->first();
+        $marineCenter = Department::where('name', 'Center for Marine Biology and Oceanography')->first() 
+                       ?? Department::where('name', 'College of Arts and Sciences')->first();
+        $urbanCenter = Department::where('name', 'Center for Urban Planning and Development')->first() 
+                      ?? Department::where('name', 'College of Engineering')->first();
+        $digitalCenter = Department::where('name', 'Center for Digital Innovation and Technology')->first() 
+                        ?? Department::where('name', 'College of Information and Computing')->first();
+        $socialCenter = Department::where('name', 'Center for Social Sciences and Humanities Research')->first() 
+                       ?? Department::where('name', 'College of Arts and Sciences')->first();
+        $sustainableCenter = Department::where('name', 'Center for Sustainable Development Studies')->first() 
+                            ?? Department::where('name', 'College of Applied Economics')->first();
 
         // Create users for each role and department
         $users = [
@@ -103,6 +127,15 @@ class UserSeeder extends Seeder
                 'email' => 'cm-ict@usep.edu.ph',
                 'password' => Hash::make('password'),
                 'departmentID' => $ictCenter->departmentID,
+                'userRolesID' => $cmRole->userRoleID,
+            ],
+            
+            [
+                'firstName' => 'Dr. Maria',
+                'lastName' => 'Santos',
+                'email' => 'cm-academic@usep.edu.ph',
+                'password' => Hash::make('password'),
+                'departmentID' => $academicDept->departmentID,
                 'userRolesID' => $cmRole->userRoleID,
             ],
             

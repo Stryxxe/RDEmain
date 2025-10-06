@@ -5,8 +5,13 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProposalController;
+use App\Http\Controllers\EndorsementController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\MessageController;
+use App\Http\Controllers\Api\OptimizedNotificationController;
+use App\Http\Controllers\Api\OptimizedMessageController;
+use App\Http\Controllers\Api\SimpleOptimizedMessageController;
+use App\Http\Middleware\RequestDeduplication;
 
 // CSRF routes that need web middleware for proper token generation
 Route::middleware('web')->group(function () {
@@ -15,6 +20,8 @@ Route::middleware('web')->group(function () {
     });
     
     Route::get('/sanctum/csrf-cookie', function (Request $request) {
+        // This will set the XSRF-TOKEN cookie that Sanctum expects
+        // The EnsureFrontendRequestsAreStateful middleware will handle this
         return response()->json(['message' => 'CSRF cookie set']);
     });
 });
@@ -49,29 +56,36 @@ Route::put('/user', function (Request $request) {
     return $user;
 })->middleware('auth:sanctum');
 
-// Proposal routes (temporarily without CSRF for testing)
-Route::middleware(['auth:sanctum'])->group(function () {
+// Proposal routes with proper CSRF handling for SPA
+Route::middleware(['auth:sanctum', 'web'])->group(function () {
     Route::get('/proposals/statistics', [ProposalController::class, 'statistics']);
     Route::apiResource('proposals', ProposalController::class);
     
-    // Notification routes
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
-    Route::put('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::put('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+    // Endorsement routes
+    Route::post('/endorsements', [EndorsementController::class, 'store']);
+    Route::get('/endorsements', [EndorsementController::class, 'index']);
+    Route::get('/endorsements/proposal/{proposalId}', [EndorsementController::class, 'getByProposal']);
     
-    // Message routes
-    Route::get('/messages', [MessageController::class, 'index']);
-    Route::get('/messages/sent', [MessageController::class, 'sent']);
-    Route::get('/messages/unread-count', [MessageController::class, 'unreadCount']);
-    Route::get('/messages/conversations', [MessageController::class, 'conversations']);
-    Route::get('/messages/conversation/{otherUserId}', [MessageController::class, 'conversation']);
-    Route::get('/messages/available-cm', [MessageController::class, 'getAvailableCM']);
-    Route::post('/messages', [MessageController::class, 'store']);
-    Route::get('/messages/{id}', [MessageController::class, 'show']);
-    Route::put('/messages/{id}/read', [MessageController::class, 'markAsRead']);
-    Route::put('/messages/mark-all-read', [MessageController::class, 'markAllAsRead']);
-    Route::delete('/messages/{id}', [MessageController::class, 'destroy']);
-    Route::delete('/messages/clear-all', [MessageController::class, 'clearAll']);
+    // Optimized Notification routes with caching and deduplication
+    Route::middleware([RequestDeduplication::class])->group(function () {
+        Route::get('/notifications', [OptimizedNotificationController::class, 'index']);
+        Route::get('/notifications/unread-count', [OptimizedNotificationController::class, 'unreadCount']);
+    });
+    Route::put('/notifications/{id}/read', [OptimizedNotificationController::class, 'markAsRead']);
+    Route::put('/notifications/mark-all-read', [OptimizedNotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{id}', [OptimizedNotificationController::class, 'destroy']);
+    
+    // Simple Optimized Message routes (compatible with all cache drivers)
+    Route::get('/messages', [SimpleOptimizedMessageController::class, 'index']);
+    Route::get('/messages/sent', [SimpleOptimizedMessageController::class, 'sent']);
+    Route::get('/messages/unread-count', [SimpleOptimizedMessageController::class, 'unreadCount']);
+    Route::get('/messages/conversations', [SimpleOptimizedMessageController::class, 'conversations']);
+    Route::get('/messages/conversation/{otherUserId}', [SimpleOptimizedMessageController::class, 'conversation']);
+    Route::get('/messages/available-cm', [SimpleOptimizedMessageController::class, 'getAvailableCM']);
+    Route::post('/messages', [SimpleOptimizedMessageController::class, 'store']);
+    Route::get('/messages/{id}', [MessageController::class, 'show']); // Keep original for show method
+    Route::put('/messages/{id}/read', [SimpleOptimizedMessageController::class, 'markAsRead']);
+    Route::put('/messages/mark-all-read', [SimpleOptimizedMessageController::class, 'markAllAsRead']);
+    Route::delete('/messages/{id}', [SimpleOptimizedMessageController::class, 'destroy']);
+    Route::delete('/messages/clear-all', [SimpleOptimizedMessageController::class, 'clearAll']);
 });

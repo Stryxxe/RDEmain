@@ -86,7 +86,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 2: Zero Hunger', 'SDG 6: Clean Water and Sanitation', 'SDG 9: Industry, Innovation and Infrastructure', 'SDG 12: Responsible Consumption and Production'],
                     'proposedBudget' => 850000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(15),
+                'uploadedAt' => Carbon::now()->subDays(30),
                 'statusID' => $underReview->statusID,
                 'userID' => $sarahJohnson->userID // ICT Center proponent
             ],
@@ -117,7 +117,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 14: Life Below Water', 'SDG 15: Life on Land', 'SDG 6: Clean Water and Sanitation'],
                     'proposedBudget' => 1200000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(8),
+                'uploadedAt' => Carbon::now()->subDays(45),
                 'statusID' => $approved->statusID,
                 'userID' => $mariaCruz->userID // Environmental Center proponent
             ],
@@ -148,7 +148,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 10: Reduced Inequalities', 'SDG 11: Sustainable Cities and Communities'],
                     'proposedBudget' => 650000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(25),
+                'uploadedAt' => Carbon::now()->subDays(60),
                 'statusID' => $ongoing->statusID,
                 'userID' => $juanSantos->userID // Indigenous Center proponent
             ],
@@ -179,7 +179,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 7: Affordable and Clean Energy', 'SDG 11: Sustainable Cities and Communities', 'SDG 1: No Poverty'],
                     'proposedBudget' => 1500000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(5),
+                'uploadedAt' => Carbon::now()->subDays(20),
                 'statusID' => $rejected->statusID,
                 'userID' => $anaReyes->userID // Renewable Energy Center proponent
             ],
@@ -210,7 +210,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 3: Good Health and Well-being', 'SDG 10: Reduced Inequalities', 'SDG 9: Industry, Innovation and Infrastructure'],
                     'proposedBudget' => 1100000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(12),
+                'uploadedAt' => Carbon::now()->subDays(90),
                 'statusID' => $completed->statusID,
                 'userID' => $carlosMendoza->userID // Health Center proponent
             ],
@@ -241,7 +241,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 8: Decent Work and Economic Growth', 'SDG 11: Sustainable Cities and Communities', 'SDG 12: Responsible Consumption and Production'],
                     'proposedBudget' => 750000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(3),
+                'uploadedAt' => Carbon::now()->subDays(25),
                 'statusID' => $underReview->statusID,
                 'userID' => $elenaTorres->userID // Tourism Center proponent
             ],
@@ -272,7 +272,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 11: Sustainable Cities and Communities', 'SDG 13: Climate Action', 'SDG 9: Industry, Innovation and Infrastructure'],
                     'proposedBudget' => 1300000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(20),
+                'uploadedAt' => Carbon::now()->subDays(50),
                 'statusID' => $approved->statusID,
                 'userID' => $robertoGarcia->userID // Disaster Center proponent
             ],
@@ -303,7 +303,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 11: Sustainable Cities and Communities', 'SDG 12: Responsible Consumption and Production', 'SDG 6: Clean Water and Sanitation'],
                     'proposedBudget' => 600000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(7),
+                'uploadedAt' => Carbon::now()->subDays(70),
                 'statusID' => $ongoing->statusID,
                 'userID' => $mariaCruz->userID // Environmental Center proponent (second proposal)
             ],
@@ -334,7 +334,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 6: Clean Water and Sanitation', 'SDG 3: Good Health and Well-being', 'SDG 1: No Poverty'],
                     'proposedBudget' => 900000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(1),
+                'uploadedAt' => Carbon::now()->subDays(15),
                 'statusID' => $underReview->statusID,
                 'userID' => $patriciaLopez->userID // Water Center proponent
             ],
@@ -365,7 +365,7 @@ class ProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 10: Reduced Inequalities', 'SDG 11: Sustainable Cities and Communities'],
                     'proposedBudget' => 450000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(18),
+                'uploadedAt' => Carbon::now()->subDays(100),
                 'statusID' => $completed->statusID,
                 'userID' => $miguelFernandez->userID // Community Center proponent
             ]

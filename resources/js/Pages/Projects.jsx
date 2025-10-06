@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Eye, ChevronUp } from 'lucide-react';
+import { Search, Eye, ChevronUp, RefreshCw } from 'lucide-react';
 import apiService from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
+import { useMessages } from '../contexts/MessageContext';
+import AutoRefreshControls from '../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
 
 const Projects = () => {
   const { user } = useAuth();
+  const { refreshAllNotifications } = useNotifications();
+  const { refreshAllMessages } = useMessages();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('title');
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -39,6 +46,21 @@ const Projects = () => {
       setError('Failed to load projects. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        loadProjects(),
+        refreshAllNotifications(),
+        refreshAllMessages()
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -173,6 +195,16 @@ const Projects = () => {
               <p className="text-gray-600">Comprehensive list of all research initiatives</p>
             </div>
             <div className="flex items-center gap-4">
+              {/* Manual Refresh Button */}
+              <button
+                onClick={handleRefresh}
+                disabled={isRefreshing}
+                className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                title="Refresh projects and notifications"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
               <label className="text-sm font-medium text-gray-700">Sort by:</label>
               <select
                 value={sortBy}
@@ -209,7 +241,7 @@ const Projects = () => {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Project Details
+                    Research Title
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Author & Research Center

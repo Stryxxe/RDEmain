@@ -27,12 +27,16 @@ class ApiService {
         method: 'GET',
         credentials: 'include'
       });
-      const data = await response.json();
-      this.csrfToken = data.csrf_token;
+      
+      if (response.ok) {
+        const data = await response.json();
+        this.csrfToken = data.csrf_token;
+      }
       
       this.csrfInitialized = true;
     } catch (error) {
-      // Error handling for CSRF initialization
+      console.warn('CSRF initialization failed:', error);
+      this.csrfInitialized = true; // Set to true to prevent infinite retries
     }
   }
 
@@ -46,6 +50,23 @@ class ApiService {
   // Get CSRF token from cookies (XSRF-TOKEN is encrypted by Laravel)
   getCsrfTokenFromCookie() {
     const name = 'XSRF-TOKEN=';
+    const decodedCookie = decodeURIComponent(document.cookie);
+    const ca = decodedCookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+      let c = ca[i];
+      while (c.charAt(0) === ' ') {
+        c = c.substring(1);
+      }
+      if (c.indexOf(name) === 0) {
+        return c.substring(name.length, c.length);
+      }
+    }
+    return null;
+  }
+
+  // Get CSRF token from Laravel session cookie
+  getCsrfTokenFromSession() {
+    const name = 'laravel_session=';
     const decodedCookie = decodeURIComponent(document.cookie);
     const ca = decodedCookie.split(';');
     for (let i = 0; i < ca.length; i++) {
@@ -81,6 +102,16 @@ class ApiService {
     const xsrfToken = this.getCsrfTokenFromCookie();
     if (xsrfToken) {
       return xsrfToken;
+    }
+    
+    // Check if we have a session cookie (indicates session is active)
+    const sessionToken = this.getCsrfTokenFromSession();
+    if (sessionToken) {
+      // If we have a session, try to get CSRF token from meta tag
+      const metaToken = this.getCsrfTokenFromMeta();
+      if (metaToken) {
+        return metaToken;
+      }
     }
     
     // Last resort: Use meta tag
@@ -129,11 +160,20 @@ class ApiService {
   async updateUser(userData) {
     try {
       await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
       
       const response = await fetch(`${this.baseURL}/user`, {
         method: 'PUT',
         credentials: 'include',
-        headers: this.getHeaders(),
+        headers: headers,
         body: JSON.stringify(userData)
       });
       
@@ -182,19 +222,39 @@ class ApiService {
       const xsrfToken = this.getCsrfTokenFromCookie();
       const token = localStorage.getItem('token');
       
+      // Prepare headers with CSRF token
+      const headers = {
+        'Accept': 'application/json',
+        ...(token && { 'Authorization': `Bearer ${token}` })
+      };
+      
+      // Add CSRF token to headers if available
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
+      console.log('Submitting proposal with headers:', headers);
+      console.log('CSRF Token:', csrfToken);
+      console.log('XSRF Token:', xsrfToken);
       
       const response = await fetch(`${this.baseURL}/proposals`, {
         method: 'POST',
         credentials: 'include',
-        headers: {
-          'Accept': 'application/json',
-          ...(token && { 'Authorization': `Bearer ${token}` })
-        },
+        headers: headers,
         body: formData
       });
       
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('Proposal submission failed:', errorData);
+        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       return await this.handleResponse(response);
     } catch (error) {
+      console.error('Proposal submission error:', error);
       throw error;
     }
   }
@@ -234,10 +294,22 @@ class ApiService {
   // Update proposal
   async updateProposal(id, proposalData) {
     try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
       const response = await fetch(`${this.baseURL}/proposals/${id}`, {
         method: 'PUT',
-        headers: this.getHeaders(),
-        body: JSON.stringify(proposalData)
+        headers: headers,
+        body: JSON.stringify(proposalData),
+        credentials: 'include'
       });
       
       return await this.handleResponse(response);
@@ -249,9 +321,21 @@ class ApiService {
   // Delete proposal
   async deleteProposal(id) {
     try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
       const response = await fetch(`${this.baseURL}/proposals/${id}`, {
         method: 'DELETE',
-        headers: this.getHeaders()
+        headers: headers,
+        credentials: 'include'
       });
       
       return await this.handleResponse(response);
@@ -291,10 +375,22 @@ class ApiService {
   // Send message
   async sendMessage(messageData) {
     try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
       const response = await fetch(`${this.baseURL}/messages`, {
         method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify(messageData)
+        headers: headers,
+        body: JSON.stringify(messageData),
+        credentials: 'include'
       });
       
       return await this.handleResponse(response);
@@ -320,9 +416,20 @@ class ApiService {
 
   async post(url, data = null) {
     try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: headers,
         body: data ? JSON.stringify(data) : null,
         credentials: 'include'
       });
@@ -335,10 +442,78 @@ class ApiService {
 
   async put(url, data = null) {
     try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'PUT',
-        headers: this.getHeaders(),
+        headers: headers,
         body: data ? JSON.stringify(data) : null,
+        credentials: 'include'
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Create endorsement
+  async createEndorsement(endorsementData) {
+    try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
+      const response = await fetch(`${this.baseURL}/endorsements`, {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify(endorsementData)
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get endorsements
+  async getEndorsements() {
+    try {
+      const response = await fetch(`${this.baseURL}/endorsements`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+        credentials: 'include'
+      });
+      
+      return await this.handleResponse(response);
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Get endorsements by proposal
+  async getEndorsementsByProposal(proposalId) {
+    try {
+      const response = await fetch(`${this.baseURL}/endorsements/proposal/${proposalId}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
         credentials: 'include'
       });
       
@@ -350,9 +525,20 @@ class ApiService {
 
   async delete(url) {
     try {
+      await this.ensureCsrfInitialized();
+      const csrfToken = await this.getCsrfToken();
+      const xsrfToken = this.getCsrfTokenFromCookie();
+      
+      const headers = this.getHeaders();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      } else if (xsrfToken) {
+        headers['X-XSRF-TOKEN'] = xsrfToken;
+      }
+      
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'DELETE',
-        headers: this.getHeaders(),
+        headers: headers,
         credentials: 'include'
       });
       

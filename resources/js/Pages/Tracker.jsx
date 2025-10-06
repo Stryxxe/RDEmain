@@ -1,16 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowRight, Clock, CheckCircle, AlertCircle, XCircle, Search, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import { ArrowRight, Clock, CheckCircle, AlertCircle, XCircle, Search, ChevronDown, ChevronUp, Eye, RefreshCw } from 'lucide-react';
+import { BiSearch, BiShow } from 'react-icons/bi';
 import apiService from '../services/api';
+import { useNotifications } from '../contexts/NotificationContext';
+import { useMessages } from '../contexts/MessageContext';
+import AutoRefreshControls from '../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
 
 const Tracker = () => {
   const navigate = useNavigate();
+  const { refreshAllNotifications } = useNotifications();
+  const { refreshAllMessages } = useMessages();
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('title');
+  const [sortBy, setSortBy] = useState('ID');
   const [sortOrder, setSortOrder] = useState('asc');
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [fromYear, setFromYear] = useState('2025');
+  const [toYear, setToYear] = useState('2025');
 
   useEffect(() => {
     loadProjects();
@@ -34,288 +44,352 @@ const Tracker = () => {
     }
   };
 
-  const getStatusColor = (statusId) => {
-    switch (statusId) {
-      case 3: case 8: return 'bg-red-100 text-red-800 border-red-200'; // Under Review
-      case 5: case 9: return 'bg-green-100 text-green-800 border-green-200'; // Approved
-      case 6: case 10: return 'bg-red-100 text-red-800 border-red-200'; // Rejected
-      case 11: return 'bg-orange-100 text-orange-800 border-orange-200'; // Ongoing
-      case 12: return 'bg-green-100 text-green-800 border-green-200'; // Completed
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        loadProjects(),
+        refreshAllNotifications(),
+        refreshAllMessages()
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
-  const getProgressPercentage = (statusId) => {
-    switch (statusId) {
-      case 3: case 8: return 25; // Under Review - Initial submission and review process
-      case 5: case 9: return 50; // Approved - Proposal approved, ready to start implementation
-      case 6: case 10: return 0;  // Rejected - No progress, needs revision
-      case 11: return 75; // Ongoing - Research work in progress
-      case 12: return 100; // Completed - Project finished
-      default: return 0;
+  const getStatusClass = (statusName) => {
+    switch (statusName) {
+      case 'Completed':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'Under Review':
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'Ongoing':
+        return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'Approved':
+        return 'bg-green-100 text-green-800 border-green-300';
+      case 'Rejected':
+        return 'bg-red-100 text-red-800 border-red-300';
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-300';
     }
+  };
+
+  const getProgressColor = (statusName) => {
+    switch (statusName) {
+      case 'Completed':
+        return 'bg-green-500';
+      case 'Under Review':
+        return 'bg-blue-500';
+      case 'Ongoing':
+        return 'bg-blue-500';
+      case 'Approved':
+        return 'bg-green-500';
+      case 'Rejected':
+        return 'bg-red-500';
+      default:
+        return 'bg-gray-500';
+    }
+  };
+
+  // Get timeline stages based on proposal status (matching CM dashboard logic)
+  const getTimelineStages = (statusId) => {
+    const allStages = [
+      { id: 0, name: 'Proposal Submitted', status: 'pending' },
+      { id: 1, name: 'College Endorsement', status: 'pending' },
+      { id: 2, name: 'R&D Division', status: 'pending' },
+      { id: 3, name: 'Proposal Review', status: 'pending' },
+      { id: 4, name: 'Ethics Review', status: 'pending' },
+      { id: 5, name: 'OVPRDE', status: 'pending' },
+      { id: 6, name: 'President', status: 'pending' },
+      { id: 7, name: 'OSOURU', status: 'pending' },
+      { id: 8, name: 'Implementation', status: 'pending' },
+      { id: 9, name: 'Monitoring', status: 'pending' },
+      { id: 10, name: 'For Completion', status: 'pending' }
+    ];
+
+    // Update stages based on actual proposal status (matching StatusSeeder IDs)
+    switch (statusId) {
+      case 1: // Under Review - Proposal submitted, waiting for College Endorsement
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'current';   // College Endorsement
+        break;
+      case 2: // Approved - All stages up to Implementation completed, Implementation current
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'current';   // Implementation
+        break;
+      case 3: // Rejected - College Endorsement completed, R&D Division rejected
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'rejected';  // R&D Division
+        break;
+      case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'completed'; // Implementation
+        allStages[9].status = 'current';   // Monitoring
+        break;
+      case 5: // Completed - All stages completed
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'completed'; // Implementation
+        allStages[9].status = 'completed'; // Monitoring
+        allStages[10].status = 'completed'; // For Completion
+        break;
+      default:
+        allStages[1].status = 'current'; // College Endorsement
+    }
+
+    return allStages;
+  };
+
+  const getProgressPercentage = (proposal) => {
+    const timelineStages = getTimelineStages(proposal.statusID);
+    const completedStages = timelineStages.filter(stage => stage.status === 'completed').length;
+    const currentStage = timelineStages.find(stage => stage.status === 'current') ? 1 : 0;
+    const rejectedStage = timelineStages.find(stage => stage.status === 'rejected') ? 1 : 0;
+    
+    // If rejected, return 0%
+    if (rejectedStage) return 0;
+    
+    return Math.round(((completedStages + currentStage * 0.5) / timelineStages.length) * 100);
   };
 
   const handleViewDetails = (projectId) => {
     navigate(`/proponent/tracker/${projectId}`);
   };
 
-  const handleSort = (field) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
-    } else {
-      setSortBy(field);
-      setSortOrder('asc');
-    }
-  };
+  const filteredProposals = projects.filter(proposal =>
+    proposal.researchTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    proposal.user?.fullName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    proposal.researchCenter?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
-  const filteredAndSortedProjects = projects
-    .filter(project => 
-      project.researchTitle?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.proposalID?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      project.author?.toLowerCase().includes(searchTerm.toLowerCase())
-    )
-    .sort((a, b) => {
-      let aValue, bValue;
-      
-      switch (sortBy) {
-        case 'title':
-          aValue = a.researchTitle || '';
-          bValue = b.researchTitle || '';
-          break;
-        case 'date':
-          aValue = new Date(a.created_at);
-          bValue = new Date(b.created_at);
-          break;
-        case 'status':
-          aValue = a.status?.statusName || '';
-          bValue = b.status?.statusName || '';
-          break;
-        default:
-          aValue = a.researchTitle || '';
-          bValue = b.researchTitle || '';
-      }
-      
-      if (sortOrder === 'asc') {
-        return aValue > bValue ? 1 : -1;
-      } else {
-        return aValue < bValue ? 1 : -1;
-      }
-    });
+  const sortedProposals = filteredProposals.sort((a, b) => {
+    switch (sortBy) {
+      case 'ID':
+        return a.proposalID - b.proposalID; // Oldest first
+      case 'Title':
+        return a.researchTitle.localeCompare(b.researchTitle);
+      case 'Author':
+        return (a.user?.fullName || '').localeCompare(b.user?.fullName || '');
+      case 'Status':
+        return (a.status?.statusName || '').localeCompare(b.status?.statusName || '');
+      case 'Date':
+        return new Date(a.created_at) - new Date(b.created_at);
+      default:
+        return a.proposalID - b.proposalID; // Default to ID sorting (oldest first)
+    }
+  });
+
 
   if (loading) {
     return (
-      <div className="w-full max-w-full mx-auto space-y-8 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
-          <div className="flex items-center justify-center min-h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading projects...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="w-full max-w-full mx-auto space-y-8 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
-          <div className="flex items-center justify-center min-h-64">
-            <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
-              <div className="text-red-600 mb-2">
-                <AlertCircle className="w-12 h-12 mx-auto" />
-              </div>
-              <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Projects</h3>
-              <p className="text-red-600 mb-4">{error}</p>
-              <button
-                onClick={loadProjects}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                Try Again
-              </button>
-            </div>
-          </div>
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading proposals...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="w-full max-w-full mx-auto space-y-6 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden" style={{ maxWidth: '100vw', width: '100%' }}>
+    <div className="min-h-screen bg-gray-50">
       {/* Header Section */}
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
-        <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
-          <div className="flex-1">
-            <h1 className="text-3xl sm:text-4xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
-              Research Projects
-            </h1>
-            <p className="text-lg text-gray-600 mb-4">
-              Comprehensive list of all research initiatives
-            </p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-700">Sort by:</span>
-              <div className="flex items-center gap-2">
-                <select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                >
-                  <option value="title">Title</option>
-                  <option value="date">Date</option>
-                  <option value="status">Status</option>
-                </select>
-                <button
-                  onClick={() => handleSort(sortBy)}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  {sortOrder === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
+      <div className="bg-white py-12">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Research Project Tracker
+          </h1>
+          <p className="text-lg text-gray-600 mb-6">
+            Monitor and track all research projects with comprehensive tracking and analytics
+          </p>
+          
+          {/* Manual Refresh Button */}
+          <div className="flex flex-wrap justify-center items-center gap-4">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh dashboard and notifications"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* Search Bar */}
-        <div className="relative mt-4">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+      {/* Year Filter Section */}
+      <div className="p-5">
+        <div className="flex gap-8 mb-8 bg-white p-5 rounded-lg shadow-md">
+          <div className="flex items-center gap-3">
+            <label className="font-medium text-gray-700">From Year:</label>
+            <select 
+              value={fromYear} 
+              onChange={(e) => setFromYear(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded bg-white text-sm"
+            >
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-3">
+            <label className="font-medium text-gray-700">To Year:</label>
+            <select 
+              value={toYear} 
+              onChange={(e) => setToYear(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded bg-white text-sm"
+            >
+              <option value="2025">2025</option>
+              <option value="2024">2024</option>
+              <option value="2023">2023</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+
+      {/* Header Section */}
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-1">Research Projects</h1>
+            <p className="text-gray-600">Comprehensive list of all research initiatives</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm font-medium text-gray-700">Sort by:</label>
+            <select 
+              value={sortBy} 
+              onChange={(e) => setSortBy(e.target.value)}
+              className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ID">ID (Oldest First)</option>
+              <option value="Title">Title</option>
+              <option value="Author">Author</option>
+              <option value="Status">Status</option>
+              <option value="Date">Date</option>
+            </select>
+            <span className="text-gray-500">↑</span>
+          </div>
+        </div>
+        
+        <div className="relative max-w-md">
           <input
             type="text"
             placeholder="Search projects..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
           />
+          <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
         </div>
       </div>
 
-      {/* Projects Table */}
-      {filteredAndSortedProjects.length === 0 ? (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-4 sm:p-6 lg:p-8">
-          <div className="text-center py-8">
-            <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Clock className="w-6 h-6 text-gray-400" />
-            </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              {searchTerm ? 'No Projects Found' : 'No Projects Available'}
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {searchTerm ? 'Try adjusting your search terms.' : 'You don\'t have any projects to track yet.'}
-            </p>
-            {!searchTerm && (
-              <button
-                onClick={() => navigate('/proponent/projects')}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-              >
-                View All Projects
-              </button>
+      {/* Research Projects Table */}
+      <div className="p-6">
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+          {/* Table Header */}
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+            <div>Research Title</div>
+            <div>Author & College</div>
+            <div>Status & Progress</div>
+            <div>Budget</div>
+            <div>Actions</div>
+          </div>
+
+          {/* Table Body */}
+          <div className="divide-y divide-gray-100">
+            {sortedProposals.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No proposals found
+              </div>
+            ) : (
+              sortedProposals.map((proposal, index) => (
+                <div key={proposal.proposalID} className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150">
+                  {/* Research Title */}
+                  <div>
+                    <div 
+                      className="font-bold text-gray-900 mb-1 hover:text-blue-600 transition-colors duration-200 cursor-pointer"
+                      onClick={() => handleViewDetails(proposal.proposalID)}
+                    >
+                      {proposal.researchTitle}
+                    </div>
+                    <div className="text-sm text-gray-600">ID: PRO-{proposal.proposalID.toString().padStart(6, '0')}</div>
+                    <div className="text-sm text-gray-600">Submitted: {new Date(proposal.uploadedAt || proposal.created_at).toLocaleDateString()}</div>
+                  </div>
+
+                  {/* Author & College */}
+                  <div>
+                    <div className="font-medium text-gray-900">{proposal.user?.fullName || 'Unknown'}</div>
+                    <div className="text-sm text-gray-600">{proposal.researchCenter}</div>
+                  </div>
+
+                  {/* Status & Progress */}
+                  <div>
+                    <div className="mb-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusClass(proposal.status?.statusName)}`}>
+                        {proposal.status?.statusName || 'Unknown'}
+                      </span>
+                    </div>
+                    <div className="mb-1">
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${getProgressColor(proposal.status?.statusName)} transition-all duration-300`}
+                          style={{ width: `${getProgressPercentage(proposal)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-600">{getProgressPercentage(proposal)}% complete</div>
+                  </div>
+
+                  {/* Budget */}
+                  <div>
+                    <div className="font-semibold text-gray-900">
+                      ₱{proposal.proposedBudget?.toLocaleString() || '0'}
+                    </div>
+                    <div className="text-sm text-gray-600">Total Budget</div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex items-center">
+                    <button 
+                      onClick={() => handleViewDetails(proposal.proposalID)}
+                      className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"
+                    >
+                      <BiShow className="text-sm" />
+                      View Details
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
           </div>
         </div>
-      ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full min-w-full">
-              <thead>
-                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-y border-gray-200">
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                    PROJECT DETAILS
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                    AUTHOR & RESEARCH CENTER
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                    STATUS & PROGRESS
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                    FUNDING
-                  </th>
-                  <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700">
-                    ACTIONS
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredAndSortedProjects.map((project, index) => (
-                  <tr key={project.proposalID || project.id || index} className={`hover:bg-gray-50 transition-colors duration-200 ${index !== filteredAndSortedProjects.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 mb-1">
-                            {project.researchTitle || 'Untitled Project'}
-                          </div>
-                          <div className="text-xs text-gray-500">ID: {project.proposalID}</div>
-                          <div className="text-xs text-gray-500">
-                            Submitted: {new Date(project.created_at).toLocaleDateString('en-US', { 
-                              year: 'numeric', 
-                              month: 'numeric', 
-                              day: 'numeric' 
-                            })}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">{project.author || 'Unknown Author'}</div>
-                        <div className="text-xs text-gray-500">{project.researchCenter || 'Not specified'}</div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="space-y-2">
-                        <div className="flex items-center">
-                          <div className={`w-3 h-3 rounded-full mr-3 ${index === 0 ? 'bg-red-600 animate-pulse' : 'bg-green-500'}`}></div>
-                          <span className={`text-sm font-medium ${index === 0 ? 'text-red-700' : 'text-gray-900'}`}>
-                            {project.status?.statusName || 'Unknown Status'}
-                          </span>
-                        </div>
-                        <div>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-600">Progress</span>
-                            <span className="text-xs font-medium text-gray-900">{getProgressPercentage(project.statusID)}%</span>
-                          </div>
-                          <div className="w-full bg-gray-200 rounded-full h-1.5">
-                            <div
-                              className="bg-red-600 h-1.5 rounded-full transition-all duration-500"
-                              style={{ width: `${getProgressPercentage(project.statusID)}%` }}
-                            ></div>
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">{getProgressPercentage(project.statusID)}% complete</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {project.statusID === 2 ? 'Approved' : 'Pending'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {project.statusID === 2 ? 'Funding Approved' : 'Awaiting RDD Approval'}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => {
-                          handleViewDetails(project.proposalID || project.id);
-                        }}
-                        className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors duration-200"
-                      >
-                        <Eye size={14} />
-                        <span>View Details</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      </div>
     </div>
   );
 };

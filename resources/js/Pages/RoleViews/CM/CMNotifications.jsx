@@ -1,12 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
+import { useMessages } from '../../../contexts/MessageContext';
+import { RefreshCw } from 'lucide-react';
+import AutoRefreshControls from '../../../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 
 const CMNotifications = () => {
   const { user } = useAuth();
+  const { refreshAllNotifications, isRefreshing: notificationRefreshing } = useNotifications();
+  const { refreshAllMessages } = useMessages();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     fetchNotifications();
@@ -23,6 +31,21 @@ const CMNotifications = () => {
       console.error('Error fetching notifications:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchNotifications(),
+        refreshAllNotifications(),
+        refreshAllMessages()
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -120,9 +143,26 @@ const CMNotifications = () => {
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Notifications
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-gray-600 mb-6">
             Stay updated with the latest activities and updates
           </p>
+          
+          {/* Auto-refresh Controls */}
+          <div className="flex flex-wrap justify-center items-center gap-4">
+            <AutoRefreshControls />
+            <RefreshStatusIndicator />
+            
+            {/* Manual Refresh Button */}
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing || notificationRefreshing}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh notifications and messages"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing || notificationRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing || notificationRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

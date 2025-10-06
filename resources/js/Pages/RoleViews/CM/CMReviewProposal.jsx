@@ -1,11 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
+import { useMessages } from '../../../contexts/MessageContext';
+import { RefreshCw } from 'lucide-react';
+import AutoRefreshControls from '../../../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 import CMProposalDetails from './CMProposalDetails';
 
 const CMReviewProposal = () => {
   const { user } = useAuth();
+  const { refreshAllNotifications } = useNotifications();
+  const { refreshAllMessages } = useMessages();
   const navigate = useNavigate();
   const [year, setYear] = useState('2025');
   const [search, setSearch] = useState('');
@@ -13,6 +20,7 @@ const CMReviewProposal = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const itemsPerPage = 10;
 
   useEffect(() => {
@@ -43,6 +51,21 @@ const CMReviewProposal = () => {
       console.error('Error fetching proposals:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchProposals(),
+        refreshAllNotifications(),
+        refreshAllMessages()
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -141,9 +164,22 @@ const CMReviewProposal = () => {
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
             Research Proposals for Review
           </h1>
-          <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+          <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-6">
             Manage and review research project proposals submitted by researchers
           </p>
+          
+          {/* Manual Refresh Button */}
+          <div className="flex flex-wrap justify-center items-center gap-4">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh proposals and notifications"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

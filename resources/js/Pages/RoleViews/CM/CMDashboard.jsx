@@ -1,12 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { BiSearch, BiShow } from 'react-icons/bi';
+import { RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
+import { useMessages } from '../../../contexts/MessageContext';
 import axios from 'axios';
 import StatsCard from '../../../Components/StatsCard';
+import AutoRefreshControls from '../../../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 
 const CMDashboard = () => {
   const { user } = useAuth();
+  const { refreshAllNotifications } = useNotifications();
+  const { refreshAllMessages } = useMessages();
   const [fromYear, setFromYear] = useState('2025');
   const [toYear, setToYear] = useState('2025');
   const [searchTerm, setSearchTerm] = useState('');
@@ -21,6 +28,7 @@ const CMDashboard = () => {
     completed: 0
   });
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     fetchProposals();
@@ -49,6 +57,22 @@ const CMDashboard = () => {
       }
     } catch (error) {
       console.error('Error fetching statistics:', error);
+    }
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchProposals(),
+        fetchStatistics(),
+        refreshAllNotifications(),
+        refreshAllMessages()
+      ]);
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -109,21 +133,86 @@ const CMDashboard = () => {
     }
   };
 
-  const getProgressPercentage = (statusName) => {
-    switch (statusName) {
-      case 'Completed':
-        return 100;
-      case 'Under Review':
-        return 20;
-      case 'Ongoing':
-        return 45;
-      case 'Approved':
-        return 80;
-      case 'Rejected':
-        return 0;
+  // Get timeline stages based on proposal status (matching CMProposalDetail logic)
+  const getTimelineStages = (statusId) => {
+    const allStages = [
+      { id: 0, name: 'Proposal Submitted', status: 'pending' },
+      { id: 1, name: 'College Endorsement', status: 'pending' },
+      { id: 2, name: 'R&D Division', status: 'pending' },
+      { id: 3, name: 'Proposal Review', status: 'pending' },
+      { id: 4, name: 'Ethics Review', status: 'pending' },
+      { id: 5, name: 'OVPRDE', status: 'pending' },
+      { id: 6, name: 'President', status: 'pending' },
+      { id: 7, name: 'OSOURU', status: 'pending' },
+      { id: 8, name: 'Implementation', status: 'pending' },
+      { id: 9, name: 'Monitoring', status: 'pending' },
+      { id: 10, name: 'For Completion', status: 'pending' }
+    ];
+
+    // Update stages based on actual proposal status (matching StatusSeeder IDs)
+    switch (statusId) {
+      case 1: // Under Review - Proposal submitted, waiting for College Endorsement
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'current';   // College Endorsement
+        break;
+      case 2: // Approved - All stages up to Implementation completed, Implementation current
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'current';   // Implementation
+        break;
+      case 3: // Rejected - College Endorsement completed, R&D Division rejected
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'rejected';  // R&D Division
+        break;
+      case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'completed'; // Implementation
+        allStages[9].status = 'current';   // Monitoring
+        break;
+      case 5: // Completed - All stages completed
+        allStages[0].status = 'completed'; // Proposal Submitted
+        allStages[1].status = 'completed'; // College Endorsement
+        allStages[2].status = 'completed'; // R&D Division
+        allStages[3].status = 'completed'; // Proposal Review
+        allStages[4].status = 'completed'; // Ethics Review
+        allStages[5].status = 'completed'; // OVPRDE
+        allStages[6].status = 'completed'; // President
+        allStages[7].status = 'completed'; // OSOURU
+        allStages[8].status = 'completed'; // Implementation
+        allStages[9].status = 'completed'; // Monitoring
+        allStages[10].status = 'completed'; // For Completion
+        break;
       default:
-        return 0;
+        allStages[1].status = 'current'; // College Endorsement
     }
+
+    return allStages;
+  };
+
+  const getProgressPercentage = (proposal) => {
+    const timelineStages = getTimelineStages(proposal.statusID);
+    const completedStages = timelineStages.filter(stage => stage.status === 'completed').length;
+    const currentStage = timelineStages.find(stage => stage.status === 'current') ? 1 : 0;
+    const rejectedStage = timelineStages.find(stage => stage.status === 'rejected') ? 1 : 0;
+    
+    // If rejected, return 0%
+    if (rejectedStage) return 0;
+    
+    return Math.round(((completedStages + currentStage * 0.5) / timelineStages.length) * 100);
   };
 
   const statsData = [
@@ -160,9 +249,22 @@ const CMDashboard = () => {
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Research Project Tracker
           </h1>
-          <p className="text-lg text-gray-600">
+          <p className="text-lg text-gray-600 mb-6">
             Monitor and manage all research projects with comprehensive tracking and analytics
           </p>
+          
+          {/* Manual Refresh Button */}
+          <div className="flex flex-wrap justify-center items-center gap-4">
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+              title="Refresh dashboard and notifications"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -250,7 +352,7 @@ const CMDashboard = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           {/* Table Header */}
           <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
-            <div>Project Details</div>
+            <div>Research Title</div>
             <div>Author & College</div>
             <div>Status & Progress</div>
             <div>Budget</div>
@@ -266,7 +368,7 @@ const CMDashboard = () => {
             ) : (
               sortedProposals.map((proposal, index) => (
                 <div key={proposal.proposalID} className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150">
-                  {/* Project Details */}
+                  {/* Research Title */}
                   <div>
                     <Link 
                       to={`/cm/proposal/${proposal.proposalID}`}
@@ -295,11 +397,11 @@ const CMDashboard = () => {
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div 
                           className={`h-2 rounded-full ${getProgressColor(proposal.status?.statusName)} transition-all duration-300`}
-                          style={{ width: `${getProgressPercentage(proposal.status?.statusName)}%` }}
+                          style={{ width: `${getProgressPercentage(proposal)}%` }}
                         ></div>
                       </div>
                     </div>
-                    <div className="text-xs text-gray-600">{getProgressPercentage(proposal.status?.statusName)}% complete</div>
+                    <div className="text-xs text-gray-600">{getProgressPercentage(proposal)}% complete</div>
                   </div>
 
                   {/* Budget */}

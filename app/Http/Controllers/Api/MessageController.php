@@ -16,8 +16,16 @@ class MessageController extends Controller
         $user = $request->user();
         $perPage = $request->get('per_page', 15);
         
-        $messages = Message::where('recipientID', $user->getKey())
-            ->with('sender')
+        $query = Message::where('recipientID', $user->getKey());
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->whereHas('sender', function ($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $messages = $query->with('sender')
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
             
@@ -29,8 +37,16 @@ class MessageController extends Controller
         $user = $request->user();
         $perPage = $request->get('per_page', 15);
         
-        $messages = Message::where('senderID', $user->getKey())
-            ->with('recipient')
+        $query = Message::where('senderID', $user->getKey());
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->whereHas('recipient', function ($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $messages = $query->with('recipient')
             ->orderBy('created_at', 'desc')
             ->paginate($perPage);
             
@@ -40,9 +56,18 @@ class MessageController extends Controller
     public function unreadCount(Request $request): JsonResponse
     {
         $user = $request->user();
-        $count = Message::where('recipientID', $user->getKey())
-            ->where('read', false)
-            ->count();
+        
+        $query = Message::where('recipientID', $user->getKey())
+            ->where('read', false);
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->whereHas('sender', function ($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $count = $query->count();
             
         return response()->json(['count' => $count]);
     }
@@ -115,9 +140,22 @@ class MessageController extends Controller
     public function show(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        $message = Message::where('recipientID', $user->getKey())
-            ->orWhere('senderID', $user->getKey())
-            ->with(['sender', 'recipient'])
+        
+        $query = Message::where('recipientID', $user->getKey())
+            ->orWhere('senderID', $user->getKey());
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('sender', function ($senderQuery) use ($user) {
+                    $senderQuery->where('departmentID', $user->departmentID);
+                })->orWhereHas('recipient', function ($recipientQuery) use ($user) {
+                    $recipientQuery->where('departmentID', $user->departmentID);
+                });
+            });
+        }
+        
+        $message = $query->with(['sender', 'recipient'])
             ->findOrFail($id);
             
         // Mark as read if user is recipient
@@ -131,10 +169,18 @@ class MessageController extends Controller
     public function markAsRead(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        $message = Message::where('recipientID', $user->getKey())
-            ->where('id', $id)
-            ->firstOrFail();
-            
+        
+        $query = Message::where('recipientID', $user->getKey())
+            ->where('id', $id);
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->whereHas('sender', function ($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $message = $query->firstOrFail();
         $message->markAsRead();
         
         return response()->json(['message' => 'Message marked as read']);
@@ -143,12 +189,21 @@ class MessageController extends Controller
     public function markAllAsRead(Request $request): JsonResponse
     {
         $user = $request->user();
-        Message::where('recipientID', $user->getKey())
-            ->where('read', false)
-            ->update([
-                'read' => true,
-                'read_at' => now()
-            ]);
+        
+        $query = Message::where('recipientID', $user->getKey())
+            ->where('read', false);
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->whereHas('sender', function ($q) use ($user) {
+                $q->where('departmentID', $user->departmentID);
+            });
+        }
+        
+        $query->update([
+            'read' => true,
+            'read_at' => now()
+        ]);
             
         return response()->json(['message' => 'All messages marked as read']);
     }
@@ -157,10 +212,25 @@ class MessageController extends Controller
     {
         $user = $request->user();
         
+        // Build base query for messages
+        $query = Message::where(function ($q) use ($user) {
+            $q->where('senderID', $user->getKey())
+              ->orWhere('recipientID', $user->getKey());
+        });
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('sender', function ($senderQuery) use ($user) {
+                    $senderQuery->where('departmentID', $user->departmentID);
+                })->orWhereHas('recipient', function ($recipientQuery) use ($user) {
+                    $recipientQuery->where('departmentID', $user->departmentID);
+                });
+            });
+        }
+        
         // Get all unique conversation partners
-        $conversations = Message::where('senderID', $user->getKey())
-            ->orWhere('recipientID', $user->getKey())
-            ->with(['sender.role', 'sender.department', 'recipient.role', 'recipient.department'])
+        $conversations = $query->with(['sender.role', 'sender.department', 'recipient.role', 'recipient.department'])
             ->orderBy('created_at', 'desc')
             ->get()
             ->groupBy(function ($message) use ($user) {
@@ -197,6 +267,14 @@ class MessageController extends Controller
     {
         $user = $request->user();
         
+        // For CM users, verify the other user is from the same department
+        if ($user->role && $user->role->userRole === 'CM') {
+            $otherUser = User::find($otherUserId);
+            if (!$otherUser || $otherUser->departmentID !== $user->departmentID) {
+                return response()->json(['error' => 'Access denied - user not in same department'], 403);
+            }
+        }
+        
         $messages = Message::where(function ($query) use ($user, $otherUserId) {
             $query->where('senderID', $user->getKey())
                   ->where('recipientID', $otherUserId);
@@ -221,10 +299,22 @@ class MessageController extends Controller
     public function destroy(Request $request, $id): JsonResponse
     {
         $user = $request->user();
-        $message = Message::where('recipientID', $user->getKey())
-            ->orWhere('senderID', $user->getKey())
-            ->findOrFail($id);
-            
+        
+        $query = Message::where('recipientID', $user->getKey())
+            ->orWhere('senderID', $user->getKey());
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('sender', function ($senderQuery) use ($user) {
+                    $senderQuery->where('departmentID', $user->departmentID);
+                })->orWhereHas('recipient', function ($recipientQuery) use ($user) {
+                    $recipientQuery->where('departmentID', $user->departmentID);
+                });
+            });
+        }
+        
+        $message = $query->findOrFail($id);
         $message->delete();
         
         return response()->json(['message' => 'Message deleted']);
@@ -262,10 +352,21 @@ class MessageController extends Controller
     {
         $user = $request->user();
         
-        // Delete all messages where user is sender or recipient
-        Message::where('senderID', $user->getKey())
-            ->orWhere('recipientID', $user->getKey())
-            ->delete();
+        $query = Message::where('senderID', $user->getKey())
+            ->orWhere('recipientID', $user->getKey());
+        
+        // For CM users, filter by department constraint
+        if ($user->role && $user->role->userRole === 'CM') {
+            $query->where(function ($q) use ($user) {
+                $q->whereHas('sender', function ($senderQuery) use ($user) {
+                    $senderQuery->where('departmentID', $user->departmentID);
+                })->orWhereHas('recipient', function ($recipientQuery) use ($user) {
+                    $recipientQuery->where('departmentID', $user->departmentID);
+                });
+            });
+        }
+        
+        $query->delete();
             
         return response()->json(['message' => 'All messages cleared successfully']);
     }

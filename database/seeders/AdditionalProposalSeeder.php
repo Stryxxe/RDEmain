@@ -76,7 +76,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 10: Reduced Inequalities'],
                     'proposedBudget' => 800000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(10),
+                'uploadedAt' => Carbon::now()->subDays(35),
                 'statusID' => $underReview->statusID,
                 'userID' => $sofiaHerrera->userID // EduTech Center proponent
             ],
@@ -95,7 +95,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 11: Sustainable Cities and Communities', 'SDG 4: Quality Education'],
                     'proposedBudget' => 950000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(5),
+                'uploadedAt' => Carbon::now()->subDays(40),
                 'statusID' => $approved->statusID,
                 'userID' => $rafaelCastillo->userID // Cultural Center proponent
             ],
@@ -115,7 +115,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 3: Good Health and Well-being', 'SDG 10: Reduced Inequalities'],
                     'proposedBudget' => 1200000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(7),
+                'uploadedAt' => Carbon::now()->subDays(65),
                 'statusID' => $ongoing->statusID,
                 'userID' => $isabelMorales->userID // Telemedicine Center proponent
             ],
@@ -134,7 +134,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 2: Zero Hunger', 'SDG 3: Good Health and Well-being'],
                     'proposedBudget' => 700000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(3),
+                'uploadedAt' => Carbon::now()->subDays(95),
                 'statusID' => $completed->statusID,
                 'userID' => $franciscoJimenez->userID // Nutrition Center proponent
             ],
@@ -154,7 +154,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 9: Industry, Innovation and Infrastructure', 'SDG 11: Sustainable Cities and Communities'],
                     'proposedBudget' => 1500000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(12),
+                'uploadedAt' => Carbon::now()->subDays(28),
                 'statusID' => $underReview->statusID,
                 'userID' => $elenaDiaz->userID // Materials Center proponent
             ],
@@ -174,7 +174,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 14: Life Below Water', 'SDG 8: Decent Work and Economic Growth'],
                     'proposedBudget' => 1100000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(6),
+                'uploadedAt' => Carbon::now()->subDays(55),
                 'statusID' => $ongoing->statusID,
                 'userID' => $victoriaSilva->userID // Marine Center proponent
             ],
@@ -193,7 +193,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 2: Zero Hunger', 'SDG 9: Industry, Innovation and Infrastructure'],
                     'proposedBudget' => 1300000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(9),
+                'uploadedAt' => Carbon::now()->subDays(42),
                 'statusID' => $approved->statusID,
                 'userID' => $gabrielOrtega->userID // Agriculture Center proponent
             ],
@@ -213,7 +213,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 11: Sustainable Cities and Communities', 'SDG 9: Industry, Innovation and Infrastructure'],
                     'proposedBudget' => 1800000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(4),
+                'uploadedAt' => Carbon::now()->subDays(22),
                 'statusID' => $underReview->statusID,
                 'userID' => $alejandroVega->userID // Urban Center proponent
             ],
@@ -232,7 +232,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 8: Decent Work and Economic Growth', 'SDG 9: Industry, Innovation and Infrastructure'],
                     'proposedBudget' => 2000000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(2),
+                'uploadedAt' => Carbon::now()->subDays(48),
                 'statusID' => $ongoing->statusID,
                 'userID' => $beatrizRomero->userID // Digital Center proponent
             ],
@@ -251,7 +251,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 10: Reduced Inequalities', 'SDG 16: Peace, Justice and Strong Institutions'],
                     'proposedBudget' => 900000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(8),
+                'uploadedAt' => Carbon::now()->subDays(85),
                 'statusID' => $completed->statusID,
                 'userID' => $danielNavarro->userID // Social Center proponent
             ],
@@ -270,7 +270,7 @@ class AdditionalProposalSeeder extends Seeder
                     'sustainableDevelopmentGoals' => ['SDG 17: Partnerships for the Goals', 'SDG 11: Sustainable Cities and Communities'],
                     'proposedBudget' => 1600000.00
                 ],
-                'uploadedAt' => Carbon::now()->subDays(11),
+                'uploadedAt' => Carbon::now()->subDays(38),
                 'statusID' => $approved->statusID,
                 'userID' => $marianaPerez->userID // Sustainable Center proponent
             ],

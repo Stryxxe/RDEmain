@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FormField from '../Components/FormField';
 import CheckboxGroup from '../Components/CheckboxGroup';
@@ -25,6 +25,16 @@ const SubmitPage = () => {
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const navigate = useNavigate();
+
+  // Refs for form fields to enable scrolling
+  const reportFileRef = useRef(null);
+  const reportTitleRef = useRef(null);
+  const descriptionRef = useRef(null);
+  const objectivesRef = useRef(null);
+  const researchAgendaRef = useRef(null);
+  const dostSPsRef = useRef(null);
+  const sustainableDevelopmentGoalsRef = useRef(null);
+  const proposedBudgetRef = useRef(null);
 
 
   const researchAgendaOptions = [
@@ -117,43 +127,89 @@ const SubmitPage = () => {
     }));
   };
 
+  const scrollToField = (ref) => {
+    if (ref.current) {
+      ref.current.scrollIntoView({ 
+        behavior: 'smooth', 
+        block: 'center' 
+      });
+      // Add a temporary highlight effect
+      ref.current.style.borderColor = '#ef4444';
+      ref.current.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
+      setTimeout(() => {
+        ref.current.style.borderColor = '';
+        ref.current.style.boxShadow = '';
+      }, 3000);
+    }
+  };
+
   const validateForm = () => {
     const errors = [];
+    const fieldErrors = {};
 
     if (!formData.reportFile) {
       errors.push('Report file is required');
+      fieldErrors.reportFile = 'Report file is required';
     }
     if (!formData.reportTitle.trim()) {
       errors.push('Report title is required');
+      fieldErrors.reportTitle = 'Report title is required';
     }
     if (!formData.description.trim()) {
       errors.push('Description is required');
+      fieldErrors.description = 'Description is required';
     }
     if (!formData.objectives.trim()) {
       errors.push('Objectives are required');
+      fieldErrors.objectives = 'Objectives are required';
     }
     if (formData.researchAgenda.length === 0) {
       errors.push('At least one research agenda must be selected');
+      fieldErrors.researchAgenda = 'At least one research agenda must be selected';
     }
     if (formData.dostSPs.length === 0) {
       errors.push('At least one DOST SP must be selected');
+      fieldErrors.dostSPs = 'At least one DOST SP must be selected';
     }
     if (formData.sustainableDevelopmentGoals.length === 0) {
       errors.push('At least one SDG must be selected');
+      fieldErrors.sustainableDevelopmentGoals = 'At least one SDG must be selected';
     }
     if (!formData.proposedBudget || parseFloat(parseNumber(formData.proposedBudget)) <= 0) {
       errors.push('Valid proposed budget is required');
+      fieldErrors.proposedBudget = 'Valid proposed budget is required';
     }
 
-    return errors;
+    return { errors, fieldErrors };
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const validationErrors = validateForm();
-    if (validationErrors.length > 0) {
-      setSubmitError(validationErrors.join(', '));
+    const { errors, fieldErrors } = validateForm();
+    if (errors.length > 0) {
+      setSubmitError(errors.join(', '));
+      
+      // Scroll to the first invalid field
+      const fieldRefs = {
+        reportFile: reportFileRef,
+        reportTitle: reportTitleRef,
+        description: descriptionRef,
+        objectives: objectivesRef,
+        researchAgenda: researchAgendaRef,
+        dostSPs: dostSPsRef,
+        sustainableDevelopmentGoals: sustainableDevelopmentGoalsRef,
+        proposedBudget: proposedBudgetRef
+      };
+
+      // Find the first invalid field and scroll to it
+      for (const [fieldName, errorMessage] of Object.entries(fieldErrors)) {
+        if (fieldRefs[fieldName]) {
+          scrollToField(fieldRefs[fieldName]);
+          break;
+        }
+      }
+      
       return;
     }
 
@@ -242,7 +298,7 @@ const SubmitPage = () => {
       )}
 
       <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8">
-          <div className="mb-8">
+          <div className="mb-8" ref={reportFileRef}>
             <DragDropUpload 
               onFileSelect={handleFileSelect}
               acceptedTypes="PDF, DOC, DOCX"
@@ -251,7 +307,7 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8" ref={reportTitleRef}>
             <FormField
               label="Report Title"
               required
@@ -261,7 +317,7 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8" ref={descriptionRef}>
             <TextAreaField
               label="Description"
               required
@@ -272,7 +328,7 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8" ref={objectivesRef}>
             <TextAreaField
               label="Objectives"
               required
@@ -284,7 +340,7 @@ const SubmitPage = () => {
           </div>
 
 
-          <div className="mb-8">
+          <div className="mb-8" ref={researchAgendaRef}>
             <CheckboxGroup
               label="Research Agenda"
               required
@@ -296,7 +352,7 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8" ref={dostSPsRef}>
             <CheckboxGroup
               label="DOST 6P's"
               required
@@ -308,7 +364,7 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8" ref={sustainableDevelopmentGoalsRef}>
             <CheckboxGroup
               label="Sustainable Development Goal"
               required
@@ -320,7 +376,7 @@ const SubmitPage = () => {
             />
           </div>
 
-          <div className="mb-8">
+          <div className="mb-8" ref={proposedBudgetRef}>
             <FormField
               label="Proposed Budget"
               required

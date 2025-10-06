@@ -4,15 +4,15 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
     server: {
-        host: '127.0.0.1',
+        host: '0.0.0.0',
         port: 5177,
         cors: true,
         hmr: {
-            host: '127.0.0.1',
+            host: '192.168.23.104',
         },
     },
     define: {
-        'import.meta.env.VITE_API_ORIGIN': JSON.stringify('http://127.0.0.1:8000'),
+        'import.meta.env.VITE_API_ORIGIN': JSON.stringify('http://192.168.23.104:8000'),
     },
     plugins: [
         laravel({

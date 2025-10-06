@@ -12,7 +12,7 @@ class AssignUserDepartmentsSeeder extends Seeder
     {
         // Get departments
         $rdd = Department::where('name', 'Research and Development Division')->first();
-        $medicine = Department::where('name', 'College of Medicine')->first();
+        $cic = Department::where('name', 'College of Information and Computing')->first();
         $president = Department::where('name', 'Office of the President')->first();
         $studentAffairs = Department::where('name', 'Office of Student Affairs and University Relations Unit')->first();
         $academic = Department::where('name', 'Academic Affairs')->first();
@@ -22,12 +22,11 @@ class AssignUserDepartmentsSeeder extends Seeder
         $users = [
             'admin@usep.edu.ph' => $it, // Admin - IT Department
             'rdd@usep.edu.ph' => $rdd, // RDD - Research and Development Division
-            'cm@usep.edu.ph' => $medicine, // CM - College of Medicine
-            'cm-academic@usep.edu.ph' => $academic, // CM (Center Manager) - Academic Affairs (same as proponent)
-            'proponent@usep.edu.ph' => $academic, // Proponent - Academic Affairs
+            'cm@usep.edu.ph' => $cic, // CM - College of Information and Computing
+            'proponent@usep.edu.ph' => $cic, // Proponent - College of Information and Computing
             'op@usep.edu.ph' => $president, // OP - Office of the President
             'osuur@usep.edu.ph' => $studentAffairs, // OSUORU - Office of Student Affairs
-            'reviewer@usep.edu.ph' => $medicine, // Reviewer - College of Medicine
+            'reviewer@usep.edu.ph' => $cic, // Reviewer - College of Information and Computing
         ];
 
         foreach ($users as $email => $department) {

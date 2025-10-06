@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Proposal;
 use App\Models\File;
+use App\Models\Notification;
+use App\Models\User;
+use App\Events\ProposalSubmitted;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -86,6 +89,21 @@ class ProposalController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        $user = Auth::user();
+        
+        // Load the role relationship if not already loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // Only proponents can submit proposals
+        if (!$user->role || $user->role->userRole !== 'Proponent') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only proponents can submit proposals'
+            ], 403);
+        }
+
         $validator = Validator::make($request->all(), [
             'researchTitle' => 'required|string|max:255',
             'description' => 'required|string',
@@ -110,8 +128,6 @@ class ProposalController extends Controller
         }
 
         try {
-            $user = Auth::user();
-            
             // Parse JSON strings from frontend
             $researchAgenda = json_decode($request->researchAgenda, true);
             $dostSPs = json_decode($request->dostSPs, true);
@@ -186,6 +202,44 @@ class ProposalController extends Controller
             }
 
             $proposal->load(['status', 'files']);
+
+            // Dispatch the ProposalSubmitted event
+            event(new ProposalSubmitted($proposal, $user));
+
+            // Create notification for the proponent
+            Notification::create([
+                'userID' => $user->userID,
+                'type' => 'success',
+                'title' => 'Proposal Submitted Successfully',
+                'message' => "Your proposal \"{$proposal->researchTitle}\" has been submitted for review.",
+                'data' => [
+                    'proposal_id' => $proposal->proposalID,
+                    'proposal_title' => $proposal->researchTitle,
+                    'event' => 'proposal.submitted'
+                ]
+            ]);
+
+            // Find CM of the same department and notify them
+            $cmUser = User::whereHas('role', function($query) {
+                $query->where('userRole', 'CM');
+            })
+            ->where('departmentID', $user->departmentID)
+            ->first();
+
+            if ($cmUser) {
+                Notification::create([
+                    'userID' => $cmUser->userID,
+                    'type' => 'info',
+                    'title' => 'New Proposal Submitted',
+                    'message' => "A new proposal \"{$proposal->researchTitle}\" has been submitted by {$user->fullName} for review.",
+                    'data' => [
+                        'proposal_id' => $proposal->proposalID,
+                        'proposal_title' => $proposal->researchTitle,
+                        'proponent_name' => $user->fullName,
+                        'event' => 'proposal.submitted.cm'
+                    ]
+                ]);
+            }
 
             return response()->json([
                 'success' => true,

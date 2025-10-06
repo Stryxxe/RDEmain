@@ -19,8 +19,11 @@ class RoleSeeder extends Seeder
             'Reviewer'
         ];
 
-        foreach ($roles as $role) {
-            Role::create(['userRole' => $role]);
+        foreach ($roles as $index => $role) {
+            Role::updateOrCreate(
+                ['userRole' => $role],
+                ['userRole' => $role]
+            );
         }
     }
 }

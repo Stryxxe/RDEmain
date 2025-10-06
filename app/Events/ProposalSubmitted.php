@@ -2,7 +2,6 @@
 
 namespace App\Events;
 
-use App\Models\Notification;
 use App\Models\Proposal;
 use App\Models\User;
 use Illuminate\Foundation\Events\Dispatchable;
@@ -16,17 +15,6 @@ class ProposalSubmitted
         public Proposal $proposal,
         public User $user
     ) {
-        // Create notification in database
-        Notification::create([
-            'userID' => $user->userID,
-            'type' => 'success',
-            'title' => 'Proposal Submitted Successfully',
-            'message' => "Your proposal \"{$proposal->title}\" has been submitted for review.",
-            'data' => [
-                'proposal_id' => $proposal->proposalID,
-                'proposal_title' => $proposal->title,
-                'event' => 'proposal.submitted'
-            ]
-        ]);
+        // Constructor only sets properties
     }
 }

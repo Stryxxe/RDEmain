@@ -284,16 +284,24 @@ class NotificationSeeder extends Seeder
             $userNotifications = collect($notifications)->random(rand(8, 12));
             
             foreach ($userNotifications as $notificationData) {
-                Notification::create([
-                    'userID' => $user->userID,
-                    'type' => $notificationData['type'],
-                    'title' => $notificationData['title'],
-                    'message' => $notificationData['message'],
-                    'data' => $notificationData['data'],
-                    'read' => $notificationData['read'],
-                    'read_at' => $notificationData['read_at'] ?? null,
-                    'created_at' => now()->subDays(rand(0, 30))->subHours(rand(0, 23))->subMinutes(rand(0, 59)),
-                ]);
+                // Check if notification already exists to prevent duplicates
+                $existingNotification = Notification::where('userID', $user->userID)
+                    ->where('title', $notificationData['title'])
+                    ->where('message', $notificationData['message'])
+                    ->first();
+                
+                if (!$existingNotification) {
+                    Notification::create([
+                        'userID' => $user->userID,
+                        'type' => $notificationData['type'],
+                        'title' => $notificationData['title'],
+                        'message' => $notificationData['message'],
+                        'data' => $notificationData['data'],
+                        'read' => $notificationData['read'],
+                        'read_at' => $notificationData['read_at'] ?? null,
+                        'created_at' => now()->subDays(rand(0, 30))->subHours(rand(0, 23))->subMinutes(rand(0, 59)),
+                    ]);
+                }
             }
         }
 

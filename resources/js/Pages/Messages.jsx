@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMessages } from '../contexts/MessageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageCircle, Send, Search, RefreshCw, User, Clock, AlertCircle } from 'lucide-react';
+import AutoRefreshControls from '../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
 
 const Messages = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [newMessage, setNewMessage] = useState('');
@@ -27,7 +30,10 @@ const Messages = () => {
     fetchMessages,
     fetchSentMessages,
     fetchUnreadCount,
-    clearAllMessages
+    clearAllMessages,
+    refreshAllMessages,
+    isRefreshing,
+    lastRefresh
   } = useMessages();
   
   const navigate = useNavigate();
@@ -48,6 +54,19 @@ const Messages = () => {
       });
     }
   }, [isProponent, fetchAvailableCM]);
+
+  // Restore conversation from URL parameter after conversations are loaded
+  useEffect(() => {
+    if (conversations.length > 0 && !selectedConversation) {
+      const conversationId = searchParams.get('conversation');
+      if (conversationId) {
+        const conversation = conversations.find(conv => conv.otherUser.userID === conversationId);
+        if (conversation) {
+          handleConversationClick(conversation);
+        }
+      }
+    }
+  }, [conversations, searchParams, selectedConversation]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown time';
@@ -124,6 +143,7 @@ const Messages = () => {
 
   const handleConversationClick = async (conversation) => {
     setSelectedConversation(conversation);
+    setSearchParams({ conversation: conversation.otherUser.userID });
     await fetchConversation(conversation.otherUser.userID);
   };
 
@@ -167,6 +187,12 @@ const Messages = () => {
     return conversations.reduce((total, conversation) => total + conversation.unreadCount, 0);
   };
 
+  const clearConversation = () => {
+    setSelectedConversation(null);
+    setCurrentConversation(null);
+    setSearchParams({});
+  };
+
 
   return (
       <div className="max-w-6xl mx-auto">
@@ -177,23 +203,27 @@ const Messages = () => {
                 <h1 className="text-3xl font-bold text-gray-900">Messages</h1>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => {
-                      // Clear any cached data and refresh
-                      fetchConversations();
-                      fetchMessages();
-                      fetchSentMessages();
-                      fetchUnreadCount();
+                    onClick={async () => {
+                      // Use the new refreshAllMessages function
+                      await refreshAllMessages();
+                      // If a conversation is selected, refresh its messages too
+                      if (selectedConversation) {
+                        await fetchConversation(selectedConversation.otherUser.userID);
+                      }
                     }}
-                    className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700"
+                    disabled={isRefreshing}
+                    className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
                   >
-                    <RefreshCw className="w-5 h-5" />
-                    <span>Refresh</span>
+                    <RefreshCw className={`w-5 h-5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
                   </button>
                 </div>
               </div>
               <p className="text-gray-600">Communicate with reviewers, center managers, and administrators</p>
             </div>
             <div className="flex items-center gap-3">
+              <AutoRefreshControls />
+              <RefreshStatusIndicator />
               {getTotalUnreadCount() > 0 && (
                 <button
                   onClick={markAllAsRead}
@@ -207,8 +237,7 @@ const Messages = () => {
                   if (confirm('Are you sure you want to clear all conversations? This will delete all messages.')) {
                     const success = await clearAllMessages();
                     if (success) {
-                      setSelectedConversation(null);
-                      setCurrentConversation(null);
+                      clearConversation();
                       // Messages cleared successfully (no popup)
                     } else {
                       alert('Failed to clear messages. Please try again.');
@@ -372,18 +401,29 @@ const Messages = () => {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
                 {/* Conversation Header */}
                 <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
-                      <User className="w-6 h-6 text-gray-500" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                        <User className="w-6 h-6 text-gray-500" />
+                      </div>
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          {selectedConversation.otherUser.fullName}
+                        </h2>
+                        <p className="text-sm text-gray-600">
+                          {selectedConversation.otherUser.role?.userRole || 'User'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h2 className="text-lg font-semibold text-gray-900">
-                        {selectedConversation.otherUser.fullName}
-                      </h2>
-                      <p className="text-sm text-gray-600">
-                        {selectedConversation.otherUser.role?.userRole || 'User'}
-                      </p>
-                    </div>
+                    <button
+                      onClick={clearConversation}
+                      className="text-gray-400 hover:text-gray-600 transition-colors"
+                      title="Close conversation"
+                    >
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
 

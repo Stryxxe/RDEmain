@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from './AuthContext';
 
@@ -19,7 +19,87 @@ export const MessageProvider = ({ children }) => {
   const [currentConversation, setCurrentConversation] = useState(null);
   const [loading, setLoading] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
   const { user, loading: authLoading } = useAuth();
+
+  // Auto-refresh state
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(30000); // 30 seconds default
+  const refreshTimeoutRef = useRef(null);
+  const isActiveRef = useRef(true);
+  const lastActivityRef = useRef(Date.now());
+
+  // Smart refresh interval calculation
+  const getSmartRefreshInterval = useCallback(() => {
+    if (!autoRefreshEnabled) return null;
+    
+    const now = Date.now();
+    const timeSinceActivity = now - lastActivityRef.current;
+    const hasUnreadContent = unreadCount > 0;
+    const isTabVisible = !document.hidden;
+    const hasActiveConversation = currentConversation && currentConversation.length > 0;
+    
+    // If tab is hidden, refresh less frequently
+    if (!isTabVisible) return 120000; // 2 minutes
+    
+    // If there's unread content, refresh more frequently
+    if (hasUnreadContent) return 10000; // 10 seconds
+    
+    // If user is actively in a conversation, refresh frequently
+    if (hasActiveConversation && timeSinceActivity < 30000) return 15000; // 15 seconds
+    
+    // If user was recently active, refresh moderately
+    if (timeSinceActivity < 60000) return 30000; // 30 seconds
+    
+    // Default refresh interval
+    return 60000; // 1 minute
+  }, [autoRefreshEnabled, unreadCount, currentConversation]);
+
+  // Update activity timestamp
+  const updateActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
+
+  // Refresh all message data
+  const refreshAllMessages = useCallback(async () => {
+    if (isRefreshing || !isActiveRef.current) return;
+    
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchMessages(),
+        fetchSentMessages(),
+        fetchConversations(),
+        fetchUnreadCount()
+      ]);
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Error refreshing messages:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing]);
+
+  // Set up auto-refresh
+  const setupAutoRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    if (!autoRefreshEnabled || !user) return;
+
+    const interval = getSmartRefreshInterval();
+    if (interval) {
+      refreshTimeoutRef.current = setTimeout(() => {
+        if (isActiveRef.current) {
+          refreshAllMessages().then(() => {
+            setupAutoRefresh(); // Schedule next refresh
+          });
+        }
+      }, interval);
+    }
+  }, [autoRefreshEnabled, user, getSmartRefreshInterval, refreshAllMessages]);
 
   // Fetch received messages from API
   const fetchMessages = async () => {
@@ -101,13 +181,66 @@ export const MessageProvider = ({ children }) => {
       setConversations([]);
       setCurrentConversation(null);
       setUnreadCount(0);
+      isActiveRef.current = false;
       return;
     }
+    
+    isActiveRef.current = true;
     fetchMessages();
     fetchSentMessages();
     fetchConversations();
     fetchUnreadCount();
   }, [user, authLoading]);
+
+  // Set up auto-refresh when user is authenticated
+  useEffect(() => {
+    if (user && !authLoading) {
+      setupAutoRefresh();
+    }
+    
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [user, authLoading, setupAutoRefresh]);
+
+  // Re-setup auto-refresh when dependencies change
+  useEffect(() => {
+    if (user && !authLoading) {
+      setupAutoRefresh();
+    }
+  }, [unreadCount, currentConversation, autoRefreshEnabled, setupAutoRefresh]);
+
+  // Track user activity for smart refresh
+  useEffect(() => {
+    const handleActivity = () => {
+      updateActivity();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        updateActivity();
+        // Refresh immediately when tab becomes visible
+        if (user && !authLoading) {
+          refreshAllMessages();
+        }
+      }
+    };
+
+    // Add event listeners for activity tracking
+    document.addEventListener('mousedown', handleActivity);
+    document.addEventListener('keydown', handleActivity);
+    document.addEventListener('scroll', handleActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('mousedown', handleActivity);
+      document.removeEventListener('keydown', handleActivity);
+      document.removeEventListener('scroll', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, authLoading, updateActivity, refreshAllMessages]);
 
   const markAsRead = async (id) => {
     try {
@@ -185,9 +318,8 @@ export const MessageProvider = ({ children }) => {
         headers: { Authorization: `Bearer ${token}` }
       });
       
-      // Refresh sent messages and conversations
-      fetchSentMessages();
-      fetchConversations();
+      // Refresh all message data after sending
+      await refreshAllMessages();
       
       // If we're in a conversation, refresh it
       if (currentConversation && currentConversation.length > 0) {
@@ -196,6 +328,9 @@ export const MessageProvider = ({ children }) => {
           : currentConversation[0].senderID;
         await fetchConversation(otherUserId);
       }
+      
+      // Update activity timestamp
+      updateActivity();
       
       return response.data;
     } catch (error) {
@@ -251,17 +386,25 @@ export const MessageProvider = ({ children }) => {
     currentConversation,
     loading,
     unreadCount,
+    isRefreshing,
+    lastRefresh,
+    autoRefreshEnabled,
+    refreshInterval,
     markAsRead,
     markAllAsRead,
     deleteMessage,
     deleteSentMessage,
     sendMessage,
     refreshMessages,
+    refreshAllMessages,
     fetchConversations,
     fetchConversation,
     setCurrentConversation,
     fetchAvailableCM,
     clearAllMessages,
+    setAutoRefreshEnabled,
+    setRefreshInterval,
+    updateActivity,
   };
 
   return (

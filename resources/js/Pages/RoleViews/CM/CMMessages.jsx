@@ -1,25 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useSearchParams } from 'react-router-dom';
+import { MessageCircle, Send, Search, RefreshCw, User, Clock, AlertCircle } from 'lucide-react';
+import { useMessages } from '../../../contexts/MessageContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
+import AutoRefreshControls from '../../../Components/AutoRefreshControls';
+import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 
 const CMMessages = () => {
   const { user } = useAuth();
-  const [messages, setMessages] = useState([]);
-  const [conversations, setConversations] = useState([]);
+  const { refreshAllMessages, isRefreshing: messageRefreshing } = useMessages();
+  const { refreshAllNotifications } = useNotifications();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchTerm, setSearchTerm] = useState('');
   const [selectedConversation, setSelectedConversation] = useState(null);
+  const [currentConversation, setCurrentConversation] = useState(null);
   const [newMessage, setNewMessage] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [sending, setSending] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     fetchConversations();
   }, []);
 
+  // Restore conversation from URL parameter after conversations are loaded
+  useEffect(() => {
+    if (conversations.length > 0 && !selectedConversation) {
+      const conversationId = searchParams.get('conversation');
+      if (conversationId) {
+        const conversation = conversations.find(conv => conv.otherUser.userID === conversationId);
+        if (conversation) {
+          handleConversationClick(conversation);
+        }
+      }
+    }
+  }, [conversations, searchParams, selectedConversation]);
+
   const fetchConversations = async () => {
     try {
       setLoading(true);
       const response = await axios.get('/api/messages/conversations');
-      if (response.data.success) {
+      if (response.data.data) {
         setConversations(response.data.data);
       }
     } catch (error) {
@@ -29,57 +53,141 @@ const CMMessages = () => {
     }
   };
 
-  const fetchMessages = async (otherUserId) => {
+  const clearConversation = () => {
+    setSelectedConversation(null);
+    setCurrentConversation(null);
+    setSearchParams({});
+  };
+
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchConversations(),
+        refreshAllMessages(),
+        refreshAllNotifications()
+      ]);
+      // If a conversation is selected, refresh its messages too
+      if (selectedConversation) {
+        await fetchConversation(selectedConversation.otherUser.userID);
+      }
+    } catch (error) {
+      console.error('Refresh failed:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const fetchConversation = async (otherUserId) => {
     try {
       const response = await axios.get(`/api/messages/conversation/${otherUserId}`);
-      if (response.data.success) {
-        setMessages(response.data.data);
+      if (response.data.data) {
+        setCurrentConversation(response.data.data);
+        return response.data.data;
       }
     } catch (error) {
-      console.error('Error fetching messages:', error);
+      console.error('Error fetching conversation:', error);
+      return [];
     }
   };
 
-  const sendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedConversation) return;
-
-    setSending(true);
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !selectedConversation || sendingMessage) return;
+    
+    setSendingMessage(true);
     try {
-      const response = await axios.post('/api/messages', {
-        recipientID: selectedConversation.other_user.id,
-        content: newMessage
+      const recipientID = String(selectedConversation.otherUser.userID);
+      
+      const result = await axios.post('/api/messages', {
+        recipientID: recipientID,
+        subject: `Re: ${selectedConversation.latestMessage.subject}`,
+        content: newMessage,
+        type: 'reply'
       });
-
-      if (response.data.success) {
-        setNewMessage('');
-        // Refresh messages
-        fetchMessages(selectedConversation.other_user.id);
-      }
+    
+      setNewMessage('');
+      
+      // Refresh the conversation to show the new message
+      await fetchConversation(recipientID);
+      
     } catch (error) {
-      console.error('Error sending message:', error);
+      const errorMessage = error.response?.data?.error || error.message || 'Failed to send message. Please try again.';
+      alert(`Failed to send message: ${errorMessage}`);
     } finally {
-      setSending(false);
+      setSendingMessage(false);
     }
-  };
-
-  const handleConversationSelect = (conversation) => {
-    setSelectedConversation(conversation);
-    fetchMessages(conversation.other_user.id);
   };
 
   const formatTime = (timestamp) => {
+    if (!timestamp) return 'Unknown time';
+    
+    const now = new Date();
+    let notificationDate;
+    
+    // Handle different timestamp formats
+    if (typeof timestamp === 'string') {
+      notificationDate = new Date(timestamp);
+      
+      if (isNaN(notificationDate.getTime())) {
+        const numTimestamp = parseFloat(timestamp);
+        if (!isNaN(numTimestamp)) {
+          notificationDate = new Date(numTimestamp * 1000);
+        }
+      }
+    } else if (typeof timestamp === 'number') {
+      notificationDate = new Date(timestamp * 1000);
+    } else {
+      notificationDate = new Date(timestamp);
+    }
+    
+    if (isNaN(notificationDate.getTime())) {
+      return 'Unknown time';
+    }
+    
+    const diff = now - notificationDate;
+    const minutes = Math.floor(diff / 60000);
+    
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  const formatMessageTime = (timestamp) => {
     const date = new Date(timestamp);
     const now = new Date();
-    const diffInHours = (now - date) / (1000 * 60 * 60);
-
-    if (diffInHours < 24) {
+    const isToday = date.toDateString() === now.toDateString();
+    
+    if (isToday) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffInHours < 168) { // 7 days
-      return date.toLocaleDateString([], { weekday: 'short' });
     } else {
-      return date.toLocaleDateString();
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
     }
+  };
+
+  const handleConversationClick = async (conversation) => {
+    setSelectedConversation(conversation);
+    setSearchParams({ conversation: conversation.otherUser.userID });
+    await fetchConversation(conversation.otherUser.userID);
+  };
+
+  const filteredConversations = conversations.filter(conversation => {
+    const searchLower = searchTerm.toLowerCase();
+    const otherUserName = conversation.otherUser?.fullName || 'Unknown';
+    const latestMessageContent = conversation.latestMessage?.content || '';
+    const latestMessageSubject = conversation.latestMessage?.subject || '';
+    
+    return otherUserName.toLowerCase().includes(searchLower) ||
+           latestMessageContent.toLowerCase().includes(searchLower) ||
+           latestMessageSubject.toLowerCase().includes(searchLower);
+  });
+
+  const getTotalUnreadCount = () => {
+    return conversations.reduce((total, conversation) => total + conversation.unreadCount, 0);
   };
 
   if (loading) {
@@ -94,170 +202,251 @@ const CMMessages = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header Section */}
-      <div className="bg-white py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            Messages
-          </h1>
-          <p className="text-lg text-gray-600">
-            Communicate with researchers and team members
-          </p>
+    <div className="max-w-6xl mx-auto">
+      <div className="mb-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className="text-3xl font-bold text-gray-900">Messages</h1>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRefresh}
+                  disabled={isRefreshing || messageRefreshing}
+                  className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-5 h-5 ${isRefreshing || messageRefreshing ? 'animate-spin' : ''}`} />
+                  <span>{isRefreshing || messageRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+                </button>
+              </div>
+            </div>
+            <p className="text-gray-600">Communicate with researchers and team members</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {/* Auto-refresh Controls */}
+            <AutoRefreshControls />
+            <RefreshStatusIndicator />
+            {getTotalUnreadCount() > 0 && (
+              <button
+                onClick={() => {
+                  // Mark all as read functionality
+                  console.log('Mark all as read');
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Mark All as Read
+              </button>
+            )}
+            <button
+              onClick={async () => {
+                if (confirm('Are you sure you want to clear all conversations? This will delete all messages.')) {
+                  try {
+                    await axios.delete('/api/messages/clear-all');
+                    clearConversation();
+                    await fetchConversations();
+                  } catch (error) {
+                    alert('Failed to clear messages. Please try again.');
+                  }
+                }
+              }}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+            >
+              Clear All
+            </button>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          <div className="flex h-[600px]">
-            {/* Conversations List */}
-            <div className="w-1/3 border-r border-gray-200 bg-gray-50">
-              <div className="p-4 border-b border-gray-200">
-                <h2 className="text-lg font-semibold text-gray-900">Conversations</h2>
-              </div>
-              
-              <div className="overflow-y-auto h-full">
-                {conversations.length === 0 ? (
-                  <div className="p-4 text-center text-gray-500">
-                    <div className="text-4xl mb-2">💬</div>
-                    <p>No conversations yet</p>
-                  </div>
-                ) : (
-                  <div className="divide-y divide-gray-200">
-                    {conversations.map((conversation) => (
-                      <div
-                        key={conversation.other_user.id}
-                        onClick={() => handleConversationSelect(conversation)}
-                        className={`p-4 cursor-pointer hover:bg-gray-100 transition-colors ${
-                          selectedConversation?.other_user.id === conversation.other_user.id
-                            ? 'bg-red-50 border-r-2 border-red-500'
-                            : ''
-                        }`}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center text-white font-medium">
-                            {conversation.other_user.firstName?.charAt(0)}{conversation.other_user.lastName?.charAt(0)}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-sm font-medium text-gray-900 truncate">
-                              {conversation.other_user.firstName} {conversation.other_user.lastName}
-                            </h3>
-                            <p className="text-xs text-gray-500 truncate">
-                              {conversation.last_message?.content || 'No messages yet'}
-                            </p>
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {conversation.last_message ? formatTime(conversation.last_message.created_at) : ''}
-                          </div>
-                        </div>
-                        {conversation.unread_count > 0 && (
-                          <div className="flex justify-end mt-2">
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                              {conversation.unread_count}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Conversations List */}
+        <div className="lg:col-span-1">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
+            {/* Search */}
+            <div className="p-4 border-b border-gray-200">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
+                <input
+                  type="text"
+                  placeholder="Search conversations..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
+                />
               </div>
             </div>
 
-            {/* Messages Area */}
-            <div className="flex-1 flex flex-col">
-              {selectedConversation ? (
-                <>
-                  {/* Chat Header */}
-                  <div className="p-4 border-b border-gray-200 bg-white">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                        {selectedConversation.other_user.firstName?.charAt(0)}{selectedConversation.other_user.lastName?.charAt(0)}
-                      </div>
-                      <div>
-                        <h3 className="text-sm font-medium text-gray-900">
-                          {selectedConversation.other_user.firstName} {selectedConversation.other_user.lastName}
-                        </h3>
-                        <p className="text-xs text-gray-500">
-                          {selectedConversation.other_user.role?.userRole || 'User'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Messages List */}
-                  <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                    {messages.length === 0 ? (
-                      <div className="text-center text-gray-500 py-8">
-                        <div className="text-4xl mb-2">💬</div>
-                        <p>No messages in this conversation</p>
-                      </div>
-                    ) : (
-                      messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${message.sender_id === user?.userID ? 'justify-end' : 'justify-start'}`}
-                        >
-                          <div
-                            className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
-                              message.sender_id === user?.userID
-                                ? 'bg-red-600 text-white'
-                                : 'bg-gray-200 text-gray-900'
-                            }`}
-                          >
-                            <p className="text-sm">{message.content}</p>
-                            <p className={`text-xs mt-1 ${
-                              message.sender_id === user?.userID ? 'text-red-100' : 'text-gray-500'
-                            }`}>
-                              {formatTime(message.created_at)}
+            {/* Conversations List */}
+            <div className="max-h-96 overflow-y-auto">
+              {filteredConversations.length === 0 ? (
+                <div className="p-6 text-center text-gray-500">
+                  <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-sm">No conversations found</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {filteredConversations.map((conversation) => (
+                    <div
+                      key={conversation.otherUser.userID}
+                      onClick={() => handleConversationClick(conversation)}
+                      className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
+                        selectedConversation?.otherUser.userID === conversation.otherUser.userID 
+                          ? 'bg-red-50 border-r-2 border-red-600' 
+                          : ''
+                      } ${conversation.unreadCount > 0 ? 'bg-blue-50' : ''}`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-gray-500" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-semibold text-gray-900 truncate">
+                              {conversation.otherUser.fullName}
+                            </h4>
+                            <p className="text-xs text-gray-500 truncate">
+                              {conversation.otherUser.role?.userRole || 'User'}
                             </p>
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
-
-                  {/* Message Input */}
-                  <div className="p-4 border-t border-gray-200 bg-white">
-                    <form onSubmit={sendMessage} className="flex space-x-2">
-                      <input
-                        type="text"
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Type a message..."
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                        disabled={sending}
-                      />
-                      <button
-                        type="submit"
-                        disabled={!newMessage.trim() || sending}
-                        className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                      >
-                        {sending ? (
-                          <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                        ) : (
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                          </svg>
-                        )}
-                      </button>
-                    </form>
-                  </div>
-                </>
-              ) : (
-                <div className="flex-1 flex items-center justify-center text-gray-500">
-                  <div className="text-center">
-                    <div className="text-6xl mb-4">💬</div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">Select a conversation</h3>
-                    <p>Choose a conversation from the list to start messaging</p>
-                  </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">
+                            {formatTime(conversation.latestMessage.created_at)}
+                          </span>
+                          {conversation.unreadCount > 0 && (
+                            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                          )}
+                        </div>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-1 line-clamp-1">
+                        {conversation.latestMessage.subject}
+                      </p>
+                      <p className="text-xs text-gray-500 line-clamp-1">
+                        {conversation.latestMessage.content?.substring(0, 60) + 
+                         (conversation.latestMessage.content?.length > 60 ? '...' : '')}
+                      </p>
+                      {conversation.unreadCount > 0 && (
+                        <div className="flex items-center justify-between mt-2">
+                          <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                            {conversation.unreadCount} unread
+                          </span>
+                          <span className="text-xs text-gray-400">
+                            {conversation.totalMessages} messages
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
           </div>
+        </div>
+
+        {/* Conversation Detail */}
+        <div className="lg:col-span-2">
+          {selectedConversation && currentConversation ? (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-full flex flex-col">
+              {/* Conversation Header */}
+              <div className="p-6 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center">
+                      <User className="w-6 h-6 text-gray-500" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">
+                        {selectedConversation.otherUser.fullName}
+                      </h2>
+                      <p className="text-sm text-gray-600">
+                        {selectedConversation.otherUser.role?.userRole || 'User'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={clearConversation}
+                    className="text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Close conversation"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Messages */}
+              <div className="flex-1 p-6 overflow-y-auto max-h-96">
+                <div className="space-y-4">
+                  {currentConversation.map((message, index) => {
+                    const isFromCurrentUser = message.senderID !== selectedConversation.otherUser.userID;
+                    const showDate = index === 0 || 
+                      new Date(message.created_at).toDateString() !== 
+                      new Date(currentConversation[index - 1].created_at).toDateString();
+                    
+                    return (
+                      <div key={message.id}>
+                        {showDate && (
+                          <div className="flex justify-center my-4">
+                            <span className="px-3 py-1 text-xs bg-gray-100 text-gray-600 rounded-full">
+                              {new Date(message.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        )}
+                        <div className={`flex ${isFromCurrentUser ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                            isFromCurrentUser 
+                              ? 'bg-red-600 text-white' 
+                              : 'bg-gray-100 text-gray-900'
+                          }`}>
+                            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                            <p className={`text-xs mt-1 ${
+                              isFromCurrentUser ? 'text-red-100' : 'text-gray-500'
+                            }`}>
+                              {formatMessageTime(message.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Reply Section */}
+              <div className="p-6 border-t border-gray-200">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reply
+                    </label>
+                    <textarea
+                      value={newMessage}
+                      onChange={(e) => setNewMessage(e.target.value)}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                      placeholder="Type your reply here..."
+                    />
+                  </div>
+                  <div className="flex justify-end">
+                    <button 
+                      onClick={sendMessage}
+                      disabled={!newMessage.trim() || sendingMessage}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Send size={16} />
+                      {sendingMessage ? 'Sending...' : 'Send Reply'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 h-96 flex items-center justify-center">
+              <div className="text-center text-gray-500">
+                <MessageCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                <p>Select a conversation to view</p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

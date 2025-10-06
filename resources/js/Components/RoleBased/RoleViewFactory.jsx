@@ -22,9 +22,6 @@ const lazyComponents = {
   CMProposalDetail: lazy(() => import('../../Pages/RoleViews/CM/CMProposalDetail')),
   CMNotifications: lazy(() => import('../../Pages/RoleViews/CM/CMNotifications')),
   CMMessages: lazy(() => import('../../Pages/RoleViews/CM/CMMessages')),
-  // CM uses shared components for Tracker and Projects
-  Tracker: lazy(() => import('../../Pages/Tracker')),
-  Projects: lazy(() => import('../../Pages/Projects')),
   
   // Proponent components
   SubmitPage: lazy(() => import('../../Pages/SubmitPage')),

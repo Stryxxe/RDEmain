@@ -17,10 +17,13 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             StatusSeeder::class,
             UserSeeder::class,
+            AssignUserDepartmentsSeeder::class,
             NotificationSeeder::class,
             MessageSeeder::class,
             ProposalSeeder::class,
             AdditionalProposalSeeder::class,
+            SarahJohnsonProposalSeeder::class,
+            ProposalFileSeeder::class,
         ]);
     }
 }

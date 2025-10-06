@@ -1,11 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PDFViewer from '../../../Components/PDFViewer';
+import apiService from '../../../services/api';
 
 const CMProposalDetails = ({ proposal, onBack }) => {
   const navigate = useNavigate();
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
+  const [isEndorsing, setIsEndorsing] = useState(false);
+  const [endorsementComments, setEndorsementComments] = useState('');
+  const [showEndorsementModal, setShowEndorsementModal] = useState(false);
+  const [isEndorsed, setIsEndorsed] = useState(false);
+  const [endorsementData, setEndorsementData] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+
+  // Check if proposal has been endorsed
+  useEffect(() => {
+    const checkEndorsementStatus = async () => {
+      try {
+        const response = await apiService.getEndorsementsByProposal(proposal.proposalID || proposal.id);
+        
+        if (response.success && response.data.length > 0) {
+          setIsEndorsed(true);
+          setEndorsementData(response.data[0]); // Get the first endorsement
+        } else {
+          setIsEndorsed(false);
+          setEndorsementData(null);
+        }
+      } catch (error) {
+        console.error('Error checking endorsement status:', error);
+        setIsEndorsed(false);
+        setEndorsementData(null);
+      }
+    };
+
+    if (proposal) {
+      checkEndorsementStatus();
+    }
+  }, [proposal, refreshKey]);
+
+  // Force refresh function
+  const handleRefresh = () => {
+    setRefreshKey(prev => prev + 1);
+  };
 
   // Path to PDF files in the public folder
   const pdfPath = '/Balbuena_Concept+Paper.pdf';
@@ -27,10 +65,42 @@ const CMProposalDetails = ({ proposal, onBack }) => {
   ];
 
   const handleEndorse = () => {
-    // Store the proposal data in localStorage for the ReviewProposal page
-    localStorage.setItem('selectedProjectForEndorsement', JSON.stringify(proposal));
-    // Navigate to the ReviewProposal page
-    navigate('/cm/review-proposal');
+    setShowEndorsementModal(true);
+  };
+
+  const handleEndorsementSubmit = async () => {
+    try {
+      setIsEndorsing(true);
+      
+      const endorsementData = {
+        proposalID: proposal.proposalID || proposal.id,
+        endorsementComments: endorsementComments,
+        endorsementStatus: 'approved'
+      };
+
+      const response = await apiService.createEndorsement(endorsementData);
+      
+      if (response.success) {
+        alert('Proposal endorsed successfully!');
+        setIsEndorsed(true);
+        setEndorsementData(response.data);
+        setShowEndorsementModal(false);
+        setEndorsementComments('');
+        // Don't go back immediately, let user see the updated status
+      } else {
+        alert('Failed to endorse proposal: ' + (response.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error endorsing proposal:', error);
+      alert('Error endorsing proposal: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsEndorsing(false);
+    }
+  };
+
+  const handleEndorsementCancel = () => {
+    setShowEndorsementModal(false);
+    setEndorsementComments('');
   };
 
   const handleDocumentClick = (document) => {
@@ -84,6 +154,83 @@ const CMProposalDetails = ({ proposal, onBack }) => {
                   Download PDF
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Endorsement Modal Component
+  const EndorsementModal = () => {
+    if (!showEndorsementModal) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full">
+          {/* Modal Header */}
+          <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <h2 className="text-xl font-semibold text-gray-800">Endorse Proposal</h2>
+            <button
+              onClick={handleEndorsementCancel}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Modal Content */}
+          <div className="p-6">
+            <div className="mb-6">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {proposal.researchTitle || proposal.title}
+              </h3>
+              <p className="text-sm text-gray-600">
+                By: {proposal.user?.fullName || proposal.author || 'Unknown'}
+              </p>
+            </div>
+
+            <div className="mb-6">
+              <label htmlFor="endorsementComments" className="block text-sm font-medium text-gray-700 mb-2">
+                Endorsement Comments (Optional)
+              </label>
+              <textarea
+                id="endorsementComments"
+                value={endorsementComments}
+                onChange={(e) => setEndorsementComments(e.target.value)}
+                rows={4}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                placeholder="Add any comments about this endorsement..."
+              />
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={handleEndorsementCancel}
+                disabled={isEndorsing}
+                className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleEndorsementSubmit}
+                disabled={isEndorsing}
+                className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center"
+              >
+                {isEndorsing ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Endorsing...
+                  </>
+                ) : (
+                  'Endorse Proposal'
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -235,16 +382,33 @@ const CMProposalDetails = ({ proposal, onBack }) => {
 
         {/* Action Buttons */}
         <div className="flex justify-end space-x-4">
-          <button 
-            onClick={handleEndorse}
-            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Endorse Proposal
-          </button>
+          {isEndorsed ? (
+            <div className="flex items-center space-x-4">
+              <div className="flex items-center px-6 py-3 bg-green-100 text-green-800 rounded-lg font-semibold">
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Proposal Endorsed
+              </div>
+              {endorsementData && (
+                <div className="text-sm text-gray-600">
+                  Endorsed on: {new Date(endorsementData.endorsementDate).toLocaleDateString()}
+                </div>
+              )}
+            </div>
+          ) : (
+            <button 
+              onClick={handleEndorse}
+              className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+            >
+              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              Endorse Proposal
+            </button>
+          )}
         </div>
+        
       </div>
 
       {/* PDF Viewer */}
@@ -252,6 +416,9 @@ const CMProposalDetails = ({ proposal, onBack }) => {
 
       {/* Document Modal */}
       {showDocumentModal && <DocumentModal />}
+      
+      {/* Endorsement Modal */}
+      <EndorsementModal />
     </div>
   );
 };

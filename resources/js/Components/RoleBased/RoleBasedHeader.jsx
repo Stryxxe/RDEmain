@@ -119,30 +119,47 @@ const RoleBasedHeader = ({ role }) => {
         );
       case 'reminder':
         return (
-          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <svg className={`${iconClass} text-blue-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center">
+            <svg className={`${iconClass} text-orange-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
         );
       case 'approval':
         return (
-          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <svg className={`${iconClass} text-blue-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
+            <svg className={`${iconClass} text-green-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+            </svg>
+          </div>
+        );
+      case 'review':
+        return (
+          <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
+            <svg className={`${iconClass} text-purple-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </div>
+        );
+      case 'revision':
+        return (
+          <div className="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center">
+            <svg className={`${iconClass} text-yellow-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
           </div>
         );
       default:
         return (
-          <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-            <svg className={`${iconClass} text-blue-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="w-8 h-8 bg-gray-100 rounded-lg flex items-center justify-center">
+            <svg className={`${iconClass} text-gray-600`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a7 7 0 00-7 7v4.29l-1.71 1.7a1 1 0 00-.29.7V16a1 1 0 001 1h16a1 1 0 001-1v-.31a1 1 0 00-.29-.7L19 13.29V9a7 7 0 00-7-7zM10 21a2 2 0 104 0" />
             </svg>
           </div>
         );
     }
   };
+
 
   // Close dropdowns when clicking outside or pressing Escape
   useEffect(() => {
@@ -302,6 +319,7 @@ const RoleBasedHeader = ({ role }) => {
             )}
           </button>
         </div>
+
 
         {/* Profile Dropdown */}
         <div className="relative" ref={profileDropdownRef}>
