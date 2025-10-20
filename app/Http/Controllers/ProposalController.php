@@ -27,15 +27,18 @@ class ProposalController extends Controller
             $user->load('role');
         }
         
-        // For CM users, show proposals from users in the same department; for others, show only their own
+        // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::with(['status', 'files', 'user.department', 'user.role']);
-        if ($user->role && $user->role->userRole !== 'CM') {
-            $query->where('userID', $user->userID);
-        } else {
+        if ($user->role && $user->role->userRole === 'RDD') {
+            // RDD users can see all proposals - no filtering needed
+        } elseif ($user->role && $user->role->userRole === 'CM') {
             // For CM users, filter by department
             $query->whereHas('user', function($q) use ($user) {
                 $q->where('departmentID', $user->departmentID);
             });
+        } else {
+            // For other users (like Proponents), show only their own proposals
+            $query->where('userID', $user->userID);
         }
         
         $proposals = $query->orderBy('proposalID', 'asc')->get();
@@ -58,15 +61,18 @@ class ProposalController extends Controller
             $user->load('role');
         }
         
-        // For CM users, show proposals from users in the same department; for others, show only their own
+        // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::where('proposalID', $id)->with(['status', 'files', 'user.department', 'user.role']);
-        if ($user->role && $user->role->userRole !== 'CM') {
-            $query->where('userID', $user->userID);
-        } else {
+        if ($user->role && $user->role->userRole === 'RDD') {
+            // RDD users can see all proposals - no filtering needed
+        } elseif ($user->role && $user->role->userRole === 'CM') {
             // For CM users, filter by department
             $query->whereHas('user', function($q) use ($user) {
                 $q->where('departmentID', $user->departmentID);
             });
+        } else {
+            // For other users (like Proponents), show only their own proposals
+            $query->where('userID', $user->userID);
         }
         
         $proposal = $query->first();
@@ -377,7 +383,7 @@ class ProposalController extends Controller
     /**
      * Get proposal statistics for dashboard
      */
-    public function statistics(Request $request): JsonResponse
+public function statistics(Request $request): JsonResponse
     {
         $user = Auth::user();
         
@@ -386,15 +392,18 @@ class ProposalController extends Controller
             $user->load('role');
         }
         
-        // For CM users, show proposals from users in the same department; for others, show only their own
+        // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::query();
-        if ($user->role && $user->role->userRole !== 'CM') {
-            $query->where('userID', $user->userID);
-        } else {
+        if ($user->role && $user->role->userRole === 'RDD') {
+            // RDD users can see all proposals - no filtering needed
+        } elseif ($user->role && $user->role->userRole === 'CM') {
             // For CM users, filter by department
             $query->whereHas('user', function($q) use ($user) {
                 $q->where('departmentID', $user->departmentID);
             });
+        } else {
+            // For other users (like Proponents), show only their own proposals
+            $query->where('userID', $user->userID);
         }
         
         $stats = [
@@ -410,5 +419,174 @@ class ProposalController extends Controller
             'success' => true,
             'data' => $stats
         ]);
+    }
+
+    /**
+     * Get RDD analytics data for statistics dashboard
+     */
+    public function rddAnalytics(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        
+        // Load the role relationship if not already loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // For RDD users, show all proposals; for others, show only their own
+        $query = Proposal::with(['status', 'user.department']);
+        if ($user->role && $user->role->userRole !== 'RDD') {
+            $query->where('userID', $user->userID);
+        }
+        
+        $proposals = $query->get();
+        
+        // RDE Agenda data
+        $rdeAgendaData = $this->getRdeAgendaData($proposals);
+        
+        // DOST 6Ps data
+        $dost6PsData = $this->getDost6PsData($proposals);
+        
+        // SDG data
+        $sdgData = $this->getSdgData($proposals);
+        
+        // Overview stats
+        $totalProposals = $proposals->count();
+        $totalOngoing = $proposals->where('statusID', 4)->count();
+        $totalCompleted = $proposals->where('statusID', 5)->count();
+        $completionRate = $totalProposals > 0 ? round(($totalCompleted / $totalProposals) * 100) : 0;
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'overview' => [
+                    'totalProposals' => $totalProposals,
+                    'totalOngoing' => $totalOngoing,
+                    'totalCompleted' => $totalCompleted,
+                    'completionRate' => $completionRate
+                ],
+                'rdeAgenda' => $rdeAgendaData,
+                'dost6Ps' => $dost6PsData,
+                'sdg' => $sdgData
+            ]
+        ]);
+    }
+
+    /**
+     * Get RDE Agenda data from proposals
+     */
+    private function getRdeAgendaData($proposals)
+    {
+        $rdeAgendas = [
+            'Agriculture, Aquatic, and Agro-Forestry' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+            'Business and Trade' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+            'Social Sciences and Education' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+            'Engineering and Technology' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+            'Environment and Natural Resources' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+            'Health and Wellness' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+            'Peace and Security' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+        ];
+
+        foreach ($proposals as $proposal) {
+            $agendas = $proposal->researchAgenda ?? [];
+            $status = $proposal->statusID;
+            
+            foreach ($agendas as $agenda) {
+                if (isset($rdeAgendas[$agenda])) {
+                    $rdeAgendas[$agenda]['total']++;
+                    if ($status == 4) { // Ongoing
+                        $rdeAgendas[$agenda]['ongoing']++;
+                    } elseif ($status == 5) { // Completed
+                        $rdeAgendas[$agenda]['completed']++;
+                    }
+                }
+            }
+        }
+
+        return array_map(function($name, $data) {
+            return array_merge(['name' => $name], $data);
+        }, array_keys($rdeAgendas), array_values($rdeAgendas));
+    }
+
+    /**
+     * Get DOST 6Ps data from proposals
+     */
+    private function getDost6PsData($proposals)
+    {
+        $dost6Ps = [
+            'Publications' => 0,
+            'Patent' => 0,
+            'Product' => 0,
+            'People Services' => 0,
+            'Places and Partner' => 0,
+            'Policies' => 0,
+        ];
+
+        foreach ($proposals as $proposal) {
+            $dostSPs = $proposal->dostSPs ?? [];
+            foreach ($dostSPs as $dostSP) {
+                // Map DOST SPs to 6Ps categories
+                if (strpos($dostSP, 'Publications') !== false) {
+                    $dost6Ps['Publications']++;
+                } elseif (strpos($dostSP, 'Patent') !== false) {
+                    $dost6Ps['Patent']++;
+                } elseif (strpos($dostSP, 'Product') !== false) {
+                    $dost6Ps['Product']++;
+                } elseif (strpos($dostSP, 'People') !== false) {
+                    $dost6Ps['People Services']++;
+                } elseif (strpos($dostSP, 'Places') !== false || strpos($dostSP, 'Partner') !== false) {
+                    $dost6Ps['Places and Partner']++;
+                } elseif (strpos($dostSP, 'Policies') !== false) {
+                    $dost6Ps['Policies']++;
+                }
+            }
+        }
+
+        return array_map(function($name, $value) {
+            return ['name' => $name, 'value' => $value];
+        }, array_keys($dost6Ps), array_values($dost6Ps));
+    }
+
+    /**
+     * Get SDG data from proposals
+     */
+    private function getSdgData($proposals)
+    {
+        $sdgData = [
+            '1' => ['fullName' => 'No Poverty', 'value' => 0, 'color' => '#E5243B'],
+            '2' => ['fullName' => 'Zero Hunger', 'value' => 0, 'color' => '#DDA63A'],
+            '3' => ['fullName' => 'Good Health and Well-being', 'value' => 0, 'color' => '#4C9F38'],
+            '4' => ['fullName' => 'Quality Education', 'value' => 0, 'color' => '#C5192D'],
+            '5' => ['fullName' => 'Gender Equality', 'value' => 0, 'color' => '#FF3A21'],
+            '6' => ['fullName' => 'Clean Water and Sanitation', 'value' => 0, 'color' => '#26BDE2'],
+            '7' => ['fullName' => 'Affordable and Clean Energy', 'value' => 0, 'color' => '#FCC30B'],
+            '8' => ['fullName' => 'Decent Work and Economic Growth', 'value' => 0, 'color' => '#A21942'],
+            '9' => ['fullName' => 'Industry, Innovation and Infrastructure', 'value' => 0, 'color' => '#FD6925'],
+            '10' => ['fullName' => 'Reduced Inequalities', 'value' => 0, 'color' => '#DD1367'],
+            '11' => ['fullName' => 'Sustainable Cities and Communities', 'value' => 0, 'color' => '#FD9D24'],
+            '12' => ['fullName' => 'Responsible Consumption and Production', 'value' => 0, 'color' => '#BF8B2E'],
+            '13' => ['fullName' => 'Climate Action', 'value' => 0, 'color' => '#3F7E44'],
+            '14' => ['fullName' => 'Life Below Water', 'value' => 0, 'color' => '#0A97D9'],
+            '15' => ['fullName' => 'Life on Land', 'value' => 0, 'color' => '#56C02B'],
+            '16' => ['fullName' => 'Peace, Justice and Strong Institutions', 'value' => 0, 'color' => '#00689D'],
+            '17' => ['fullName' => 'Partnerships for the Goals', 'value' => 0, 'color' => '#19486A'],
+        ];
+
+        foreach ($proposals as $proposal) {
+            $sdgs = $proposal->sustainableDevelopmentGoals ?? [];
+            foreach ($sdgs as $sdg) {
+                // Extract SDG number from string like "SDG 1: No Poverty"
+                if (preg_match('/SDG (\d+):/', $sdg, $matches)) {
+                    $sdgNumber = $matches[1];
+                    if (isset($sdgData[$sdgNumber])) {
+                        $sdgData[$sdgNumber]['value']++;
+                    }
+                }
+            }
+        }
+
+        return array_map(function($name, $data) {
+            return array_merge(['name' => $name], $data);
+        }, array_keys($sdgData), array_values($sdgData));
     }
 }

@@ -20,12 +20,19 @@ export const roleConfigs = {
     ]
   },
   RDD: {
-    layout: 'RoleBasedLayout',
+    layout: 'RDDLayout',
     roleName: 'Research & Development Division',
     displayName: 'RDD',
     color: 'green',
     routes: [
-      { path: '', component: 'RDDDashboard', label: 'Dashboard' },
+      { path: '', component: 'RDDDashboard', label: 'Tracker' },
+      { path: 'statistics', component: 'RDDStatistics', label: 'Statistics' },
+      { path: 'review-proposal', component: 'RDDReviewProposal', label: 'Endorsement' },
+      { path: 'progress-report', component: 'RDDProgressReport', label: 'Progress Reports' },
+      { path: 'submit-report', component: 'RDDSubmitReport', label: 'Submit Report' },
+      { path: 'resources', component: 'RDDResources', label: 'Resources' },
+      { path: 'account', component: 'RDDAccount', label: 'Account' },
+      { path: 'proposal/:id', component: 'RDDProposalDetail', label: 'Proposal Detail' },
       { path: 'notifications', component: 'NotificationsPage', label: 'Notifications', hidden: true },
       { path: 'messages', component: 'MessagesPage', label: 'Messages', hidden: true }
     ],

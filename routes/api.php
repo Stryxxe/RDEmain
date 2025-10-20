@@ -59,6 +59,7 @@ Route::put('/user', function (Request $request) {
 // Proposal routes with proper CSRF handling for SPA
 Route::middleware(['auth:sanctum', 'web'])->group(function () {
     Route::get('/proposals/statistics', [ProposalController::class, 'statistics']);
+    Route::get('/proposals/rdd-analytics', [ProposalController::class, 'rddAnalytics']);
     Route::apiResource('proposals', ProposalController::class);
     
     // Endorsement routes

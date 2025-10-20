@@ -10,7 +10,14 @@ const lazyComponents = {
   AdminDashboard: lazy(() => import('../../Pages/RoleViews/Dashboards/AdminDashboard')),
   
   // RDD components
-  RDDDashboard: lazy(() => import('../../Pages/RoleViews/Dashboards/RDDDashboard')),
+  RDDDashboard: lazy(() => import('../../Pages/RoleViews/RDD/RDDDashboard')),
+  RDDStatistics: lazy(() => import('../../Pages/RoleViews/RDD/RDDStatistics')),
+  RDDReviewProposal: lazy(() => import('../../Pages/RoleViews/RDD/RDDReviewProposal')),
+  RDDProgressReport: lazy(() => import('../../Pages/RoleViews/RDD/RDDProgressReport')),
+  RDDSubmitReport: lazy(() => import('../../Pages/RoleViews/RDD/RDDSubmitReport')),
+  RDDResources: lazy(() => import('../../Pages/RoleViews/RDD/RDDResources')),
+  RDDAccount: lazy(() => import('../../Pages/RoleViews/RDD/RDDAccount')),
+  RDDProposalDetail: lazy(() => import('../../Pages/RoleViews/RDD/RDDProposalDetail')),
   
   // CM components
   CMDashboard: lazy(() => import('../../Pages/RoleViews/CM/CMDashboard')),
@@ -47,6 +54,7 @@ const lazyComponents = {
 // Layout components
 const layoutComponents = {
   RoleBasedLayout: RoleBasedLayout,
+  RDDLayout: lazy(() => import('../Layouts/RDDLayout')),
   CMLayout: lazy(() => import('../CMLayout')),
   ProponentLayout: lazy(() => import('../ProponentLayout'))
 };
