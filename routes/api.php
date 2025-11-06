@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OptimizedNotificationController;
 use App\Http\Controllers\Api\OptimizedMessageController;
 use App\Http\Controllers\Api\SimpleOptimizedMessageController;
+use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Middleware\RequestDeduplication;
 
 // CSRF routes that need web middleware for proper token generation
@@ -89,4 +90,10 @@ Route::middleware(['auth:sanctum', 'web'])->group(function () {
     Route::put('/messages/mark-all-read', [SimpleOptimizedMessageController::class, 'markAllAsRead']);
     Route::delete('/messages/{id}', [SimpleOptimizedMessageController::class, 'destroy']);
     Route::delete('/messages/clear-all', [SimpleOptimizedMessageController::class, 'clearAll']);
+
+});
+
+// Admin - Users management (token auth only)
+Route::middleware(['auth:sanctum'])->group(function () {
+    Route::get('/admin/users', [AdminUserController::class, 'index']);
 });

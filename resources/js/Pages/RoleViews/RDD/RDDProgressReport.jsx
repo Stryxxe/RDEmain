@@ -25,6 +25,9 @@ const RDDProgressReport = () => {
           const currentDate = new Date();
           const dueDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0); // End of current month
           const isOverdue = dueDate < currentDate && proposal.statusID !== 5; // Not completed
+          const sourceDate = proposal.uploadedAt ? new Date(proposal.uploadedAt) : currentDate;
+          const quarterIndex = Math.floor(sourceDate.getMonth() / 3) + 1; // 1-4
+          const dynamicReportPeriod = `Q${quarterIndex} ${sourceDate.getFullYear()}`;
           
           return {
             id: proposal.proposalID, // Use actual database ID for routing
@@ -33,7 +36,7 @@ const RDDProgressReport = () => {
             author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}` : 'Unknown',
             college: proposal.user?.department?.name || 'Unknown Department',
             status: isOverdue ? 'Overdue' : (proposal.status?.statusName || 'Draft'),
-            reportPeriod: 'Q1 2025', // Default period
+            reportPeriod: dynamicReportPeriod,
             dueDate: dueDate.toISOString().split('T')[0],
             submittedDate: proposal.statusID === 5 ? dueDate.toISOString().split('T')[0] : null,
             progress: proposal.statusID === 5 ? 100 : (proposal.statusID === 4 ? 50 : 25),

@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
             \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            // \App\Http\Middleware\VerifyCsrfToken::class, // Temporarily disabled
         ]);
 
         // Add EnsureFrontendRequestsAreStateful to API routes for proper SPA authentication

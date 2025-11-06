@@ -7,6 +7,10 @@ export const roleConfigs = {
     color: 'blue',
     routes: [
       { path: '', component: 'AdminDashboard', label: 'Dashboard' },
+      { path: 'user-management', component: 'AdminUserManagement', label: 'User Management' },
+      { path: 'system-settings', component: 'AdminSystemSettings', label: 'System Settings' },
+      { path: 'reports', component: 'AdminReports', label: 'Reports' },
+      { path: 'profile', component: 'AdminProfile', label: 'Profile' },
       { path: 'notifications', component: 'NotificationsPage', label: 'Notifications', hidden: true },
       { path: 'messages', component: 'MessagesPage', label: 'Messages', hidden: true }
     ],

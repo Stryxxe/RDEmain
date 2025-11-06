@@ -13,6 +13,7 @@ import Login from './Components/auth/login';
 // Modular role-based view system
 import RoleBasedView from './Components/RoleBased/RoleBasedView';
 import RoleBasedRedirect from './Components/RoleBased/RoleBasedRedirect';
+import { AdminProvider } from './contexts/AdminContext';
 
 // Protected Route component
 const ProtectedRoute = ({ children }) => {
@@ -41,7 +42,9 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <NotificationContainer />
-                <RoleBasedView role="Admin" />
+                <AdminProvider>
+                  <RoleBasedView role="Admin" />
+                </AdminProvider>
               </ProtectedRoute>
             } 
           />

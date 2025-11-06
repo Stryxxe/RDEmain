@@ -5,7 +5,7 @@ import rddService from '../../../services/rddService';
 const RDDSubmitReport = () => {
   const [selectedProject, setSelectedProject] = useState('');
   const [reportType, setReportType] = useState('Quarterly');
-  const [reportPeriod, setReportPeriod] = useState('Q1 2025');
+  const [reportPeriod, setReportPeriod] = useState('');
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -48,10 +48,24 @@ const RDDSubmitReport = () => {
     { value: 'Interim', label: 'Interim Report' }
   ];
 
-  const reportPeriods = [
-    'Q1 2025', 'Q2 2025', 'Q3 2025', 'Q4 2025',
-    '2025', '2024', '2023'
-  ];
+  const getDynamicReportPeriods = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const quarters = [`Q1 ${year}`, `Q2 ${year}`, `Q3 ${year}`, `Q4 ${year}`];
+    const years = [year, year - 1, year - 2].map(String);
+    return [...quarters, ...years];
+  };
+
+  const reportPeriods = getDynamicReportPeriods();
+
+  useEffect(() => {
+    if (!reportPeriod) {
+      const now = new Date();
+      const month = now.getMonth();
+      const quarterIndex = Math.floor(month / 3) + 1; // 1-4
+      setReportPeriod(`Q${quarterIndex} ${now.getFullYear()}`);
+    }
+  }, [reportPeriod]);
 
   const handleFileUpload = (event) => {
     const files = Array.from(event.target.files);

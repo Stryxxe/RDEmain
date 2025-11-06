@@ -29,10 +29,12 @@ const RDDReviewProposal = () => {
           college: proposal.user?.department?.name || 'Unknown Department',
           status: proposal.status?.statusName || 'Unknown',
           submittedDate: new Date(proposal.uploadedAt).toLocaleDateString(),
-          priority: 'Medium', // Default priority since it's not in the database
+          priority: proposal.priority || (proposal.proposedBudget >= 1000000 ? 'High' : proposal.proposedBudget >= 500000 ? 'Medium' : 'Low'),
           budget: `₱${Number(proposal.proposedBudget).toLocaleString()}`,
-          duration: '12 months', // Default duration since it's not in the database
-          reviewers: ['Dr. Sarah Wilson', 'Prof. John Doe'] // Default reviewers
+          duration: proposal.duration || proposal.projectDuration || 'N/A',
+          reviewers: Array.isArray(proposal.reviewers) && proposal.reviewers.length > 0
+            ? proposal.reviewers.map(r => (typeof r === 'string' ? r : (r.name || `${r.firstName || ''} ${r.lastName || ''}`.trim())))
+            : []
         }));
         setProposals(transformedProposals);
       } else {

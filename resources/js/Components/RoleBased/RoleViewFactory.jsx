@@ -8,6 +8,10 @@ import { getRoleConfig } from '../../config/roleConfigs';
 const lazyComponents = {
   // Admin components
   AdminDashboard: lazy(() => import('../../Pages/RoleViews/Dashboards/AdminDashboard')),
+  AdminProfile: lazy(() => import('../../Pages/RoleViews/Admin/Profile')),
+  AdminReports: lazy(() => import('../../Pages/RoleViews/Admin/Reports')),
+  AdminSystemSettings: lazy(() => import('../../Pages/RoleViews/Admin/SystemSettings')),
+  AdminUserManagement: lazy(() => import('../../Pages/RoleViews/Admin/UserManagement')),
   
   // RDD components
   RDDDashboard: lazy(() => import('../../Pages/RoleViews/RDD/RDDDashboard')),

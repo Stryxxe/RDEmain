@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { BiDownload, BiEdit, BiCheck, BiX, BiCalendar, BiUser, BiFile, BiDollarSign, BiMail } from 'react-icons/bi';
+import { BiDownload, BiEdit, BiCheck, BiX, BiCalendar, BiUser, BiFile, BiDollar, BiEnvelope } from 'react-icons/bi';
 import rddService from '../../../services/rddService';
 
 const RDDProposalDetail = () => {
@@ -240,7 +240,7 @@ const RDDProposalDetail = () => {
                         <span className="text-gray-900">{transformedProposal.author}</span>
                       </div>
                       <div className="flex items-center">
-                        <BiMail className="mr-2 text-gray-400" />
+                        <BiEnvelope className="mr-2 text-gray-400" />
                         <span className="text-gray-900">{transformedProposal.email}</span>
                       </div>
                       <div className="text-gray-600">{transformedProposal.college}</div>
@@ -252,7 +252,7 @@ const RDDProposalDetail = () => {
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">Project Information</h3>
                     <div className="space-y-2">
                       <div className="flex items-center">
-                        <BiDollarSign className="mr-2 text-gray-400" />
+                        <BiDollar className="mr-2 text-gray-400" />
                         <span className="text-gray-900">{transformedProposal.budget}</span>
                       </div>
                       <div className="flex items-center">

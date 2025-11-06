@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BiUser, BiMail, BiPhone, BiMapPin, BiEdit, BiSave, BiX } from 'react-icons/bi';
+import { BiUser, BiEnvelope, BiPhone, BiMapPin, BiEdit, BiSave, BiX } from 'react-icons/bi';
 import rddService from '../../../services/rddService';
 
 const RDDAccount = () => {
@@ -267,7 +267,7 @@ const RDDAccount = () => {
                   />
                 ) : (
                   <div className="flex items-center text-gray-900">
-                    <BiMail className="mr-2" />
+                    <BiEnvelope className="mr-2" />
                     {userData.email}
                   </div>
                 )}
