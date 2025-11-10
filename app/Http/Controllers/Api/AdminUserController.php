@@ -15,6 +15,21 @@ class AdminUserController extends Controller
 {
     public function index(Request $request)
     {
+        // Debug: Check if user is authenticated
+        if (!$request->user()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated',
+                'debug' => [
+                    'session_id' => $request->session()->getId(),
+                    'has_session' => $request->hasSession(),
+                    'auth_check' => auth()->check(),
+                    'auth_user' => auth()->user() ? 'exists' : 'null',
+                    'cookies' => $request->cookies->all(),
+                ]
+            ], 401);
+        }
+
         $users = User::with(['role', 'department'])->get();
 
         $mapped = $users->map(fn (User $user) => $this->formatUserResponse($user));

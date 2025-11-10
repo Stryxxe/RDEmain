@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
 import FormField from '../Components/FormField';
 import CheckboxGroup from '../Components/CheckboxGroup';
 import FileUpload from '../Components/FileUpload';
@@ -24,7 +24,6 @@ const SubmitPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const navigate = useNavigate();
 
   // Refs for form fields to enable scrolling
   const reportFileRef = useRef(null);
@@ -244,7 +243,7 @@ const SubmitPage = () => {
         
         // Redirect to projects page after 2 seconds
         setTimeout(() => {
-          navigate('/proponent/projects');
+          router.visit('/proponent/projects');
         }, 2000);
       } else {
         setSubmitError(response.message || 'Failed to submit proposal');

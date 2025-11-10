@@ -5,128 +5,32 @@ const API_BASE_URL = `${API_ORIGIN}/api`;
 class ApiService {
   constructor() { 
     this.baseURL = API_BASE_URL;
-    this.csrfToken = null;
-    this.csrfInitialized = false;
   }
 
-  // Initialize CSRF protection using Sanctum
-  async initializeCsrf() {
-    if (this.csrfInitialized) {
-      return;
-    }
-    
-    try {
-      // Get the CSRF cookie from Sanctum (this sets the XSRF-TOKEN cookie)
-      await fetch(`${API_ORIGIN}/sanctum/csrf-cookie`, {
-        method: 'GET',
-        credentials: 'include'
-      });
-      
-      // Also get the CSRF token from the web middleware
-      const response = await fetch(`${API_ORIGIN}/csrf-token`, {
-        method: 'GET',
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        this.csrfToken = data.csrf_token;
-      }
-      
-      this.csrfInitialized = true;
-    } catch (error) {
-      console.warn('CSRF initialization failed:', error);
-      this.csrfInitialized = true; // Set to true to prevent infinite retries
-    }
-  }
-
-  // Ensure CSRF is initialized before making requests
-  async ensureCsrfInitialized() {
-    if (!this.csrfInitialized) {
-      await this.initializeCsrf();
-    }
-  }
-
-  // Get CSRF token from cookies (XSRF-TOKEN is encrypted by Laravel)
-  getCsrfTokenFromCookie() {
-    const name = 'XSRF-TOKEN=';
-    const decodedCookie = decodeURIComponent(document.cookie);
-    const ca = decodedCookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i];
-      while (c.charAt(0) === ' ') {
-        c = c.substring(1);
-      }
-      if (c.indexOf(name) === 0) {
-        return c.substring(name.length, c.length);
-      }
-    }
-    return null;
-  }
-
-  // Get CSRF token from Laravel session cookie
-  getCsrfTokenFromSession() {
-    const name = 'laravel_session=';
-    const decodedCookie = decodeURIComponent(document.cookie);
-    const ca = decodedCookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i];
-      while (c.charAt(0) === ' ') {
-        c = c.substring(1);
-      }
-      if (c.indexOf(name) === 0) {
-        return c.substring(name.length, c.length);
-      }
-    }
-    return null;
-  }
-
-  // Get CSRF token from meta tag (fallback)
-  getCsrfTokenFromMeta() {
+  // Get CSRF token from Inertia's meta tag
+  // Inertia automatically provides the CSRF token in the meta tag
+  getCsrfToken() {
     const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    return metaToken;
+    return metaToken || null;
   }
 
-  // Get CSRF token
-  async getCsrfToken() {
-    if (!this.csrfInitialized) {
-      await this.initializeCsrf();
-    }
-    
-    // Primary: Use the CSRF token from the API call
-    if (this.csrfToken) {
-      return this.csrfToken;
-    }
-    
-    // Fallback: Use XSRF-TOKEN cookie (Sanctum's method)
-    const xsrfToken = this.getCsrfTokenFromCookie();
-    if (xsrfToken) {
-      return xsrfToken;
-    }
-    
-    // Check if we have a session cookie (indicates session is active)
-    const sessionToken = this.getCsrfTokenFromSession();
-    if (sessionToken) {
-      // If we have a session, try to get CSRF token from meta tag
-      const metaToken = this.getCsrfTokenFromMeta();
-      if (metaToken) {
-        return metaToken;
-      }
-    }
-    
-    // Last resort: Use meta tag
-    const metaToken = this.getCsrfTokenFromMeta();
-    return metaToken;
-  }
-
-  // Helper method to get headers
-  getHeaders() {
-    const token = localStorage.getItem('token');
-    return {
+  // Helper method to get headers with CSRF token from Inertia
+  // Using session-based auth, so no bearer tokens needed
+  getHeaders(includeCsrf = true) {
+    const headers = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
     };
+    
+    // Add CSRF token from Inertia's meta tag for all requests
+    if (includeCsrf) {
+      const csrfToken = this.getCsrfToken();
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+      }
+    }
+    
+    return headers;
   }
   // Helper method to handle responses
   async handleResponse(response) {
@@ -142,12 +46,10 @@ class ApiService {
   // Get current user
   async getCurrentUser() {
     try {
-      await this.initializeCsrf();
-      
       const response = await fetch(`${this.baseURL}/user`, {
         method: 'GET',
         credentials: 'include',
-        headers: this.getHeaders()
+        headers: this.getHeaders(false) // GET requests don't need CSRF
       });
       
       return await this.handleResponse(response);
@@ -159,21 +61,10 @@ class ApiService {
   // Update user profile
   async updateUser(userData) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}/user`, {
         method: 'PUT',
         credentials: 'include',
-        headers: headers,
+        headers: this.getHeaders(true), // PUT requests need CSRF
         body: JSON.stringify(userData)
       });
       
@@ -186,9 +77,6 @@ class ApiService {
   // Create proposal
   async createProposal(proposalData) {
     try {
-      // Ensure CSRF is initialized
-      await this.ensureCsrfInitialized();
-      
       const formData = new FormData();
       
       // Add basic fields
@@ -217,27 +105,13 @@ class ApiService {
         formData.append('matrixOfCompliance', proposalData.matrixOfCompliance);
       }
 
-      // Get CSRF token
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      const token = localStorage.getItem('token');
-      
-      // Prepare headers with CSRF token
+      // Prepare headers with CSRF token from Inertia
+      // Using session-based auth, so no bearer tokens needed
+      const csrfToken = this.getCsrfToken();
       const headers = {
         'Accept': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` })
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
       };
-      
-      // Add CSRF token to headers if available
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
-      console.log('Submitting proposal with headers:', headers);
-      console.log('CSRF Token:', csrfToken);
-      console.log('XSRF Token:', xsrfToken);
       
       const response = await fetch(`${this.baseURL}/proposals`, {
         method: 'POST',
@@ -265,7 +139,7 @@ class ApiService {
       const response = await fetch(`${this.baseURL}/proposals`, {
         method: 'GET',
         credentials: 'include',
-        headers: this.getHeaders()
+        headers: this.getHeaders(false) // GET requests don't need CSRF
       });
       
       return await this.handleResponse(response);
@@ -277,12 +151,11 @@ class ApiService {
   // Get single proposal
   async getProposal(id) {
     try {
-      
       const response = await fetch(`${this.baseURL}/proposals/${id}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        credentials: 'include',
+        headers: this.getHeaders(false) // GET requests don't need CSRF
       });
-      
       
       const data = await this.handleResponse(response);
       return data;
@@ -294,20 +167,9 @@ class ApiService {
   // Update proposal
   async updateProposal(id, proposalData) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}/proposals/${id}`, {
         method: 'PUT',
-        headers: headers,
+        headers: this.getHeaders(true), // PUT requests need CSRF
         body: JSON.stringify(proposalData),
         credentials: 'include'
       });
@@ -321,20 +183,9 @@ class ApiService {
   // Delete proposal
   async deleteProposal(id) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}/proposals/${id}`, {
         method: 'DELETE',
-        headers: headers,
+        headers: this.getHeaders(true), // DELETE requests need CSRF
         credentials: 'include'
       });
       
@@ -349,7 +200,8 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/notifications`, {
         method: 'GET',
-        headers: this.getHeaders()
+        credentials: 'include',
+        headers: this.getHeaders(false) // GET requests don't need CSRF
       });
       
       return await this.handleResponse(response);
@@ -363,7 +215,8 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/messages`, {
         method: 'GET',
-        headers: this.getHeaders()
+        credentials: 'include',
+        headers: this.getHeaders(false) // GET requests don't need CSRF
       });
       
       return await this.handleResponse(response);
@@ -375,20 +228,9 @@ class ApiService {
   // Send message
   async sendMessage(messageData) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}/messages`, {
         method: 'POST',
-        headers: headers,
+        headers: this.getHeaders(true), // POST requests need CSRF
         body: JSON.stringify(messageData),
         credentials: 'include'
       });
@@ -404,7 +246,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'GET',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(false), // GET requests don't need CSRF
         credentials: 'include'
       });
       
@@ -416,20 +258,9 @@ class ApiService {
 
   async post(url, data = null) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'POST',
-        headers: headers,
+        headers: this.getHeaders(true), // POST requests need CSRF
         body: data ? JSON.stringify(data) : null,
         credentials: 'include'
       });
@@ -442,20 +273,9 @@ class ApiService {
 
   async put(url, data = null) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'PUT',
-        headers: headers,
+        headers: this.getHeaders(true), // PUT requests need CSRF
         body: data ? JSON.stringify(data) : null,
         credentials: 'include'
       });
@@ -469,20 +289,9 @@ class ApiService {
   // Create endorsement
   async createEndorsement(endorsementData) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}/endorsements`, {
         method: 'POST',
-        headers: headers,
+        headers: this.getHeaders(true), // POST requests need CSRF
         credentials: 'include',
         body: JSON.stringify(endorsementData)
       });
@@ -498,7 +307,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/endorsements`, {
         method: 'GET',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(false), // GET requests don't need CSRF
         credentials: 'include'
       });
       
@@ -513,7 +322,7 @@ class ApiService {
     try {
       const response = await fetch(`${this.baseURL}/endorsements/proposal/${proposalId}`, {
         method: 'GET',
-        headers: this.getHeaders(),
+        headers: this.getHeaders(false), // GET requests don't need CSRF
         credentials: 'include'
       });
       
@@ -525,20 +334,9 @@ class ApiService {
 
   async delete(url) {
     try {
-      await this.ensureCsrfInitialized();
-      const csrfToken = await this.getCsrfToken();
-      const xsrfToken = this.getCsrfTokenFromCookie();
-      
-      const headers = this.getHeaders();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      } else if (xsrfToken) {
-        headers['X-XSRF-TOKEN'] = xsrfToken;
-      }
-      
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'DELETE',
-        headers: headers,
+        headers: this.getHeaders(true), // DELETE requests need CSRF
         credentials: 'include'
       });
       

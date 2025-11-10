@@ -1,13 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
+import { useRouteParams } from '../../../Components/RoleBased/InertiaRoleRouter';
 import { useAuth } from '../../../contexts/AuthContext';
 import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
-import apiService from '../../../services/api';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const CMProposalDetail = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const routeParams = useRouteParams();
+  const id = routeParams.id;
   const { user } = useAuth();
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -20,33 +27,41 @@ const CMProposalDetail = () => {
   console.log('Current user:', user);
 
   useEffect(() => {
-    fetchProposal();
-  }, [id]);
+    if (user) {
+      fetchProposal();
+    }
+  }, [id, user]);
 
   // Check endorsement status when proposal is loaded
   useEffect(() => {
     const checkEndorsementStatus = async () => {
-      if (!proposal) return;
+      if (!proposal || !user) return;
       
       try {
-        const response = await apiService.getEndorsementsByProposal(proposal.proposalID);
+        const response = await axiosInstance.get(`/endorsements/proposal/${proposal.proposalID}`, {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
+        });
         
-        if (response.success && response.data.length > 0) {
+        if (response.data.success && response.data.data && response.data.data.length > 0) {
           setIsEndorsed(true);
-          setEndorsementData(response.data[0]);
+          setEndorsementData(response.data.data[0]);
         } else {
           setIsEndorsed(false);
           setEndorsementData(null);
         }
       } catch (error) {
-        console.error('Error checking endorsement status:', error);
+        // Only log error if it's not a 401 (unauthorized) - 401 is expected if not authenticated
+        if (error.response?.status !== 401) {
+          console.error('Error checking endorsement status:', error);
+        }
         setIsEndorsed(false);
         setEndorsementData(null);
       }
     };
 
     checkEndorsementStatus();
-  }, [proposal, refreshKey]);
+  }, [proposal, refreshKey, user]);
 
   // Force refresh function
   const handleRefresh = () => {
@@ -54,10 +69,19 @@ const CMProposalDetail = () => {
   };
 
   const fetchProposal = async () => {
+    if (!user) {
+      setError('Please log in to view proposal details');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('Fetching proposal with ID:', id);
-      const response = await axios.get(`/proposals/${id}`);
+      const response = await axiosInstance.get(`/proposals/${id}`, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       console.log('API Response:', response.data);
       if (response.data.success) {
         setProposal(response.data.data);
@@ -69,21 +93,25 @@ const CMProposalDetail = () => {
     } catch (error) {
       console.error('Error fetching proposal:', error);
       console.error('Error details:', error.response?.data);
-      setError('Error loading proposal');
+      if (error.response?.status === 401) {
+        setError('Unauthorized. Please log in again.');
+      } else {
+        setError('Error loading proposal');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleBack = () => {
-    navigate('/cm');
+    router.visit('/cm');
   };
 
   const handleEndorse = () => {
     // Store the proposal data in localStorage for the ReviewProposal page
     localStorage.setItem('selectedProjectForEndorsement', JSON.stringify(proposal));
     // Navigate to the ReviewProposal page
-    navigate('/cm/review-proposal');
+    router.visit('/cm/review-proposal');
   };
 
   if (loading) {

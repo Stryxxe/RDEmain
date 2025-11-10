@@ -7,57 +7,80 @@ use App\Http\Requests\Auth\LoginRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Route;
-use Illuminate\Http\JsonResponse;
+use Illuminate\Validation\ValidationException;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AuthenticatedSessionController extends Controller
 {
     /**
+     * Display the login view.
+     */
+    public function create(): Response
+    {
+        return Inertia::render('Auth/Login', [
+            'canResetPassword' => true,
+        ]);
+    }
+
+    /**
      * Handle an incoming authentication request.
      */
-    public function store(LoginRequest $request): JsonResponse|RedirectResponse
+    public function store(LoginRequest $request): RedirectResponse
     {
         $request->authenticate();
 
-        $user = Auth::user();
-        
-        // If this is an API request, return JSON with token
-        if ($request->expectsJson() || $request->is('api/*')) {
-            $token = $user->createToken('auth-token')->plainTextToken;
-            
-            // Load relationships
-            $user->load(['role', 'department']);
-            
-            return response()->json([
-                'user' => $user,
-                'token' => $token,
-                'message' => 'Login successful'
-            ]);
-        }
-
-        // For web requests, use session-based auth
         $request->session()->regenerate();
-        return redirect()->intended(route('dashboard', absolute: false));
+
+        // Load user relationships for redirect
+        $user = Auth::user();
+        $user->load(['role', 'department']);
+
+        // Redirect based on user role
+        return redirect()->intended($this->getRoleBasedRedirect($user));
     }
 
     /**
      * Destroy an authenticated session.
      */
-    public function destroy(Request $request): JsonResponse|RedirectResponse
+    public function destroy(Request $request): RedirectResponse
     {
-        // If this is an API request, revoke the token
-        if ($request->expectsJson() || $request->is('api/*')) {
-            $request->user()->currentAccessToken()->delete();
-            
-            return response()->json([
-                'message' => 'Logout successful'
-            ]);
+        Auth::guard('web')->logout();
+
+        $request->session()->invalidate();
+
+        $request->session()->regenerateToken();
+
+        return redirect('/');
+    }
+
+    /**
+     * Get redirect path based on user role
+     */
+    private function getRoleBasedRedirect($user): string
+    {
+        $userRole = $user->role->userRole ?? null;
+        
+        if (!$userRole) {
+            return '/';
         }
 
-        // For web requests, use session-based logout
-        Auth::guard('web')->logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-        return redirect('/');
+        // Normalize role name to lowercase for route
+        $rolePath = strtolower($userRole);
+        
+        // Map role names to their route prefixes
+        $roleMap = [
+            'administrator' => 'admin',
+            'rdd' => 'rdd',
+            'cm' => 'cm',
+            'proponent' => 'proponent',
+            'op' => 'op',
+            'osuoru' => 'osuur',
+            'reviewer' => 'reviewer',
+        ];
+
+        $routePrefix = $roleMap[strtolower($userRole)] ?? strtolower($userRole);
+        
+        return "/{$routePrefix}";
     }
 }

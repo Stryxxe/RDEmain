@@ -1,13 +1,22 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { router, usePage } from '@inertiajs/react';
 import { useMessages } from '../contexts/MessageContext';
 import { useAuth } from '../contexts/AuthContext';
 import { MessageCircle, Send, Search, RefreshCw, User, Clock, AlertCircle } from 'lucide-react';
 import AutoRefreshControls from '../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
+import axios from 'axios';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const Messages = () => {
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { url } = usePage();
+  const searchParams = new URLSearchParams(url.split('?')[1] || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [newMessage, setNewMessage] = useState('');
@@ -16,6 +25,7 @@ const Messages = () => {
   const [cmLoading, setCmLoading] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [composeData, setComposeData] = useState({ recipient: '', subject: '', type: 'general', content: '' });
+  const [startingConversation, setStartingConversation] = useState(false);
   
   const { user } = useAuth();
   const { 
@@ -36,7 +46,6 @@ const Messages = () => {
     lastRefresh
   } = useMessages();
   
-  const navigate = useNavigate();
 
   // Check if user is a proponent
   const isProponent = user?.role?.userRole === 'Proponent';
@@ -60,13 +69,17 @@ const Messages = () => {
     if (conversations.length > 0 && !selectedConversation) {
       const conversationId = searchParams.get('conversation');
       if (conversationId) {
-        const conversation = conversations.find(conv => conv.otherUser.userID === conversationId);
+        const conversation = conversations.find(conv => 
+          String(conv.otherUser.userID) === String(conversationId)
+        );
         if (conversation) {
-          handleConversationClick(conversation);
+          setSelectedConversation(conversation);
+          fetchConversation(conversation.otherUser.userID);
         }
       }
     }
-  }, [conversations, searchParams, selectedConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, url]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown time';
@@ -143,7 +156,10 @@ const Messages = () => {
 
   const handleConversationClick = async (conversation) => {
     setSelectedConversation(conversation);
-    setSearchParams({ conversation: conversation.otherUser.userID });
+    // Update URL without causing navigation - just update the query parameter
+    const newUrl = `${url.split('?')[0]}?conversation=${conversation.otherUser.userID}`;
+    window.history.pushState({}, '', newUrl);
+    // Fetch the conversation messages
     await fetchConversation(conversation.otherUser.userID);
   };
 
@@ -190,7 +206,9 @@ const Messages = () => {
   const clearConversation = () => {
     setSelectedConversation(null);
     setCurrentConversation(null);
-    setSearchParams({});
+    // Update URL without causing navigation
+    const baseUrl = url.split('?')[0];
+    window.history.pushState({}, '', baseUrl);
   };
 
 
@@ -272,70 +290,111 @@ const Messages = () => {
 
               {/* Conversations List */}
               <div className="max-h-96 overflow-y-auto">
-                {isProponent && availableCM && filteredConversations.length === 0 && (
-                  <div className="p-4 border-b border-gray-200 bg-blue-50">
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center">
-                        <User className="w-5 h-5 text-blue-600" />
+                {/* Show "Start Conversation" when there are no conversations at all */}
+                {conversations.length === 0 && (
+                  <>
+                    {/* Proponent: Show CM to start conversation */}
+                    {isProponent && availableCM && (
+                      <div className="p-4 border-b border-gray-200 bg-blue-50">
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-10 h-10 bg-blue-200 rounded-full flex items-center justify-center">
+                            <User className="w-5 h-5 text-blue-600" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-semibold text-blue-900">
+                              {availableCM.cm.fullName}
+                            </h4>
+                            <p className="text-xs text-blue-600">Center Manager - {availableCM.cm.department?.name}</p>
+                          </div>
+                        </div>
+                        <p className="text-xs text-blue-700 mb-3">
+                          You can start a conversation with your department's Center Manager.
+                        </p>
+                        <button
+                          onClick={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            
+                            // Prevent double clicks
+                            if (startingConversation) return;
+                            
+                            try {
+                              setStartingConversation(true);
+                              
+                              // Create a conversation by sending an initial message
+                              await sendMessage(
+                                String(availableCM.cm.userID),
+                                'New Conversation',
+                                'Hello! I would like to start a conversation with you.',
+                                'general'
+                              );
+                              
+                              // Wait a bit for the message to be processed
+                              await new Promise(resolve => setTimeout(resolve, 300));
+                              
+                              // Wait for conversations to refresh
+                              await fetchConversations();
+                              
+                              // Refetch conversations directly to get the updated list
+                              const response = await axiosInstance.get('/messages/conversations', {
+                                headers: { 'Accept': 'application/json' },
+                                withCredentials: true
+                              });
+                              
+                              const updatedConversations = response.data.data || [];
+                              
+                              // Find the new conversation
+                              const newConversation = updatedConversations.find(conv => 
+                                String(conv.otherUser.userID) === String(availableCM.cm.userID)
+                              );
+                              
+                              if (newConversation) {
+                                // Select the conversation
+                                setSelectedConversation(newConversation);
+                                await fetchConversation(availableCM.cm.userID);
+                              }
+                            } catch (error) {
+                              console.error('Error starting conversation:', error);
+                              alert('Failed to start conversation. Please try again.');
+                            } finally {
+                              setStartingConversation(false);
+                            }
+                          }}
+                          disabled={startingConversation}
+                          className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {startingConversation ? 'Starting...' : 'Start Conversation'}
+                        </button>
                       </div>
-                      <div>
-                        <h4 className="text-sm font-semibold text-blue-900">
-                          {availableCM.cm.fullName}
-                        </h4>
-                        <p className="text-xs text-blue-600">Center Manager - {availableCM.cm.department?.name}</p>
-                      </div>
+                    )}
+                    
+                    {/* Empty state when no conversations */}
+                    <div className="p-6 text-center text-gray-500">
+                      <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                      <p className="text-sm">
+                        {isProponent ? 'No conversations with Center Managers' : 'No conversations found'}
+                      </p>
+                      {isProponent && availableCM && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Use the "Start Conversation" button above to begin
+                        </p>
+                      )}
+                      {!isProponent && (
+                        <p className="text-xs text-gray-400 mt-1">
+                          Start a new conversation by composing a message
+                        </p>
+                      )}
                     </div>
-                    <p className="text-xs text-blue-700 mb-3">
-                      You can start a conversation with your department's Center Manager.
-                    </p>
-                    <button
-                      onClick={async () => {
-                        try {
-                          // Create a conversation by sending an initial message
-                          await sendMessage(
-                            String(availableCM.cm.userID),
-                            'New Conversation',
-                            'Hello! I would like to start a conversation with you.',
-                            'general'
-                          );
-                          
-                          // Wait for conversations to refresh
-                          await fetchConversations();
-                          
-                          // Find the new conversation
-                          const newConversation = conversations.find(conv => 
-                            conv.otherUser.userID === availableCM.cm.userID
-                          );
-                          
-                          if (newConversation) {
-                            // Select the conversation
-                            setSelectedConversation(newConversation);
-                            await fetchConversation(availableCM.cm.userID);
-                          }
-                        } catch (error) {
-                          // Error handling for starting conversation
-                        }
-                      }}
-                      className="w-full px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-                    >
-                      Start Conversation
-                    </button>
-                  </div>
+                  </>
                 )}
                 
-                {filteredConversations.length === 0 ? (
+                {/* Show conversations if they exist */}
+                {conversations.length > 0 && filteredConversations.length === 0 ? (
                   <div className="p-6 text-center text-gray-500">
                     <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">
-                      {isProponent ? 'No conversations with Center Managers' : 'No conversations found'}
-                    </p>
-                    {isProponent && availableCM && (
-                      <p className="text-xs text-gray-400 mt-1">
-                        Use the "Start Conversation" button above to begin
-                      </p>
-                    )}
+                    <p className="text-sm">No conversations match your search</p>
                   </div>
-                ) : (
+                ) : conversations.length > 0 && filteredConversations.length > 0 ? (
                   <div className="divide-y divide-gray-100">
                     {filteredConversations.map((conversation) => (
                       <div
@@ -375,7 +434,7 @@ const Messages = () => {
                         </p>
                         <p className="text-xs text-gray-500 line-clamp-1">
                           {conversation.latestMessage.content?.substring(0, 60) + 
-                           (conversation.latestMessage.content?.length > 60 ? '...' : '')}
+                            (conversation.latestMessage.content?.length > 60 ? '...' : '')}
                         </p>
                         {conversation.unreadCount > 0 && (
                           <div className="flex items-center justify-between mt-2">
@@ -390,7 +449,7 @@ const Messages = () => {
                       </div>
                     ))}
                   </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>

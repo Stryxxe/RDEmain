@@ -2,6 +2,13 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import axios from 'axios';
 import { useAuth } from './AuthContext';
 
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
+
 const MessageContext = createContext();
 
 export const useMessages = () => {
@@ -105,13 +112,14 @@ export const MessageProvider = ({ children }) => {
   const fetchMessages = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/messages', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) { setMessages([]); return; }
+      const response = await axiosInstance.get('/messages', {
+        withCredentials: true
       });
       setMessages(response.data.data || []);
     } catch (error) {
       // Error handling for fetching messages
+      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -120,22 +128,23 @@ export const MessageProvider = ({ children }) => {
   // Fetch sent messages from API
   const fetchSentMessages = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/messages/sent', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) { setSentMessages([]); return; }
+      const response = await axiosInstance.get('/messages/sent', {
+        withCredentials: true
       });
       setSentMessages(response.data.data || []);
     } catch (error) {
       // Error handling for fetching sent messages
+      setSentMessages([]);
     }
   };
 
   // Fetch unread count
   const fetchUnreadCount = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/messages/unread-count', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) { setUnreadCount(0); return; }
+      const response = await axiosInstance.get('/messages/unread-count', {
+        withCredentials: true
       });
       setUnreadCount(response.data.count || 0);
     } catch (error) {
@@ -146,22 +155,23 @@ export const MessageProvider = ({ children }) => {
   // Fetch conversations from API
   const fetchConversations = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/messages/conversations', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) { setConversations([]); return; }
+      const response = await axiosInstance.get('/messages/conversations', {
+        withCredentials: true
       });
       setConversations(response.data.data || []);
     } catch (error) {
       // Error handling for fetching conversations
+      setConversations([]);
     }
   };
 
   // Fetch specific conversation
   const fetchConversation = async (otherUserId) => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get(`/messages/conversation/${otherUserId}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return [];
+      const response = await axiosInstance.get(`/messages/conversation/${otherUserId}`, {
+        withCredentials: true
       });
       setCurrentConversation(response.data.data || []);
       return response.data.data || [];
@@ -173,9 +183,13 @@ export const MessageProvider = ({ children }) => {
   // Load messages when authenticated and auth check finished
   useEffect(() => {
     if (authLoading) return;
-    const token = localStorage.getItem('token');
-    if (!user || !token) {
-      // Clear any stale data if not authenticated
+    
+    // Check if we're on the login page
+    const currentPath = window.location.pathname;
+    const isLoginPage = currentPath === '/login' || currentPath === '/';
+    
+    if (!user || isLoginPage) {
+      // Clear any stale data if not authenticated or on login page
       setMessages([]);
       setSentMessages([]);
       setConversations([]);
@@ -244,9 +258,9 @@ export const MessageProvider = ({ children }) => {
 
   const markAsRead = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(`/messages/${id}/read`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.put(`/messages/${id}/read`, {}, {
+        withCredentials: true
       });
       setMessages(prev =>
         prev.map(message =>
@@ -263,9 +277,9 @@ export const MessageProvider = ({ children }) => {
 
   const markAllAsRead = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.put('/messages/mark-all-read', {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.put('/messages/mark-all-read', {}, {
+        withCredentials: true
       });
       setMessages(prev =>
         prev.map(message => ({ ...message, read: true, read_at: new Date().toISOString() }))
@@ -278,9 +292,9 @@ export const MessageProvider = ({ children }) => {
 
   const deleteMessage = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/messages/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.delete(`/messages/${id}`, {
+        withCredentials: true
       });
       setMessages(prev => prev.filter(message => message.id !== id));
       // Update unread count if the message was unread
@@ -295,9 +309,9 @@ export const MessageProvider = ({ children }) => {
 
   const deleteSentMessage = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/messages/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.delete(`/messages/${id}`, {
+        withCredentials: true
       });
       setSentMessages(prev => prev.filter(message => message.id !== id));
     } catch (error) {
@@ -307,15 +321,15 @@ export const MessageProvider = ({ children }) => {
 
   const sendMessage = async (recipientId, subject, content, type = 'general') => {
     try {
-      const token = localStorage.getItem('token');
+      if (!user) throw new Error('User not authenticated');
       
-      const response = await axios.post('/messages', {
+      const response = await axiosInstance.post('/messages', {
         recipientID: recipientId,
         subject,
         content,
         type
       }, {
-        headers: { Authorization: `Bearer ${token}` }
+        withCredentials: true
       });
       
       // Refresh all message data after sending
@@ -341,13 +355,29 @@ export const MessageProvider = ({ children }) => {
   // Fetch available CM for proponents
   const fetchAvailableCM = async () => {
     try {
-      const token = localStorage.getItem('token');
-      const response = await axios.get('/messages/available-cm', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return null;
+      const response = await axiosInstance.get('/messages/available-cm', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
       });
       return response.data;
     } catch (error) {
       console.error('Failed to fetch available CM:', error);
+      return null;
+    }
+  };
+
+  // Fetch available proponents for CM users
+  const fetchAvailableProponents = async () => {
+    try {
+      if (!user) return null;
+      const response = await axiosInstance.get('/messages/available-proponents', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Failed to fetch available proponents:', error);
       return null;
     }
   };
@@ -361,9 +391,9 @@ export const MessageProvider = ({ children }) => {
 
   const clearAllMessages = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete('/messages/clear-all', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return false;
+      await axiosInstance.delete('/messages/clear-all', {
+        withCredentials: true
       });
       
       // Clear local state
@@ -401,6 +431,7 @@ export const MessageProvider = ({ children }) => {
     fetchConversation,
     setCurrentConversation,
     fetchAvailableCM,
+    fetchAvailableProponents,
     clearAllMessages,
     setAutoRefreshEnabled,
     setRefreshInterval,

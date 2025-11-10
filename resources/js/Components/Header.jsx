@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from "react-router-dom";
+import { router } from '@inertiajs/react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useMessages } from '../contexts/MessageContext';
@@ -14,7 +14,6 @@ const Header = () => {
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
-  const navigate = useNavigate();
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown time';
@@ -93,13 +92,13 @@ const Header = () => {
 
   const handleViewAllMessages = () => {
     setShowNotifications(false);
-    navigate('/proponent/messages');
+    router.visit('/proponent/messages');
   };
 
   const handleNotificationClick = async (notificationId) => {
     await markAsRead(notificationId);
     setShowNotifications(false);
-    navigate('/proponent/notification');
+    router.visit('/proponent/notification');
   };
 
   // Close dropdowns when clicking outside or pressing Escape
@@ -273,7 +272,7 @@ const Header = () => {
               <button 
                 onClick={() => {
                   setShowNotifications(false);
-                  navigate('/proponent/notification');
+                  router.visit('/proponent/notification');
                 }}
                 className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
@@ -317,7 +316,7 @@ const Header = () => {
               <button
                 onClick={() => {
                   setShowProfileDropdown(false);
-                  navigate('/proponent/account');
+                  router.visit('/proponent/account');
                 }}
                 className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
               >

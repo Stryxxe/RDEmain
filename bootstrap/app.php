@@ -19,13 +19,15 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->web(append: [
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
             \App\Http\Middleware\VerifyCsrfToken::class,
         ]);
 
-        // Add EnsureFrontendRequestsAreStateful to API routes for proper SPA authentication
+        // Add session middleware to API routes for proper SPA authentication
+        // This allows API routes to use session-based authentication like web routes
+        // Order is critical: StartSession must come before other middleware
         $middleware->api(prepend: [
-            \Laravel\Sanctum\Http\Middleware\EnsureFrontendRequestsAreStateful::class,
+            \Illuminate\Cookie\Middleware\EncryptCookies::class,
+            \Illuminate\Session\Middleware\StartSession::class,
         ]);
 
         $middleware->alias([

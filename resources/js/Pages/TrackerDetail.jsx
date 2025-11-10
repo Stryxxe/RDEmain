@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
+import { useRouteParams } from '../Components/RoleBased/InertiaRoleRouter';
 import { ArrowLeft } from 'lucide-react';
 import apiService from '../services/api';
 
-const TrackerDetail = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+const TrackerDetail = ({ id: propId }) => {
+  const routeParams = useRouteParams();
+  const id = propId || routeParams.id;
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -302,7 +303,7 @@ const TrackerDetail = () => {
             <h3 className="text-lg font-medium text-red-800 mb-2">Invalid Project ID</h3>
             <p className="text-red-600 mb-4">No project ID was provided in the URL.</p>
             <button
-              onClick={() => navigate('/proponent/tracker')}
+              onClick={() => router.visit('/proponent/tracker')}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Back to Tracker
@@ -321,7 +322,7 @@ const TrackerDetail = () => {
             <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Project</h3>
             <p className="text-red-600 mb-4">{error}</p>
             <button
-              onClick={() => navigate('/tracker')}
+              onClick={() => router.visit('/proponent/tracker')}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Back to Tracker

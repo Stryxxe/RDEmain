@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { createContext, useContext } from 'react';
+import { usePage, router, useForm } from '@inertiajs/react';
 
 const AuthContext = createContext();
 
@@ -11,98 +11,60 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Check if user is already logged in
-    const token = localStorage.getItem('token');
-    if (token) {
-      // Ensure axios sends the bearer token by default
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      // Verify token with backend
-      axios.get('/user', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
-      .then(response => {
-        setUser(response.data);
-      })
-      .catch(() => {
-        localStorage.removeItem('token');
-        delete axios.defaults.headers.common['Authorization'];
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-    } else {
-      setLoading(false);
-    }
-  }, []);
-
-  const login = async (credentials) => {
-    try {
-      // For API routes, we don't need CSRF for login - just use bearer token auth
-      const response = await axios.post('/login', credentials, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        withCredentials: false
-      });
-      
-      const { token, user: userData } = response.data;
-      
-      localStorage.setItem('token', token);
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(userData);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('Login error:', error.response?.data); // Debug log
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Login failed' 
-      };
-    }
-  };
-
-  // Helper function to get cookie value
-  const getCookieValue = (name) => {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
-  };
+export const AuthProvider = ({ children, user: initialUser }) => {
+  let user = initialUser || null;
+  
+  try {
+    const { props } = usePage();
+    user = props?.auth?.user || user;
+  } catch (e) {
+    // usePage might not be available in all contexts, use initialUser
+    user = initialUser || null;
+  }
 
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('dismissedNotifications'); // Clear dismissed notifications on logout
-    delete axios.defaults.headers.common['Authorization'];
-    setUser(null);
+    // Clear local storage first
+    localStorage.removeItem('dismissedNotifications');
+    
+    // Create a form and submit it - this is the most reliable way to handle logout
+    // Forms automatically include CSRF tokens and handle redirects properly
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/logout';
+    
+    // Add CSRF token as hidden input
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (csrfToken) {
+      const csrfInput = document.createElement('input');
+      csrfInput.type = 'hidden';
+      csrfInput.name = '_token';
+      csrfInput.value = csrfToken;
+      form.appendChild(csrfInput);
+    }
+    
+    // Add method spoofing for POST
+    const methodInput = document.createElement('input');
+    methodInput.type = 'hidden';
+    methodInput.name = '_method';
+    methodInput.value = 'POST';
+    form.appendChild(methodInput);
+    
+    // Append to body and submit
+    document.body.appendChild(form);
+    form.submit();
   };
 
   const updateUser = async (userData) => {
-    try {
-      const response = await axios.put('/user', userData, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-      });
-      setUser(response.data);
-      return { success: true };
-    } catch (error) {
-      return { 
-        success: false, 
-        message: error.response?.data?.message || 'Update failed' 
-      };
-    }
+    // For Inertia, user updates should be handled through Inertia forms
+    // This is a placeholder - implement based on your update route
+    return { success: false, message: 'Use Inertia form for user updates' };
   };
 
   const value = {
     user,
-    login,
     logout,
     updateUser,
-    loading
+    loading: false // Inertia handles loading state
   };
 
   return (

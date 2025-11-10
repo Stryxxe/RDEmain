@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { useMessages } from '../../contexts/MessageContext';
@@ -11,7 +11,6 @@ const RoleBasedHeader = ({ role }) => {
   const { user, logout } = useAuth();
   const { notifications, unreadCount, markAsRead } = useNotifications();
   const { unreadCount: messageUnreadCount } = useMessages();
-  const navigate = useNavigate();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
   const dropdownRef = useRef(null);
@@ -87,22 +86,22 @@ const RoleBasedHeader = ({ role }) => {
 
   const handleViewAllMessages = () => {
     setShowNotifications(false);
-    navigate(`/${role.toLowerCase()}/messages`);
+    router.visit(`/${role.toLowerCase()}/messages`);
   };
 
   const handleNotificationClick = async (notificationId) => {
     await markAsRead(notificationId);
     setShowNotifications(false);
-    navigate(`/${role.toLowerCase()}/notifications`);
+    router.visit(`/${role.toLowerCase()}/notifications`);
   };
 
   const handleViewAllNotifications = () => {
     setShowNotifications(false);
-    navigate(`/${role.toLowerCase()}/notifications`);
+    router.visit(`/${role.toLowerCase()}/notifications`);
   };
 
   const handleMessagesClick = () => {
-    navigate(`/${role.toLowerCase()}/messages`);
+    router.visit(`/${role.toLowerCase()}/messages`);
   };
 
   const getTypeIcon = (type) => {
@@ -292,7 +291,7 @@ const RoleBasedHeader = ({ role }) => {
               <button 
                 onClick={() => {
                   setShowNotifications(false);
-                  navigate(`/${role.toLowerCase()}/notifications`);
+                  router.visit(`/${role.toLowerCase()}/notifications`);
                 }}
                 className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium"
               >
@@ -302,23 +301,25 @@ const RoleBasedHeader = ({ role }) => {
           </div>
         </div>
 
-        {/* Message Icon */}
-        <div className="relative">
-          <button
-            onClick={() => handleViewAllMessages('messages')}
-            className="relative p-2 text-white hover:bg-red-700 rounded-lg transition-colors duration-200"
-            title="Messages"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            {messageUnreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
-                {messageUnreadCount}
-              </span>
-            )}
-          </button>
-        </div>
+        {/* Message Icon - Hidden for RDD and Admin */}
+        {(role !== 'RDD' && role !== 'Admin') && (
+          <div className="relative">
+            <button
+              onClick={() => handleViewAllMessages('messages')}
+              className="relative p-2 text-white hover:bg-red-700 rounded-lg transition-colors duration-200"
+              title="Messages"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {messageUnreadCount > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+                  {messageUnreadCount}
+                </span>
+              )}
+            </button>
+          </div>
+        )}
 
 
         {/* Profile Dropdown */}
@@ -337,7 +338,7 @@ const RoleBasedHeader = ({ role }) => {
               <button
                 onClick={() => {
                   setShowProfileDropdown(false);
-                  navigate(`/${role.toLowerCase()}/account`);
+                  router.visit(`/${role.toLowerCase()}/account`);
                 }}
                 className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
               >

@@ -1,10 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
+import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
-import apiService from '../../../services/api';
+import { useAuth } from '../../../contexts/AuthContext';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const CMProposalDetails = ({ proposal, onBack }) => {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [isEndorsing, setIsEndorsing] = useState(false);
@@ -18,27 +26,35 @@ const CMProposalDetails = ({ proposal, onBack }) => {
   // Check if proposal has been endorsed
   useEffect(() => {
     const checkEndorsementStatus = async () => {
+      if (!proposal || !user) return;
+      
       try {
-        const response = await apiService.getEndorsementsByProposal(proposal.proposalID || proposal.id);
+        const response = await axiosInstance.get(`/endorsements/proposal/${proposal.proposalID || proposal.id}`, {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
+        });
         
-        if (response.success && response.data.length > 0) {
+        if (response.data.success && response.data.data && response.data.data.length > 0) {
           setIsEndorsed(true);
-          setEndorsementData(response.data[0]); // Get the first endorsement
+          setEndorsementData(response.data.data[0]); // Get the first endorsement
         } else {
           setIsEndorsed(false);
           setEndorsementData(null);
         }
       } catch (error) {
-        console.error('Error checking endorsement status:', error);
+        // Only log error if it's not a 401 (unauthorized)
+        if (error.response?.status !== 401) {
+          console.error('Error checking endorsement status:', error);
+        }
         setIsEndorsed(false);
         setEndorsementData(null);
       }
     };
 
-    if (proposal) {
+    if (proposal && user) {
       checkEndorsementStatus();
     }
-  }, [proposal, refreshKey]);
+  }, [proposal, refreshKey, user]);
 
   // Force refresh function
   const handleRefresh = () => {
@@ -78,17 +94,22 @@ const CMProposalDetails = ({ proposal, onBack }) => {
         endorsementStatus: 'approved'
       };
 
-      const response = await apiService.createEndorsement(endorsementData);
+      const response = await axiosInstance.post('/endorsements', endorsementData, {
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        withCredentials: true
+      });
       
-      if (response.success) {
+      const responseData = response.data;
+      
+      if (responseData.success) {
         alert('Proposal endorsed successfully!');
         setIsEndorsed(true);
-        setEndorsementData(response.data);
+        setEndorsementData(responseData.data);
         setShowEndorsementModal(false);
         setEndorsementComments('');
         // Don't go back immediately, let user see the updated status
       } else {
-        alert('Failed to endorse proposal: ' + (response.message || 'Unknown error'));
+        alert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error endorsing proposal:', error);

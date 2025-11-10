@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
+import { useAuth } from './AuthContext';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const NotificationContext = createContext();
 
@@ -18,6 +26,7 @@ export const NotificationProvider = ({ children }) => {
   const [dismissedToasts, setDismissedToasts] = useState(new Set());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(null);
+  const { user, loading: authLoading } = useAuth();
 
   // Auto-refresh state
   const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
@@ -111,10 +120,9 @@ export const NotificationProvider = ({ children }) => {
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
-      if (!token) { setNotifications([]); return; }
-      const response = await axios.get('/notifications', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) { setNotifications([]); return; }
+      const response = await axiosInstance.get('/notifications', {
+        withCredentials: true
       });
       
       setNotifications(response.data.data || []);
@@ -129,10 +137,9 @@ export const NotificationProvider = ({ children }) => {
   // Fetch unread count
   const fetchUnreadCount = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) { setUnreadCount(0); return; }
-      const response = await axios.get('/notifications/unread-count', {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) { setUnreadCount(0); return; }
+      const response = await axiosInstance.get('/notifications/unread-count', {
+        withCredentials: true
       });
       setUnreadCount(response.data.count || 0);
     } catch (error) {
@@ -142,20 +149,26 @@ export const NotificationProvider = ({ children }) => {
 
   // Load notifications on mount
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (authLoading) return;
+    
+    // Check if we're on the login page
+    const currentPath = window.location.pathname;
+    const isLoginPage = currentPath === '/login' || currentPath === '/';
+    
+    if (user && !isLoginPage) {
       isActiveRef.current = true;
       fetchNotifications();
       fetchUnreadCount();
     } else {
       isActiveRef.current = false;
+      setNotifications([]);
+      setUnreadCount(0);
     }
-  }, []);
+  }, [user, authLoading]);
 
-  // Set up auto-refresh when token is available
+  // Set up auto-refresh when user is authenticated
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (user && !authLoading) {
       setupAutoRefresh();
     }
     
@@ -164,15 +177,14 @@ export const NotificationProvider = ({ children }) => {
         clearTimeout(refreshTimeoutRef.current);
       }
     };
-  }, [setupAutoRefresh]);
+  }, [user, authLoading, setupAutoRefresh]);
 
   // Re-setup auto-refresh when dependencies change
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
+    if (user && !authLoading) {
       setupAutoRefresh();
     }
-  }, [unreadCount, autoRefreshEnabled, setupAutoRefresh]);
+  }, [user, authLoading, unreadCount, autoRefreshEnabled, setupAutoRefresh]);
 
   // Track user activity for smart refresh
   useEffect(() => {
@@ -184,8 +196,7 @@ export const NotificationProvider = ({ children }) => {
       if (!document.hidden) {
         updateActivity();
         // Refresh immediately when tab becomes visible
-        const token = localStorage.getItem('token');
-        if (token) {
+        if (user && !authLoading) {
           refreshAllNotifications();
         }
       }
@@ -203,33 +214,32 @@ export const NotificationProvider = ({ children }) => {
       document.removeEventListener('scroll', handleActivity);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [updateActivity, refreshAllNotifications]);
+  }, [user, authLoading, updateActivity, refreshAllNotifications]);
 
-  // React to token changes across the app
+  // React to user changes (login/logout)
   useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === 'token') {
-        const token = e.newValue;
-        if (token) {
-          fetchNotifications();
-          fetchUnreadCount();
-        } else {
-          setNotifications([]);
-          setUnreadCount(0);
-          // Clear dismissed notifications when user logs out
-          clearDismissedToasts();
-        }
+    if (!authLoading) {
+      // Check if we're on the login page
+      const currentPath = window.location.pathname;
+      const isLoginPage = currentPath === '/login' || currentPath === '/';
+      
+      if (user && !isLoginPage) {
+        fetchNotifications();
+        fetchUnreadCount();
+      } else {
+        setNotifications([]);
+        setUnreadCount(0);
+        // Clear dismissed notifications when user logs out
+        clearDismissedToasts();
       }
-    };
-    window.addEventListener('storage', onStorage);
-    return () => window.removeEventListener('storage', onStorage);
-  }, []);
+    }
+  }, [user, authLoading]);
 
   const markAsRead = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.put(`/notifications/${id}/read`, {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.put(`/notifications/${id}/read`, {}, {
+        withCredentials: true
       });
       
       // Update local state immediately for better UX
@@ -254,9 +264,9 @@ export const NotificationProvider = ({ children }) => {
 
   const markAllAsRead = async () => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.put('/notifications/mark-all-read', {}, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.put('/notifications/mark-all-read', {}, {
+        withCredentials: true
       });
       setNotifications(prev =>
         prev.map(notification => ({ ...notification, read: true, read_at: new Date().toISOString() }))
@@ -269,9 +279,9 @@ export const NotificationProvider = ({ children }) => {
 
   const removeNotification = async (id) => {
     try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`/notifications/${id}`, {
-        headers: { Authorization: `Bearer ${token}` }
+      if (!user) return;
+      await axiosInstance.delete(`/notifications/${id}`, {
+        withCredentials: true
       });
       setNotifications(prev => prev.filter(notification => notification.id !== id));
       // Update unread count if the notification was unread

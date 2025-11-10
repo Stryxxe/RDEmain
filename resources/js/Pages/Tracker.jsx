@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
 import { ArrowRight, Clock, CheckCircle, AlertCircle, XCircle, Search, ChevronDown, ChevronUp, Eye, RefreshCw } from 'lucide-react';
 import { BiSearch, BiShow } from 'react-icons/bi';
 import apiService from '../services/api';
@@ -9,7 +9,6 @@ import AutoRefreshControls from '../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
 
 const Tracker = () => {
-  const navigate = useNavigate();
   const { refreshAllNotifications } = useNotifications();
   const { refreshAllMessages } = useMessages();
   const [projects, setProjects] = useState([]);
@@ -177,7 +176,7 @@ const Tracker = () => {
   };
 
   const handleViewDetails = (projectId) => {
-    navigate(`/proponent/tracker/${projectId}`);
+    router.visit(`/proponent/tracker/${projectId}`);
   };
 
   const filteredProposals = projects.filter(proposal =>

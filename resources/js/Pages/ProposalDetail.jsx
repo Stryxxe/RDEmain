@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
+import { useRouteParams } from '../Components/RoleBased/InertiaRoleRouter';
 import { ArrowLeft, Download, Eye, X } from 'lucide-react';
 import apiService from '../services/api';
 
 const ProposalDetail = () => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const routeParams = useRouteParams();
+  const id = routeParams.id;
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -156,7 +157,7 @@ const ProposalDetail = () => {
             <h3 className="text-lg font-medium text-red-800 mb-2">Error Loading Proposal</h3>
             <p className="text-red-600 mb-4">{error}</p>
             <button
-              onClick={() => navigate('/proponent/projects')}
+              onClick={() => router.visit('/proponent/projects')}
               className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Back to Projects
@@ -194,7 +195,7 @@ const ProposalDetail = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => navigate('/proponent/projects')}
+              onClick={() => router.visit('/proponent/projects')}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-800 transition-colors duration-200 group"
             >
               <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
@@ -202,7 +203,7 @@ const ProposalDetail = () => {
             </button>
             
             <button
-              onClick={() => navigate(`/proponent/tracker/${id}`)}
+              onClick={() => router.visit(`/proponent/tracker/${id}`)}
               className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 group"
             >
               <Eye size={16} className="group-hover:scale-110 transition-transform duration-200" />

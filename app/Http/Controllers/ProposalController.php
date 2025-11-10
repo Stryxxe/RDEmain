@@ -6,6 +6,7 @@ use App\Models\Proposal;
 use App\Models\File;
 use App\Models\Notification;
 use App\Models\User;
+use App\Models\Endorsement;
 use App\Events\ProposalSubmitted;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -495,6 +496,57 @@ public function statistics(Request $request): JsonResponse
                 'sdg' => $sdgData
             ]
         ]);
+    }
+
+    /**
+     * Get proposals that have been endorsed by CM (Center Manager)
+     * Only returns proposals with approved endorsements from CM users
+     */
+    public function getCmEndorsedProposals(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            
+            // Load the role relationship if not already loaded
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // Only RDD users can access this endpoint
+            if (!$user->role || $user->role->userRole !== 'RDD') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only RDD users can access this endpoint.'
+                ], 403);
+            }
+
+            // Get proposals that have been endorsed by CM users with status 'approved'
+            // First, get all CM user IDs
+            $cmUserIds = User::whereHas('role', function($q) {
+                $q->where('userRole', 'CM');
+            })->pluck('userID');
+
+            // Get proposals that have approved endorsements from CM users
+            $proposals = Proposal::with(['status', 'files', 'user.department', 'user.role', 'endorsements.endorser.role'])
+                ->whereHas('endorsements', function($query) use ($cmUserIds) {
+                    $query->where('endorsementStatus', 'approved')
+                        ->whereIn('endorserID', $cmUserIds);
+                })
+                ->orderBy('proposalID', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $proposals
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch CM-endorsed proposals',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
