@@ -96,5 +96,6 @@ Route::middleware(['auth:sanctum', 'web'])->group(function () {
 // Admin - Users management (token auth only)
 Route::middleware(['auth:sanctum'])->group(function () {
     Route::get('/admin/users', [AdminUserController::class, 'index']);
+    Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
 });

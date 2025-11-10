@@ -155,15 +155,15 @@ export function AdminProvider({ children }) {
   const actions = {
     setLoading: (loading) => dispatch({ type: ACTIONS.SET_LOADING, payload: loading }),
     setError: (error) => dispatch({ type: ACTIONS.SET_ERROR, payload: error }),
-    addUser: (userData) => {
-      const newUser = {
-        id: `user_${Date.now()}`,
-        ...userData,
-        createdAt: new Date().toISOString(),
-        lastLogin: null,
-        avatar: `https://ui-avatars.com/api/?name=${userData.firstName}+${userData.lastName}&background=3b82f6&color=fff`
-      };
-      dispatch({ type: ACTIONS.ADD_USER, payload: newUser });
+    addUser: async (userData) => {
+      const response = await axios.post('/admin/users', userData, {
+        headers: { 'Accept': 'application/json' }
+      });
+      const createdUser = response?.data?.user;
+      if (createdUser) {
+        dispatch({ type: ACTIONS.ADD_USER, payload: createdUser });
+      }
+      return response?.data;
     },
     updateUser: async (userId, userData) => {
       const response = await axios.put(`/admin/users/${userId}`, userData, {

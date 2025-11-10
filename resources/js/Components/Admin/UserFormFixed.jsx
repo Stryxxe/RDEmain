@@ -41,19 +41,25 @@ const UserFormFixed = ({ user, onClose }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     if (!validateForm()) return;
     try {
       if (user) {
-        updateUser(user.id, formData);
+        await updateUser(user.id, formData);
         alert('User updated successfully!');
       } else {
-        addUser(formData);
-        alert('User added successfully!');
+        const result = await addUser(formData);
+        if (result?.temporaryPassword) {
+          alert(`User added successfully! Temporary password: ${result.temporaryPassword}`);
+        } else {
+          alert('User added successfully!');
+        }
       }
       onClose();
     } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('User save failed:', error?.response?.data || error?.message || error);
       alert('Error saving user. Please try again.');
     }
   };
