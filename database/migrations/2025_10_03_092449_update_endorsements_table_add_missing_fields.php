@@ -14,8 +14,7 @@ return new class extends Migration
         Schema::table('endorsements', function (Blueprint $table) {
             $table->foreignId('endorserID')->constrained('users', 'userID')->after('proposalID');
             $table->text('endorsementComments')->nullable()->after('endorserID');
-            $table->timestamp('endorsementDate')->useCurrent()->after('endorsementComments');
-            $table->string('endorsementStatus')->default('pending')->after('endorsementDate');
+            $table->string('endorsementStatus')->default('pending')->after('endorsementComments');
         });
     }
 
@@ -26,7 +25,7 @@ return new class extends Migration
     {
         Schema::table('endorsements', function (Blueprint $table) {
             $table->dropForeign(['endorserID']);
-            $table->dropColumn(['endorserID', 'endorsementComments', 'endorsementDate', 'endorsementStatus']);
+            $table->dropColumn(['endorserID', 'endorsementComments', 'endorsementStatus']);
         });
     }
 };

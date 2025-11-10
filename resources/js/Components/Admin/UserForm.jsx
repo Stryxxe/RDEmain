@@ -82,7 +82,7 @@ const UserForm = ({ user, onClose }) => {
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</nlabel>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
                     <div className="relative">
                       <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} className={`admin-input pl-10 ${errors.firstName ? 'border-red-500' : ''}`} placeholder="Enter first name" />
@@ -90,7 +90,7 @@ const UserForm = ({ user, onClose }) => {
                     {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</nlabel>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
                     <div className="relative">
                       <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                       <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} className={`admin-input pl-10 ${errors.lastName ? 'border-red-500' : ''}`} placeholder="Enter last name" />
@@ -99,7 +99,7 @@ const UserForm = ({ user, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</nlabel>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                   <div className="relative">
                     <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <input type="email" name="email" value={formData.email} onChange={handleChange} className={`admin-input pl-10 ${errors.email ? 'border-red-500' : ''}`} placeholder="Enter email address" />
@@ -107,7 +107,7 @@ const UserForm = ({ user, onClose }) => {
                   {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</nlabel>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
                   <div className="relative">
                     <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`admin-input pl-10 ${errors.phone ? 'border-red-500' : ''}`} placeholder="Enter phone number" />
@@ -115,7 +115,7 @@ const UserForm = ({ user, onClose }) => {
                   {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Department *</nlabel>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
                   <div className="relative">
                     <FiHome className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                     <input type="text" name="department" value={formData.department} onChange={handleChange} className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''}`} placeholder="Enter department" />
@@ -158,5 +158,6 @@ const UserForm = ({ user, onClose }) => {
 };
 
 export default UserForm;
+
 
 

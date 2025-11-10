@@ -12,7 +12,12 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('decisions', function (Blueprint $table) {
-            $table->id();
+            $table->id('decisionID');
+            $table->foreignId('proposalID')->constrained('proposals', 'proposalID');
+            $table->foreignId('decisionMakerID')->constrained('users', 'userID');
+            $table->string('decisionType', 50);
+            $table->text('decisionComments')->nullable();
+            $table->timestamp('decisionDate')->useCurrent();
             $table->timestamps();
         });
     }

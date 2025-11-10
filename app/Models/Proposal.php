@@ -25,6 +25,7 @@ class Proposal extends Model
         'dostSPs',
         'sustainableDevelopmentGoals',
         'proposedBudget',
+        'budgetBreakdown',
         'revisionFile',
         'matrixOfCompliance',
         'uploadedAt',
@@ -37,6 +38,7 @@ class Proposal extends Model
         'dostSPs' => 'array',
         'sustainableDevelopmentGoals' => 'array',
         'matrixOfCompliance' => 'array',
+        'budgetBreakdown' => 'array',
         'proposedBudget' => 'decimal:2',
         'uploadedAt' => 'datetime'
     ];

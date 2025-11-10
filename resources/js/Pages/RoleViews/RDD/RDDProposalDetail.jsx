@@ -72,7 +72,47 @@ const RDDProposalDetail = () => {
     );
   }
 
-  // Transform the proposal data to match the expected format
+  const formatCurrency = (value) => {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return '₱0';
+    return `₱${numeric.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
+  const buildBudgetBreakdown = (budget, breakdown) => {
+    const total = Number(budget) || 0;
+    const source =
+      (breakdown && Object.keys(breakdown).length > 0)
+        ? breakdown
+        : total > 0
+          ? {
+              personnel: total * 0.5,
+              equipment: total * 0.2,
+              materials: total * 0.15,
+              travel: total * 0.1,
+              other: total * 0.05,
+            }
+          : {};
+
+    const formatted = {};
+    let computedTotal = 0;
+    Object.entries(source).forEach(([category, amount]) => {
+      const numericAmount = Number(amount) || 0;
+      computedTotal += numericAmount;
+      formatted[category] = formatCurrency(numericAmount);
+    });
+
+    if (total > 0) {
+      formatted.total = formatCurrency(total);
+    } else if (computedTotal > 0) {
+      formatted.total = formatCurrency(computedTotal);
+    }
+
+    return formatted;
+  };
+
+  const budgetAmount = Number(proposal.proposedBudget) || 0;
+  const formattedBudgetBreakdown = buildBudgetBreakdown(budgetAmount, proposal.budgetBreakdown);
+
   const transformedProposal = {
     id: `PRO-2025-${String(proposal.proposalID).padStart(5, '0')}`,
     title: proposal.researchTitle,
@@ -84,7 +124,7 @@ const RDDProposalDetail = () => {
     priority: 'Medium', // Default priority since it's not in the database
     submittedDate: new Date(proposal.uploadedAt).toISOString().split('T')[0],
     reviewDeadline: new Date(new Date(proposal.uploadedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from submission
-    budget: `₱${Number(proposal.proposedBudget).toLocaleString()}`,
+    budget: formatCurrency(budgetAmount),
     duration: '12 months', // Default duration since it's not in the database
     startDate: new Date(proposal.uploadedAt).toISOString().split('T')[0],
     endDate: new Date(new Date(proposal.uploadedAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year from submission
@@ -97,14 +137,7 @@ const RDDProposalDetail = () => {
       'Knowledge transfer to stakeholders',
       'Policy recommendations'
     ],
-    budgetBreakdown: {
-      personnel: `₱${Number(proposal.proposedBudget * 0.5).toLocaleString()}`,
-      equipment: `₱${Number(proposal.proposedBudget * 0.25).toLocaleString()}`,
-      materials: `₱${Number(proposal.proposedBudget * 0.15).toLocaleString()}`,
-      travel: `₱${Number(proposal.proposedBudget * 0.05).toLocaleString()}`,
-      other: `₱${Number(proposal.proposedBudget * 0.05).toLocaleString()}`,
-      total: `₱${Number(proposal.proposedBudget).toLocaleString()}`
-    },
+    budgetBreakdown: formattedBudgetBreakdown,
     timeline: [
       { phase: 'Literature Review', start: proposal.uploadedAt, end: new Date(new Date(proposal.uploadedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'Completed' },
       { phase: 'Data Collection', start: new Date(new Date(proposal.uploadedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], end: new Date(new Date(proposal.uploadedAt).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: proposal.statusID >= 2 ? 'In Progress' : 'Pending' },

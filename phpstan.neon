@@ -1,0 +1,17 @@
+includes:
+    - vendor/nunomaduro/larastan/extension.neon
+
+parameters:
+    paths:
+        - app
+        - bootstrap/app.php
+        - config
+        - database
+        - routes
+    level: 6
+    tmpDir: storage/framework/cache/phpstan
+    inferPrivatePropertyTypeFromConstructor: true
+    scanDirectories:
+        - database/factories
+        - database/seeders
+

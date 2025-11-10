@@ -11,6 +11,29 @@ use Carbon\Carbon;
 
 class AdditionalProposalSeeder extends Seeder
 {
+    private function generateBudgetBreakdown(float $total): array
+    {
+        if ($total <= 0) {
+            return [];
+        }
+
+        $breakdown = [
+            'personnel' => round($total * 0.5, 2),
+            'equipment' => round($total * 0.2, 2),
+            'materials' => round($total * 0.15, 2),
+            'travel' => round($total * 0.1, 2),
+            'other' => round($total * 0.05, 2),
+        ];
+
+        $allocated = array_sum($breakdown);
+        $difference = round($total - $allocated, 2);
+        if ($difference !== 0.0) {
+            $breakdown['other'] += $difference;
+        }
+
+        return $breakdown;
+    }
+
     /**
      * Run the database seeds.
      */
@@ -70,6 +93,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
                 'sustainableDevelopmentGoals' => ['SDG 4: Quality Education', 'SDG 10: Reduced Inequalities'],
                 'proposedBudget' => 800000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(800000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Educational Technology', 'Mathematics Education', 'Digital Learning', 'Curriculum Development'],
                     'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
@@ -89,6 +113,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 4: Social Sciences and Humanities', 'Priority 2: Information and Communications Technology'],
                 'sustainableDevelopmentGoals' => ['SDG 11: Sustainable Cities and Communities', 'SDG 4: Quality Education'],
                 'proposedBudget' => 950000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(950000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Cultural Studies', 'Heritage Preservation', 'Digital Archives', 'Community Engagement'],
                     'dostSPs' => ['Priority 4: Social Sciences and Humanities', 'Priority 2: Information and Communications Technology'],
@@ -109,6 +134,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 3: Health', 'Priority 2: Information and Communications Technology'],
                 'sustainableDevelopmentGoals' => ['SDG 3: Good Health and Well-being', 'SDG 10: Reduced Inequalities'],
                 'proposedBudget' => 1200000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(1200000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Telemedicine', 'Rural Healthcare', 'Digital Health', 'Healthcare Access'],
                     'dostSPs' => ['Priority 3: Health', 'Priority 2: Information and Communications Technology'],
@@ -128,6 +154,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 3: Health', 'Priority 1: Agriculture, Aquatic and Natural Resources'],
                 'sustainableDevelopmentGoals' => ['SDG 2: Zero Hunger', 'SDG 3: Good Health and Well-being'],
                 'proposedBudget' => 700000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(700000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Public Health', 'Nutrition', 'Child Health', 'Community Intervention'],
                     'dostSPs' => ['Priority 3: Health', 'Priority 1: Agriculture, Aquatic and Natural Resources'],
@@ -148,6 +175,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 1: Agriculture, Aquatic and Natural Resources', 'Priority 2: Information and Communications Technology'],
                 'sustainableDevelopmentGoals' => ['SDG 9: Industry, Innovation and Infrastructure', 'SDG 11: Sustainable Cities and Communities'],
                 'proposedBudget' => 1500000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(1500000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Materials Science', 'Sustainable Construction', 'Environmental Engineering', 'Civil Engineering'],
                     'dostSPs' => ['Priority 1: Agriculture, Aquatic and Natural Resources', 'Priority 2: Information and Communications Technology'],
@@ -168,6 +196,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 1: Agriculture, Aquatic and Natural Resources', 'Priority 3: Health'],
                 'sustainableDevelopmentGoals' => ['SDG 14: Life Below Water', 'SDG 8: Decent Work and Economic Growth'],
                 'proposedBudget' => 1100000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(1100000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Marine Biology', 'Aquaculture', 'Environmental Conservation', 'Sustainable Development'],
                     'dostSPs' => ['Priority 1: Agriculture, Aquatic and Natural Resources', 'Priority 3: Health'],
@@ -187,6 +216,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 1: Agriculture, Aquatic and Natural Resources', 'Priority 2: Information and Communications Technology'],
                 'sustainableDevelopmentGoals' => ['SDG 2: Zero Hunger', 'SDG 9: Industry, Innovation and Infrastructure'],
                 'proposedBudget' => 1300000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(1300000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Smart Agriculture', 'Precision Farming', 'IoT Technology', 'Crop Science'],
                     'dostSPs' => ['Priority 1: Agriculture, Aquatic and Natural Resources', 'Priority 2: Information and Communications Technology'],
@@ -207,6 +237,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
                 'sustainableDevelopmentGoals' => ['SDG 11: Sustainable Cities and Communities', 'SDG 9: Industry, Innovation and Infrastructure'],
                 'proposedBudget' => 1800000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(1800000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Urban Planning', 'Smart Cities', 'Infrastructure Development', 'Digital Integration'],
                     'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
@@ -226,6 +257,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
                 'sustainableDevelopmentGoals' => ['SDG 8: Decent Work and Economic Growth', 'SDG 9: Industry, Innovation and Infrastructure'],
                 'proposedBudget' => 2000000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(2000000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Digital Innovation', 'Entrepreneurship', 'Technology Transfer', 'Startup Ecosystem'],
                     'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
@@ -245,6 +277,7 @@ class AdditionalProposalSeeder extends Seeder
                 'dostSPs' => ['Priority 4: Social Sciences and Humanities', 'Priority 1: Agriculture, Aquatic and Natural Resources'],
                 'sustainableDevelopmentGoals' => ['SDG 10: Reduced Inequalities', 'SDG 16: Peace, Justice and Strong Institutions'],
                 'proposedBudget' => 900000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(900000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Social Impact Assessment', 'Development Studies', 'Community Research', 'Policy Analysis'],
                     'dostSPs' => ['Priority 4: Social Sciences and Humanities', 'Priority 1: Agriculture, Aquatic and Natural Resources'],

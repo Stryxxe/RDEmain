@@ -135,7 +135,7 @@ export function AdminProvider({ children }) {
     async function loadUsers() {
       dispatch({ type: ACTIONS.SET_LOADING, payload: true });
       try {
-        const response = await axios.get('/api/admin/users', {
+        const response = await axios.get('/admin/users', {
           headers: { 'Accept': 'application/json' }
         });
         const data = response?.data || {};
@@ -165,8 +165,15 @@ export function AdminProvider({ children }) {
       };
       dispatch({ type: ACTIONS.ADD_USER, payload: newUser });
     },
-    updateUser: (userId, userData) => {
-      dispatch({ type: ACTIONS.UPDATE_USER, payload: { id: userId, ...userData } });
+    updateUser: async (userId, userData) => {
+      const response = await axios.put(`/admin/users/${userId}`, userData, {
+        headers: { 'Accept': 'application/json' }
+      });
+      const updatedUser = response?.data?.user;
+      if (updatedUser) {
+        dispatch({ type: ACTIONS.UPDATE_USER, payload: updatedUser });
+      }
+      return updatedUser;
     },
     deleteUser: (userId) => {
       dispatch({ type: ACTIONS.DELETE_USER, payload: userId });

@@ -10,6 +10,29 @@ use Carbon\Carbon;
 
 class SarahJohnsonProposalSeeder extends Seeder
 {
+    private function generateBudgetBreakdown(float $total): array
+    {
+        if ($total <= 0) {
+            return [];
+        }
+
+        $breakdown = [
+            'personnel' => round($total * 0.55, 2),
+            'equipment' => round($total * 0.18, 2),
+            'materials' => round($total * 0.12, 2),
+            'travel' => round($total * 0.1, 2),
+            'other' => round($total * 0.05, 2),
+        ];
+
+        $allocated = array_sum($breakdown);
+        $difference = round($total - $allocated, 2);
+        if ($difference !== 0.0) {
+            $breakdown['other'] += $difference;
+        }
+
+        return $breakdown;
+    }
+
     /**
      * Run the database seeds.
      */
@@ -52,6 +75,7 @@ class SarahJohnsonProposalSeeder extends Seeder
                     'SDG 10: Reduced Inequalities'
                 ],
                 'proposedBudget' => 1200000.00,
+                'budgetBreakdown' => $this->generateBudgetBreakdown(1200000.00),
                 'matrixOfCompliance' => [
                     'researchAgenda' => ['Artificial Intelligence', 'Educational Technology', 'Learning Analytics', 'Assessment Systems'],
                     'dostSPs' => ['Priority 2: Information and Communications Technology', 'Priority 4: Social Sciences and Humanities'],
@@ -249,6 +273,13 @@ class SarahJohnsonProposalSeeder extends Seeder
                 'userID' => $sarahJohnson->userID
             ]
         ];
+
+        foreach ($proposals as &$proposal) {
+            if (!isset($proposal['budgetBreakdown'])) {
+                $proposal['budgetBreakdown'] = $this->generateBudgetBreakdown((float) ($proposal['proposedBudget'] ?? 0));
+            }
+        }
+        unset($proposal);
 
         foreach ($proposals as $proposalData) {
             // Check if proposal already exists by title

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BiSearch, BiFilter, BiDownload, BiShow, BiCalendar } from 'react-icons/bi';
+import { BiSearch, BiDownload, BiShow, BiCalendar } from 'react-icons/bi';
 import rddService from '../../../services/rddService';
 
 const RDDProgressReport = () => {
@@ -7,8 +7,45 @@ const RDDProgressReport = () => {
   const [filterStatus, setFilterStatus] = useState('All');
   const [filterPeriod, setFilterPeriod] = useState('All');
   const [progressReports, setProgressReports] = useState([]);
+  const [statusOptions, setStatusOptions] = useState([]);
+  const [periodOptions, setPeriodOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const statusProgressMap = {
+    1: 20, // Under Review
+    2: 45, // Approved
+    3: 10, // Rejected
+    4: 70, // Ongoing
+    5: 100, // Completed
+  };
+
+  const formatCurrency = (value, fallback = null) => {
+    const numericValue = Number(value);
+    if (Number.isFinite(numericValue)) {
+      return `₱${numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+    return fallback;
+  };
+
+  const formatDate = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return null;
+    }
+    return new Intl.DateTimeFormat('en-PH', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(date);
+  };
+
+  const buildReportPeriod = (date) => {
+    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+      return 'No reporting period';
+    }
+    const quarterIndex = Math.floor(date.getMonth() / 3) + 1;
+    return `Q${quarterIndex} ${date.getFullYear()}`;
+  };
 
   useEffect(() => {
     fetchProgressReports();
@@ -20,32 +57,59 @@ const RDDProgressReport = () => {
       setError(null);
       const response = await rddService.getProposalsForReview();
       if (response.success) {
-        // Transform the data to match the expected format for progress reports
-        const transformedReports = response.data.map(proposal => {
-          const currentDate = new Date();
-          const dueDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0); // End of current month
-          const isOverdue = dueDate < currentDate && proposal.statusID !== 5; // Not completed
-          const sourceDate = proposal.uploadedAt ? new Date(proposal.uploadedAt) : currentDate;
-          const quarterIndex = Math.floor(sourceDate.getMonth() / 3) + 1; // 1-4
-          const dynamicReportPeriod = `Q${quarterIndex} ${sourceDate.getFullYear()}`;
-          
+        const transformedReports = response.data.map((proposal) => {
+          const uploadedAt = proposal.uploadedAt ? new Date(proposal.uploadedAt) : null;
+          const updatedAt = proposal.updated_at ? new Date(proposal.updated_at) : null;
+          const reportPeriod = buildReportPeriod(uploadedAt);
+          const statusName = proposal.status?.statusName || 'Unknown';
+          const statusId = proposal.statusID;
+          const proposedBudgetValue = proposal.proposedBudget ?? null;
+          const budgetUtilizedValue = proposal.actualBudgetUtilized ?? proposal.budgetUtilized ?? null;
+          const hasBudgetUtilized = Number.isFinite(Number(budgetUtilizedValue));
+          const hasTotalBudget = Number.isFinite(Number(proposedBudgetValue));
+
+          const formattedSubmittedDate = formatDate(uploadedAt);
+          const formattedUpdatedDate = formatDate(updatedAt);
+
           return {
-            id: proposal.proposalID, // Use actual database ID for routing
-            displayId: `PR-2025-${String(proposal.proposalID).padStart(5, '0')}`, // Formatted ID for display
-            projectTitle: proposal.researchTitle,
-            author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}` : 'Unknown',
-            college: proposal.user?.department?.name || 'Unknown Department',
-            status: isOverdue ? 'Overdue' : (proposal.status?.statusName || 'Draft'),
-            reportPeriod: dynamicReportPeriod,
-            dueDate: dueDate.toISOString().split('T')[0],
-            submittedDate: proposal.statusID === 5 ? dueDate.toISOString().split('T')[0] : null,
-            progress: proposal.statusID === 5 ? 100 : (proposal.statusID === 4 ? 50 : 25),
-            budgetUtilized: `₱${Number(proposal.proposedBudget * 0.25).toLocaleString()}`,
-            totalBudget: `₱${Number(proposal.proposedBudget).toLocaleString()}`,
-            nextMilestone: 'Data Collection Phase', // Default milestone
-            issues: isOverdue ? 'Report overdue' : 'None'
+            id: proposal.proposalID,
+            displayId: `PR-${String(proposal.proposalID).padStart(5, '0')}`,
+            projectTitle: proposal.researchTitle || 'Untitled Proposal',
+            author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}`.trim() : 'Unknown User',
+            college: proposal.user?.department?.name || 'Unassigned Department',
+            status: statusName,
+            statusId,
+            reportPeriod,
+            reportPeriodSortKey: uploadedAt ? uploadedAt.getTime() : Number.MAX_SAFE_INTEGER,
+            submittedDate: formattedSubmittedDate,
+            lastUpdated: formattedUpdatedDate,
+            progress: Math.min(Math.max(statusProgressMap[statusId] ?? 0, 0), 100),
+            hasBudgetUtilized,
+            hasTotalBudget,
+            formattedBudgetUtilized: formatCurrency(budgetUtilizedValue, 'Not reported'),
+            formattedTotalBudget: formatCurrency(proposedBudgetValue, 'Not set'),
           };
         });
+
+        const uniqueStatuses = Array.from(
+          new Set(transformedReports.map((report) => report.status).filter(Boolean))
+        ).sort((a, b) => a.localeCompare(b));
+        setStatusOptions(uniqueStatuses);
+
+        const periodMap = new Map();
+        transformedReports.forEach((report) => {
+          if (!report.reportPeriod) return;
+          const existingSortKey = periodMap.get(report.reportPeriod);
+          if (existingSortKey === undefined || report.reportPeriodSortKey < existingSortKey) {
+            periodMap.set(report.reportPeriod, report.reportPeriodSortKey);
+          }
+        });
+
+        const sortedPeriods = Array.from(periodMap.entries())
+          .sort((a, b) => a[1] - b[1])
+          .map(([label]) => label);
+        setPeriodOptions(sortedPeriods);
+
         setProgressReports(transformedReports);
       } else {
         setError('Failed to fetch progress reports');
@@ -58,27 +122,39 @@ const RDDProgressReport = () => {
     }
   };
 
-  const filteredReports = progressReports.filter(report => {
-    const matchesSearch = report.projectTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.college.toLowerCase().includes(searchTerm.toLowerCase());
-    
+  const filteredReports = progressReports.filter((report) => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    const matchesSearch =
+      normalizedSearch.length === 0 ||
+      [report.projectTitle, report.author, report.college, report.displayId]
+        .map((field) => (field || '').toLowerCase())
+        .some((field) => field.includes(normalizedSearch));
+
     const matchesStatus = filterStatus === 'All' || report.status === filterStatus;
     const matchesPeriod = filterPeriod === 'All' || report.reportPeriod === filterPeriod;
-    
+
     return matchesSearch && matchesStatus && matchesPeriod;
   });
 
+  const summary = {
+    total: progressReports.length,
+    underReview: progressReports.filter((report) => report.statusId === 1).length,
+    ongoing: progressReports.filter((report) => report.statusId === 4).length,
+    completed: progressReports.filter((report) => report.statusId === 5).length,
+  };
+
   const getStatusClass = (status) => {
     switch (status) {
-      case 'Approved':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'Submitted':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Draft':
+      case 'Under Review':
         return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Overdue':
+      case 'Approved':
+        return 'bg-blue-100 text-blue-800 border-blue-300';
+      case 'Rejected':
         return 'bg-red-100 text-red-800 border-red-300';
+      case 'Ongoing':
+        return 'bg-orange-100 text-orange-800 border-orange-300';
+      case 'Completed':
+        return 'bg-green-100 text-green-800 border-green-300';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-300';
     }
@@ -88,11 +164,8 @@ const RDDProgressReport = () => {
     if (progress >= 80) return 'bg-green-500';
     if (progress >= 60) return 'bg-blue-500';
     if (progress >= 40) return 'bg-yellow-500';
-    return 'bg-red-500';
-  };
-
-  const isOverdue = (dueDate) => {
-    return new Date(dueDate) < new Date();
+    if (progress > 0) return 'bg-orange-500';
+    return 'bg-gray-400';
   };
 
   if (loading) {
@@ -166,10 +239,11 @@ const RDDProgressReport = () => {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <option value="All">All Status</option>
-                <option value="Draft">Draft</option>
-                <option value="Submitted">Submitted</option>
-                <option value="Approved">Approved</option>
-                <option value="Overdue">Overdue</option>
+                {statusOptions.map((status) => (
+                  <option key={status} value={status}>
+                    {status}
+                  </option>
+                ))}
               </select>
               
               <select 
@@ -178,10 +252,11 @@ const RDDProgressReport = () => {
                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
               >
                 <option value="All">All Periods</option>
-                <option value="Q1 2025">Q1 2025</option>
-                <option value="Q2 2025">Q2 2025</option>
-                <option value="Q3 2025">Q3 2025</option>
-                <option value="Q4 2025">Q4 2025</option>
+                {periodOptions.map((period) => (
+                  <option key={period} value={period}>
+                    {period}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -203,33 +278,26 @@ const RDDProgressReport = () => {
       <div className="p-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200">
           {/* Table Header */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
             <div>Project Details</div>
             <div>Author & College</div>
-            <div>Status & Period</div>
+            <div>Status & Timeline</div>
             <div>Progress</div>
             <div>Budget</div>
-            <div>Next Milestone</div>
             <div>Actions</div>
           </div>
 
           {/* Table Body */}
           <div className="divide-y divide-gray-100">
-            {filteredReports.map((report, index) => (
-              <div key={index} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150">
+            {filteredReports.map((report) => (
+              <div key={report.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150">
                 {/* Project Details */}
                 <div>
                   <h3 className="font-bold text-gray-900 mb-1">{report.projectTitle}</h3>
                   <div className="text-sm text-gray-600">ID: {report.displayId}</div>
                   <div className="text-sm text-gray-600">
-                    Due: {report.dueDate} 
-                    {isOverdue(report.dueDate) && report.status !== 'Approved' && (
-                      <span className="text-red-600 font-semibold ml-2">(Overdue)</span>
-                    )}
+                    {report.submittedDate ? `Submitted: ${report.submittedDate}` : 'Submission pending'}
                   </div>
-                  {report.submittedDate && (
-                    <div className="text-sm text-gray-600">Submitted: {report.submittedDate}</div>
-                  )}
                 </div>
 
                 {/* Author & College */}
@@ -238,14 +306,19 @@ const RDDProgressReport = () => {
                   <div className="text-sm text-gray-600">{report.college}</div>
                 </div>
 
-                {/* Status & Period */}
+                {/* Status & Timeline */}
                 <div>
                   <div className="mb-2">
                     <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusClass(report.status)}`}>
                       {report.status}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-600">{report.reportPeriod}</div>
+                  <div className="text-sm text-gray-600">
+                    {report.reportPeriod || 'No reporting period'}
+                  </div>
+                  {report.lastUpdated && (
+                    <div className="text-xs text-gray-500 mt-1">Updated: {report.lastUpdated}</div>
+                  )}
                 </div>
 
                 {/* Progress */}
@@ -263,16 +336,14 @@ const RDDProgressReport = () => {
 
                 {/* Budget */}
                 <div>
-                  <div className="font-bold text-gray-900">{report.budgetUtilized}</div>
-                  <div className="text-sm text-gray-600">of {report.totalBudget}</div>
-                </div>
-
-                {/* Next Milestone */}
-                <div>
-                  <div className="text-sm text-gray-900">{report.nextMilestone}</div>
-                  {report.issues && report.issues !== 'None' && (
-                    <div className="text-xs text-red-600 mt-1">⚠️ {report.issues}</div>
-                  )}
+                  <div className={`font-bold ${report.hasBudgetUtilized ? 'text-gray-900' : 'text-gray-500'}`}>
+                    {report.hasBudgetUtilized ? report.formattedBudgetUtilized : 'Not reported'}
+                  </div>
+                  <div className="text-sm text-gray-600">
+                    {report.hasTotalBudget
+                      ? `of ${report.formattedTotalBudget}`
+                      : 'Total budget not recorded'}
+                  </div>
                 </div>
 
                 {/* Actions */}
@@ -292,26 +363,26 @@ const RDDProgressReport = () => {
       <div className="p-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-gray-900">{progressReports.length}</div>
-            <div className="text-sm text-gray-600">Total Reports</div>
+            <div className="text-2xl font-bold text-gray-900">{summary.total}</div>
+            <div className="text-sm text-gray-600">Total Proposals</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-yellow-600">
-              {progressReports.filter(r => r.status === 'Draft').length}
+            <div className="text-2xl font-bold text-amber-600">
+              {summary.underReview}
             </div>
-            <div className="text-sm text-gray-600">Draft</div>
+            <div className="text-sm text-gray-600">Under Review</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
             <div className="text-2xl font-bold text-blue-600">
-              {progressReports.filter(r => r.status === 'Submitted').length}
+              {summary.ongoing}
             </div>
-            <div className="text-sm text-gray-600">Submitted</div>
+            <div className="text-sm text-gray-600">Ongoing</div>
           </div>
           <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-red-600">
-              {progressReports.filter(r => r.status === 'Overdue').length}
+            <div className="text-2xl font-bold text-green-600">
+              {summary.completed}
             </div>
-            <div className="text-sm text-gray-600">Overdue</div>
+            <div className="text-sm text-gray-600">Completed</div>
           </div>
         </div>
       </div>

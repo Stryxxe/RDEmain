@@ -12,6 +12,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Str;
 
 class ProposalController extends Controller
 {
@@ -134,6 +135,11 @@ class ProposalController extends Controller
         }
 
         try {
+            $budgetBreakdown = $this->prepareBudgetBreakdown(
+                $request->input('budgetBreakdown'),
+                (float) $request->proposedBudget
+            );
+
             // Parse JSON strings from frontend
             $researchAgenda = json_decode($request->researchAgenda, true);
             $dostSPs = json_decode($request->dostSPs, true);
@@ -153,6 +159,7 @@ class ProposalController extends Controller
                 'dostSPs' => $dostSPs,
                 'sustainableDevelopmentGoals' => $sustainableDevelopmentGoals,
                 'proposedBudget' => $request->proposedBudget,
+                'budgetBreakdown' => $budgetBreakdown,
                 'userID' => $user->userID,
                 'statusID' => 1, // Assuming 1 is "Under Review" status
                 'matrixOfCompliance' => [
@@ -160,6 +167,7 @@ class ProposalController extends Controller
                     'dostSPs' => $dostSPs,
                     'sustainableDevelopmentGoals' => $sustainableDevelopmentGoals,
                     'proposedBudget' => $request->proposedBudget,
+                    'budgetBreakdown' => $budgetBreakdown,
                     'researchCenter' => $researchCenter,
                     'description' => $request->description,
                     'objectives' => $request->objectives
@@ -288,7 +296,8 @@ class ProposalController extends Controller
             'researchAgenda' => 'sometimes|array',
             'dostSPs' => 'sometimes|array',
             'sustainableDevelopmentGoals' => 'sometimes|array',
-            'proposedBudget' => 'sometimes|numeric|min:0'
+            'proposedBudget' => 'sometimes|numeric|min:0',
+            'budgetBreakdown' => 'sometimes|array'
         ]);
 
         if ($validator->fails()) {
@@ -304,13 +313,29 @@ class ProposalController extends Controller
                 'researchTitle', 'description', 'objectives', 'researchCenter'
             ]);
 
-            if ($request->hasAny(['researchAgenda', 'dostSPs', 'sustainableDevelopmentGoals', 'proposedBudget'])) {
+            $proposedBudget = $request->has('proposedBudget')
+                ? (float) $request->proposedBudget
+                : (float) $proposal->proposedBudget;
+
+            if ($request->has('budgetBreakdown')) {
+                $updateData['budgetBreakdown'] = $this->prepareBudgetBreakdown(
+                    $request->input('budgetBreakdown'),
+                    $proposedBudget
+                );
+            } elseif ($request->has('proposedBudget')) {
+                $updateData['budgetBreakdown'] = $this->generateDefaultBudgetBreakdown($proposedBudget);
+            }
+
+            if ($request->hasAny(['researchAgenda', 'dostSPs', 'sustainableDevelopmentGoals', 'proposedBudget', 'budgetBreakdown'])) {
                 $matrixData = $proposal->matrixOfCompliance ?: [];
                 
                 if ($request->has('researchAgenda')) $matrixData['researchAgenda'] = $request->researchAgenda;
                 if ($request->has('dostSPs')) $matrixData['dostSPs'] = $request->dostSPs;
                 if ($request->has('sustainableDevelopmentGoals')) $matrixData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
                 if ($request->has('proposedBudget')) $matrixData['proposedBudget'] = $request->proposedBudget;
+                if (array_key_exists('budgetBreakdown', $updateData)) {
+                    $matrixData['budgetBreakdown'] = $updateData['budgetBreakdown'];
+                }
                 if ($request->has('researchCenter')) $matrixData['researchCenter'] = $request->researchCenter;
                 if ($request->has('description')) $matrixData['description'] = $request->description;
                 if ($request->has('objectives')) $matrixData['objectives'] = $request->objectives;
@@ -463,7 +488,7 @@ public function statistics(Request $request): JsonResponse
                     'totalProposals' => $totalProposals,
                     'totalOngoing' => $totalOngoing,
                     'totalCompleted' => $totalCompleted,
-                    'completionRate' => $completionRate
+            'completionRate' => $completionRate
                 ],
                 'rdeAgenda' => $rdeAgendaData,
                 'dost6Ps' => $dost6PsData,
@@ -477,35 +502,74 @@ public function statistics(Request $request): JsonResponse
      */
     private function getRdeAgendaData($proposals)
     {
-        $rdeAgendas = [
-            'Agriculture, Aquatic, and Agro-Forestry' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
-            'Business and Trade' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
-            'Social Sciences and Education' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
-            'Engineering and Technology' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
-            'Environment and Natural Resources' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
-            'Health and Wellness' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
-            'Peace and Security' => ['ongoing' => 0, 'completed' => 0, 'total' => 0],
+        $officialAgendas = [
+            'Agriculture, Aquatic, and Agro-Forestry',
+            'Business and Trade',
+            'Social Sciences and Education',
+            'Engineering and Technology',
+            'Environment and Natural Resources',
+            'Health and Wellness',
+            'Peace and Security',
         ];
+
+        $officialData = collect($officialAgendas)
+            ->mapWithKeys(function ($agenda) {
+                return [$agenda => [
+                    'name' => $agenda,
+                    'ongoing' => 0,
+                    'completed' => 0,
+                    'other' => 0,
+                    'rawTotal' => 0,
+                ]];
+            })
+            ->all();
+
+        $additionalData = [];
 
         foreach ($proposals as $proposal) {
             $agendas = $proposal->researchAgenda ?? [];
             $status = $proposal->statusID;
-            
+
             foreach ($agendas as $agenda) {
-                if (isset($rdeAgendas[$agenda])) {
-                    $rdeAgendas[$agenda]['total']++;
-                    if ($status == 4) { // Ongoing
-                        $rdeAgendas[$agenda]['ongoing']++;
-                    } elseif ($status == 5) { // Completed
-                        $rdeAgendas[$agenda]['completed']++;
-                    }
+                $match = $this->matchOfficialAgenda($agenda, $officialAgendas);
+                $key = $match ?? $this->formatAgendaLabel($agenda);
+
+                $bucket = $match !== null ? $officialData[$match] : ($additionalData[$key] ?? [
+                    'name' => $key,
+                    'ongoing' => 0,
+                    'completed' => 0,
+                    'other' => 0,
+                    'rawTotal' => 0,
+                ]);
+
+                $bucket['rawTotal']++;
+
+                if ($status === 4) {
+                    $bucket['ongoing']++;
+                } elseif ($status === 5) {
+                    $bucket['completed']++;
+                } else {
+                    $bucket['other']++;
+                }
+
+                if ($match !== null) {
+                    $officialData[$match] = $bucket;
+                } else {
+                    $additionalData[$key] = $bucket;
                 }
             }
         }
 
-        return array_map(function($name, $data) {
-            return array_merge(['name' => $name], $data);
-        }, array_keys($rdeAgendas), array_values($rdeAgendas));
+        return collect($officialData)
+            ->merge($additionalData)
+            ->filter(fn ($item) => ($item['ongoing'] + $item['completed'] + $item['other']) > 0)
+            ->map(function ($item) {
+                $item['total'] = $item['ongoing'] + $item['completed'];
+                unset($item['rawTotal']);
+                return $item;
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -513,38 +577,52 @@ public function statistics(Request $request): JsonResponse
      */
     private function getDost6PsData($proposals)
     {
-        $dost6Ps = [
+        $officialCategories = [
             'Publications' => 0,
             'Patent' => 0,
             'Product' => 0,
             'People Services' => 0,
-            'Places and Partner' => 0,
+            'Places and Partnership' => 0,
             'Policies' => 0,
         ];
 
+        $additionalCategories = [];
+
         foreach ($proposals as $proposal) {
             $dostSPs = $proposal->dostSPs ?? [];
+
             foreach ($dostSPs as $dostSP) {
-                // Map DOST SPs to 6Ps categories
-                if (strpos($dostSP, 'Publications') !== false) {
-                    $dost6Ps['Publications']++;
-                } elseif (strpos($dostSP, 'Patent') !== false) {
-                    $dost6Ps['Patent']++;
-                } elseif (strpos($dostSP, 'Product') !== false) {
-                    $dost6Ps['Product']++;
-                } elseif (strpos($dostSP, 'People') !== false) {
-                    $dost6Ps['People Services']++;
-                } elseif (strpos($dostSP, 'Places') !== false || strpos($dostSP, 'Partner') !== false) {
-                    $dost6Ps['Places and Partner']++;
-                } elseif (strpos($dostSP, 'Policies') !== false) {
-                    $dost6Ps['Policies']++;
+                $category = $this->mapDostValueToCategory($dostSP);
+
+                if ($category !== null && array_key_exists($category, $officialCategories)) {
+                    $officialCategories[$category]++;
+                } else {
+                    $label = $this->formatDostLabel($dostSP);
+                    if (!isset($additionalCategories[$label])) {
+                        $additionalCategories[$label] = 0;
+                    }
+                    $additionalCategories[$label]++;
                 }
             }
         }
 
-        return array_map(function($name, $value) {
-            return ['name' => $name, 'value' => $value];
-        }, array_keys($dost6Ps), array_values($dost6Ps));
+        $data = collect($officialCategories)
+            ->map(function ($count, $name) {
+                return ['name' => $name, 'value' => $count];
+            })
+            ->filter(fn ($item) => $item['value'] > 0)
+            ->values();
+
+        foreach ($additionalCategories as $label => $count) {
+            if ($count > 0) {
+                $data->push(['name' => $label, 'value' => $count]);
+            }
+        }
+
+        return $data
+            ->sortByDesc('value')
+            ->values()
+            ->all();
     }
 
     /**
@@ -552,41 +630,250 @@ public function statistics(Request $request): JsonResponse
      */
     private function getSdgData($proposals)
     {
-        $sdgData = [
-            '1' => ['fullName' => 'No Poverty', 'value' => 0, 'color' => '#E5243B'],
-            '2' => ['fullName' => 'Zero Hunger', 'value' => 0, 'color' => '#DDA63A'],
-            '3' => ['fullName' => 'Good Health and Well-being', 'value' => 0, 'color' => '#4C9F38'],
-            '4' => ['fullName' => 'Quality Education', 'value' => 0, 'color' => '#C5192D'],
-            '5' => ['fullName' => 'Gender Equality', 'value' => 0, 'color' => '#FF3A21'],
-            '6' => ['fullName' => 'Clean Water and Sanitation', 'value' => 0, 'color' => '#26BDE2'],
-            '7' => ['fullName' => 'Affordable and Clean Energy', 'value' => 0, 'color' => '#FCC30B'],
-            '8' => ['fullName' => 'Decent Work and Economic Growth', 'value' => 0, 'color' => '#A21942'],
-            '9' => ['fullName' => 'Industry, Innovation and Infrastructure', 'value' => 0, 'color' => '#FD6925'],
-            '10' => ['fullName' => 'Reduced Inequalities', 'value' => 0, 'color' => '#DD1367'],
-            '11' => ['fullName' => 'Sustainable Cities and Communities', 'value' => 0, 'color' => '#FD9D24'],
-            '12' => ['fullName' => 'Responsible Consumption and Production', 'value' => 0, 'color' => '#BF8B2E'],
-            '13' => ['fullName' => 'Climate Action', 'value' => 0, 'color' => '#3F7E44'],
-            '14' => ['fullName' => 'Life Below Water', 'value' => 0, 'color' => '#0A97D9'],
-            '15' => ['fullName' => 'Life on Land', 'value' => 0, 'color' => '#56C02B'],
-            '16' => ['fullName' => 'Peace, Justice and Strong Institutions', 'value' => 0, 'color' => '#00689D'],
-            '17' => ['fullName' => 'Partnerships for the Goals', 'value' => 0, 'color' => '#19486A'],
+        $sdgMeta = [
+            '1' => ['fullName' => 'No Poverty', 'color' => '#E5243B'],
+            '2' => ['fullName' => 'Zero Hunger', 'color' => '#DDA63A'],
+            '3' => ['fullName' => 'Good Health and Well-being', 'color' => '#4C9F38'],
+            '4' => ['fullName' => 'Quality Education', 'color' => '#C5192D'],
+            '5' => ['fullName' => 'Gender Equality', 'color' => '#FF3A21'],
+            '6' => ['fullName' => 'Clean Water and Sanitation', 'color' => '#26BDE2'],
+            '7' => ['fullName' => 'Affordable and Clean Energy', 'color' => '#FCC30B'],
+            '8' => ['fullName' => 'Decent Work and Economic Growth', 'color' => '#A21942'],
+            '9' => ['fullName' => 'Industry, Innovation and Infrastructure', 'color' => '#FD6925'],
+            '10' => ['fullName' => 'Reduced Inequalities', 'color' => '#DD1367'],
+            '11' => ['fullName' => 'Sustainable Cities and Communities', 'color' => '#FD9D24'],
+            '12' => ['fullName' => 'Responsible Consumption and Production', 'color' => '#BF8B2E'],
+            '13' => ['fullName' => 'Climate Action', 'color' => '#3F7E44'],
+            '14' => ['fullName' => 'Life Below Water', 'color' => '#0A97D9'],
+            '15' => ['fullName' => 'Life on Land', 'color' => '#56C02B'],
+            '16' => ['fullName' => 'Peace, Justice and Strong Institutions', 'color' => '#00689D'],
+            '17' => ['fullName' => 'Partnerships for the Goals', 'color' => '#19486A'],
         ];
+
+        $sdgCounts = [];
 
         foreach ($proposals as $proposal) {
             $sdgs = $proposal->sustainableDevelopmentGoals ?? [];
+
             foreach ($sdgs as $sdg) {
-                // Extract SDG number from string like "SDG 1: No Poverty"
-                if (preg_match('/SDG (\d+):/', $sdg, $matches)) {
-                    $sdgNumber = $matches[1];
-                    if (isset($sdgData[$sdgNumber])) {
-                        $sdgData[$sdgNumber]['value']++;
-                    }
+                $sdgNumber = $this->extractSdgNumber($sdg);
+
+                if ($sdgNumber === null) {
+                    continue;
                 }
+
+                if (!isset($sdgCounts[$sdgNumber])) {
+                    $sdgCounts[$sdgNumber] = 0;
+                }
+
+                $sdgCounts[$sdgNumber]++;
             }
         }
 
-        return array_map(function($name, $data) {
-            return array_merge(['name' => $name], $data);
-        }, array_keys($sdgData), array_values($sdgData));
+        // If nothing matched, return an empty collection so the frontend can render a fallback state
+        if (empty($sdgCounts)) {
+            return [];
+        }
+
+        // Sort SDGs by value (desc) then by SDG number (asc) for consistent ordering
+        arsort($sdgCounts);
+
+        return collect($sdgCounts)
+            ->map(function ($count, $sdgNumber) use ($sdgMeta) {
+                $meta = $sdgMeta[$sdgNumber] ?? [
+                    'fullName' => "SDG {$sdgNumber}",
+                    'color' => '#4B5563', // Neutral gray fallback
+                ];
+
+                return [
+                    'name' => (string) $sdgNumber,
+                    'fullName' => $meta['fullName'],
+                    'color' => $meta['color'],
+                    'value' => $count,
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Attempt to normalize SDG identifiers from stored proposal data.
+     */
+    private function extractSdgNumber($sdg): ?string
+    {
+        if (is_array($sdg)) {
+            // Support formats like ['id' => 4, 'label' => 'Quality Education']
+            if (isset($sdg['id'])) {
+                return (string) $sdg['id'];
+            }
+
+            if (isset($sdg['value'])) {
+                return $this->extractSdgNumber($sdg['value']);
+            }
+        }
+
+        if (is_numeric($sdg)) {
+            $sdgNumber = (int) $sdg;
+            return $sdgNumber >= 1 && $sdgNumber <= 17 ? (string) $sdgNumber : null;
+        }
+
+        if (is_string($sdg)) {
+            // Match patterns like "SDG 4: Quality Education" or "SDG 4"
+            if (preg_match('/SDG\s*(\d{1,2})/i', $sdg, $matches)) {
+                return $matches[1];
+            }
+
+            // Match patterns like "Goal 4" or "Goal-4"
+            if (preg_match('/Goal[\s\-]*(\d{1,2})/i', $sdg, $matches)) {
+                return $matches[1];
+            }
+
+            // Finally, check for raw digit strings
+            if (preg_match('/^(\d{1,2})$/', trim($sdg), $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Attempt to match a research agenda entry to the official list.
+     */
+    private function matchOfficialAgenda($agenda, array $officialAgendas): ?string
+    {
+        if (!is_string($agenda)) {
+            return null;
+        }
+
+        foreach ($officialAgendas as $official) {
+            if (strcasecmp($agenda, $official) === 0) {
+                return $official;
+            }
+
+            // Handle cases where the stored agenda contains the official label as a substring
+            if (stripos($agenda, $official) !== false) {
+                return $official;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Produce a clean label for non-standard research agenda entries.
+     */
+    private function formatAgendaLabel($agenda): string
+    {
+        if (is_string($agenda)) {
+            return Str::title(trim($agenda));
+        }
+
+        if (is_array($agenda)) {
+            return Str::title(trim(implode(', ', $agenda)));
+        }
+
+        return 'Other Research Agenda';
+    }
+
+    /**
+     * Map potential DOST SP values to the official 6Ps categories.
+     */
+    private function mapDostValueToCategory($value): ?string
+    {
+        if (is_array($value)) {
+            $value = $value['label'] ?? $value['name'] ?? $value['value'] ?? null;
+        }
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $normalized = Str::lower($value);
+
+        if (str_contains($normalized, 'publication')) {
+            return 'Publications';
+        }
+
+        if (str_contains($normalized, 'patent')) {
+            return 'Patent';
+        }
+
+        if (str_contains($normalized, 'product')) {
+            return 'Product';
+        }
+
+        if (str_contains($normalized, 'people') || str_contains($normalized, 'service')) {
+            return 'People Services';
+        }
+
+        if (str_contains($normalized, 'place') || str_contains($normalized, 'partner')) {
+            return 'Places and Partnership';
+        }
+
+        if (str_contains($normalized, 'policy')) {
+            return 'Policies';
+        }
+
+        return null;
+    }
+
+    /**
+     * Format additional DOST SP labels for display.
+     */
+    private function formatDostLabel($value): string
+    {
+        if (is_array($value)) {
+            $value = $value['label'] ?? $value['name'] ?? $value['value'] ?? null;
+        }
+
+        if (is_string($value) && trim($value) !== '') {
+            return Str::title(trim($value));
+        }
+
+        return 'Other DOST Priorities';
+    }
+
+    private function prepareBudgetBreakdown($input, float $total): ?array
+    {
+        if (is_array($input) && !empty($input)) {
+            $normalized = [];
+            foreach ($input as $key => $value) {
+                if (is_array($value) && isset($value['amount'])) {
+                    $normalized[$key] = round((float) $value['amount'], 2);
+                } elseif (is_numeric($value)) {
+                    $normalized[$key] = round((float) $value, 2);
+                }
+            }
+
+            if (!empty($normalized)) {
+                return $normalized;
+            }
+        }
+
+        if ($total <= 0) {
+            return null;
+        }
+
+        return $this->generateDefaultBudgetBreakdown($total);
+    }
+
+    private function generateDefaultBudgetBreakdown(float $total): array
+    {
+        $breakdown = [
+            'personnel' => round($total * 0.5, 2),
+            'equipment' => round($total * 0.2, 2),
+            'materials' => round($total * 0.15, 2),
+            'travel' => round($total * 0.1, 2),
+            'other' => round($total * 0.05, 2),
+        ];
+
+        $allocated = array_sum($breakdown);
+        $difference = round($total - $allocated, 2);
+        if ($difference !== 0.0) {
+            $breakdown['other'] += $difference;
+        }
+
+        return $breakdown;
     }
 }
