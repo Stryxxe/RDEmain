@@ -14,20 +14,6 @@ use App\Http\Controllers\Api\SimpleOptimizedMessageController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Middleware\RequestDeduplication;
 
-// CSRF routes that need web middleware for proper token generation
-Route::middleware('web')->group(function () {
-    Route::get('/csrf-token', function () {
-        return response()->json(['csrf_token' => csrf_token()]);
-    });
-    
-    Route::get('/sanctum/csrf-cookie', function (Request $request) {
-        // This will set the XSRF-TOKEN cookie that Sanctum expects
-        // The EnsureFrontendRequestsAreStateful middleware will handle this
-        return response()->json(['message' => 'CSRF cookie set']);
-    });
-});
-
-
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth:sanctum');
 
