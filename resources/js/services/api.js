@@ -17,13 +17,13 @@ class ApiService {
     
     try {
       // Get the CSRF cookie from Sanctum (this sets the XSRF-TOKEN cookie)
-      await fetch(`${this.baseURL}/sanctum/csrf-cookie`, {
+      await fetch(`${API_ORIGIN}/sanctum/csrf-cookie`, {
         method: 'GET',
         credentials: 'include'
       });
       
       // Also get the CSRF token from the web middleware
-      const response = await fetch(`${this.baseURL}/csrf-token`, {
+      const response = await fetch(`${API_ORIGIN}/csrf-token`, {
         method: 'GET',
         credentials: 'include'
       });
