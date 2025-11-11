@@ -219,7 +219,9 @@ const SubmitPage = () => {
     return { errors, fieldErrors };
   };
 
+
   const handleSubmit = async (e) => {
+    console.log('Submitting form with data:', formData);
     e.preventDefault();
     
     const { errors, fieldErrors } = validateForm();
