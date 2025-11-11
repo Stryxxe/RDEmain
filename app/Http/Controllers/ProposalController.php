@@ -96,6 +96,7 @@ class ProposalController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        dd('test');
         $user = Auth::user();
         
         // Load the role relationship if not already loaded
