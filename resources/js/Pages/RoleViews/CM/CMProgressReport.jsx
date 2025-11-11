@@ -7,6 +7,13 @@ import AutoRefreshControls from '../../../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
+
 const CMProgressReport = () => {
   const { user } = useAuth();
   const { refreshAllNotifications } = useNotifications();
@@ -26,12 +33,18 @@ const CMProgressReport = () => {
       setLoading(true);
       // This would be a new API endpoint for progress reports
       // For now, we'll use proposals as a placeholder
-      const response = await axios.get('/proposals');
+      const response = await axiosInstance.get('/proposals', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       if (response.data.success) {
         setReports(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching progress reports:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     } finally {
       setLoading(false);
     }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
 import { useAuth } from '../../contexts/AuthContext';
 import bg from '../../../assets/bg.png';
 import logo from '../../../assets/logo.png';
@@ -14,7 +14,6 @@ const Login = () => {
   const [isLoading, setIsLoading] = useState(false);
   
   const { login } = useAuth();
-  const navigate = useNavigate(); // Changed from useHistory
 
   const handleChange = (e) => {
     setCredentials({
@@ -31,7 +30,7 @@ const Login = () => {
     const result = await login(credentials);
     
     if (result.success) {
-      navigate('/'); // Navigate to role-based redirect after successful login
+      router.visit('/'); // Navigate to role-based redirect after successful login
     } else {
       setError(result.message);
     }

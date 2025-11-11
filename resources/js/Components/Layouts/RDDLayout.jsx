@@ -1,5 +1,5 @@
 import React from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, usePage } from '@inertiajs/react';
 import { useAuth } from '../../contexts/AuthContext';
 import RoleBasedHeader from '../RoleBased/RoleBasedHeader';
 import { 
@@ -12,7 +12,7 @@ import {
 
 const RDDLayout = ({ children }) => {
   const { user } = useAuth();
-  const location = useLocation();
+  const { url } = usePage();
 
   const menuItems = [
     { path: '/rdd', label: 'Tracker', icon: BiSearch },
@@ -36,9 +36,9 @@ const RDDLayout = ({ children }) => {
           <nav className="flex flex-col h-full mt-5">
             {menuItems.map((item) => {
               const IconComponent = item.icon;
-              const isActive = location.pathname === item.path;
+              const isActive = url === item.path || url.startsWith(item.path + '/');
               return (
-                <a
+                <Link
                   key={item.path}
                   href={item.path}
                   className={`w-full flex items-center gap-4 px-6 py-4 rounded-lg transition-colors duration-300 ${
@@ -49,7 +49,7 @@ const RDDLayout = ({ children }) => {
                 >
                   <IconComponent className="text-xl w-6 h-6" />
                   <span className="font-medium">{item.label}</span>
-                </a>
+                </Link>
               );
             })}
           </nav>

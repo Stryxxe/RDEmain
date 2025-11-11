@@ -1,14 +1,14 @@
 import { Send, FileText, FolderOpen, Clock } from 'lucide-react';
-import { useLocation, Link } from 'react-router-dom';
+import { Link, usePage } from '@inertiajs/react';
 
 const Sidebar = () => {
-  const location = useLocation();
+  const { url } = usePage();
 
   const isActive = (path) => {
     if (path === '/proponent/tracker' || path === '/proponent') {
-      return location.pathname === '/proponent/tracker' || location.pathname === '/proponent';
+      return url === '/proponent/tracker' || url === '/proponent' || url === '/proponent/';
     }
-    return location.pathname === path;
+    return url === path;
   };
 
   return (
@@ -17,7 +17,7 @@ const Sidebar = () => {
         <ul className="space-y-2 px-4 flex-1">
           <li>
             <Link 
-              to="/proponent/submit" 
+              href="/proponent/submit" 
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive('/proponent/submit') 
                   ? 'bg-white text-red-800 font-semibold' 
@@ -30,7 +30,7 @@ const Sidebar = () => {
           </li>
           <li>
             <Link 
-              to="/proponent/tracker" 
+              href="/proponent/tracker" 
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive('/proponent/tracker') 
                   ? 'bg-white text-red-800 font-semibold' 
@@ -43,20 +43,7 @@ const Sidebar = () => {
           </li>
           <li>
             <Link 
-              to="/proponent/projects" 
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive('/proponent/projects') 
-                  ? 'bg-white text-red-800 font-semibold' 
-                  : 'text-white hover:bg-red-700'
-              }`}
-            >
-              <FileText size={20} />
-              <span className="text-base">Projects</span>
-            </Link>
-          </li>
-          <li>
-            <Link 
-              to="/proponent/resources" 
+              href="/proponent/resources" 
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
                 isActive('/proponent/resources') 
                   ? 'bg-white text-red-800 font-semibold' 

@@ -3,132 +3,66 @@ import './bootstrap';
 
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { createInertiaApp } from '@inertiajs/react';
+import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
+import { AuthProvider } from './contexts/AuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { MessageProvider } from './contexts/MessageContext';
-import NotificationContainer from './Components/NotificationContainer';
-import Login from './Components/auth/login';
-
-// Modular role-based view system
-import RoleBasedView from './Components/RoleBased/RoleBasedView';
-import RoleBasedRedirect from './Components/RoleBased/RoleBasedRedirect';
 import { AdminProvider } from './contexts/AdminContext';
 
-// Protected Route component
-const ProtectedRoute = ({ children }) => {
-  const { user, loading } = useAuth();
-  
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  }
-  
-  return user ? children : <Navigate to="/login" replace />;
-};
+// Debug: Check if session cookie exists
+if (typeof window !== 'undefined' && !import.meta.env.PROD) {
+    console.log('=== Session Cookie Debug ===');
+    console.log('Current URL:', window.location.href);
+    console.log('document.cookie:', document.cookie);
+    console.log('Axios withCredentials:', window.axios?.defaults?.withCredentials);
+    console.log('Axios baseURL:', window.axios?.defaults?.baseURL);
+    
+    // Check if cookies exist (they might be HttpOnly, so document.cookie might be empty)
+    // But we can still check if axios is configured correctly
+    if (window.axios) {
+        console.log('✅ Axios is configured');
+        if (window.axios.defaults.withCredentials) {
+            console.log('✅ withCredentials is set to true');
+        } else {
+            console.error('❌ withCredentials is NOT set to true!');
+        }
+    } else {
+        console.error('❌ window.axios is not available!');
+    }
+}
 
-// Role-based redirect component is now imported from RoleBasedRedirect.jsx
+const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
-// App content component with notifications and messages
-const AppContent = () => {
-  return (
-    <Router>
-      <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/" element={<RoleBasedRedirect />} />
-          
-          {/* Modular role-based routes */}
-          <Route 
-            path="/admin/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <AdminProvider>
-                  <RoleBasedView role="Admin" />
-                </AdminProvider>
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/rdd/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <RoleBasedView role="RDD" />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/cm/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <RoleBasedView role="CM" />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/proponent/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <RoleBasedView role="Proponent" />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/op/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <RoleBasedView role="OP" />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/osuur/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <RoleBasedView role="OSUORU" />
-              </ProtectedRoute>
-            } 
-          />
-          <Route 
-            path="/reviewer/*" 
-            element={
-              <ProtectedRoute>
-                <NotificationContainer />
-                <RoleBasedView role="Reviewer" />
-              </ProtectedRoute>
-            } 
-          />
-          
-          {/* Fallback routes for direct URL access - redirect to proponent routes */}
-          <Route path="/projects" element={<Navigate to="/proponent/projects" replace />} />
-          <Route path="/projects/:id" element={<Navigate to="/proponent/projects" replace />} />
-          <Route path="/resources" element={<Navigate to="/proponent/resources" replace />} />
-          <Route path="/account" element={<Navigate to="/proponent/account" replace />} />
-          <Route path="/submit" element={<Navigate to="/proponent/submit" replace />} />
-          <Route path="/tracker" element={<Navigate to="/proponent/tracker" replace />} />
-          <Route path="/notification" element={<Navigate to="/proponent/notification" replace />} />
-          <Route path="/messages" element={<Navigate to="/proponent/messages" replace />} />
-        </Routes>
-      </Router>
-  );
-};
+createInertiaApp({
+    title: (title) => `${title} - ${appName}`,
+    resolve: (name) => resolvePageComponent(`./Pages/${name}.jsx`, import.meta.glob('./Pages/**/*.jsx')),
+    setup({ el, App, props }) {
+        const root = createRoot(el);
+        
+        // Get user from Inertia props - safely access nested properties
+        let user = null;
+        try {
+            if (props && props.initialPage && props.initialPage.props && props.initialPage.props.auth) {
+                user = props.initialPage.props.auth.user || null;
+            }
+        } catch (error) {
+            console.warn('Error accessing user from Inertia props:', error);
+        }
 
-const App = () => {
-  return (
-    <AuthProvider>
-      <NotificationProvider>
-        <MessageProvider>
-          <AppContent />
-        </MessageProvider>
-      </NotificationProvider>
-    </AuthProvider>
-  );
-};
-
-const container = document.getElementById('app');
-const root = createRoot(container);
-root.render(<App />);
+        root.render(
+            <AuthProvider user={user}>
+                <NotificationProvider>
+                    <MessageProvider>
+                        <AdminProvider>
+                            <App {...props} />
+                        </AdminProvider>
+                    </MessageProvider>
+                </NotificationProvider>
+            </AuthProvider>
+        );
+    },
+    progress: {
+        color: '#4B5563',
+    },
+});

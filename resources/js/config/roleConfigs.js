@@ -31,7 +31,7 @@ export const roleConfigs = {
     routes: [
       { path: '', component: 'RDDDashboard', label: 'Tracker' },
       { path: 'statistics', component: 'RDDStatistics', label: 'Statistics' },
-      { path: 'review-proposal', component: 'RDDReviewProposal', label: 'Endorsement' },
+      { path: 'review-proposal', component: 'RDDEndorsement', label: 'Endorsement' },
       { path: 'progress-report', component: 'RDDProgressReport', label: 'Progress Reports' },
       { path: 'submit-report', component: 'RDDSubmitReport', label: 'Submit Report' },
       { path: 'resources', component: 'RDDResources', label: 'Resources' },
@@ -87,7 +87,6 @@ export const roleConfigs = {
       { path: 'submit', component: 'SubmitPage', label: 'Submit Proposal' },
       { path: 'tracker', component: 'Tracker', label: 'Tracker' },
       { path: 'tracker/:id', component: 'TrackerDetail', label: 'Tracker Detail' },
-      { path: 'projects', component: 'Projects', label: 'Projects' },
       { path: 'resources', component: 'ResourcesPage', label: 'Resources' },
       { path: 'account', component: 'AccountPage', label: 'Account' },
       { path: 'notification', component: 'NotificationsPage', label: 'Notifications', hidden: true },

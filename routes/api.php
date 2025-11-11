@@ -15,14 +15,14 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Middleware\RequestDeduplication;
 
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
-Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth:sanctum');
+Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth:web');
 
 // Get authenticated user
 Route::get('/user', function (Request $request) {
     $user = $request->user();
     $user->load(['role', 'department']);
     return $user;
-})->middleware('auth:sanctum');
+})->middleware('auth:web');
 
 // Update user profile
 Route::put('/user', function (Request $request) {
@@ -41,18 +41,23 @@ Route::put('/user', function (Request $request) {
 
     $user->load(['role', 'department']);
     return $user;
-})->middleware('auth:sanctum');
+})->middleware('auth:web');
 
-// Proposal routes with proper CSRF handling for SPA
-Route::middleware(['auth:sanctum', 'web'])->group(function () {
+// Proposal routes - Use session-based auth for Inertia
+// Explicitly use 'web' guard to ensure session authentication works
+Route::middleware(['auth:web'])->group(function () {
     Route::get('/proposals/statistics', [ProposalController::class, 'statistics']);
     Route::get('/proposals/rdd-analytics', [ProposalController::class, 'rddAnalytics']);
+    Route::get('/proposals/cm-endorsed', [ProposalController::class, 'getCmEndorsedProposals']);
     Route::apiResource('proposals', ProposalController::class);
     
     // Endorsement routes
     Route::post('/endorsements', [EndorsementController::class, 'store']);
     Route::get('/endorsements', [EndorsementController::class, 'index']);
     Route::get('/endorsements/proposal/{proposalId}', [EndorsementController::class, 'getByProposal']);
+    
+    // Progress Report routes
+    Route::apiResource('progress-reports', \App\Http\Controllers\ProgressReportController::class);
     
     // Optimized Notification routes with caching and deduplication
     Route::middleware([RequestDeduplication::class])->group(function () {
@@ -70,6 +75,7 @@ Route::middleware(['auth:sanctum', 'web'])->group(function () {
     Route::get('/messages/conversations', [SimpleOptimizedMessageController::class, 'conversations']);
     Route::get('/messages/conversation/{otherUserId}', [SimpleOptimizedMessageController::class, 'conversation']);
     Route::get('/messages/available-cm', [SimpleOptimizedMessageController::class, 'getAvailableCM']);
+    Route::get('/messages/available-proponents', [SimpleOptimizedMessageController::class, 'getAvailableProponents']);
     Route::post('/messages', [SimpleOptimizedMessageController::class, 'store']);
     Route::get('/messages/{id}', [MessageController::class, 'show']); // Keep original for show method
     Route::put('/messages/{id}/read', [SimpleOptimizedMessageController::class, 'markAsRead']);
@@ -79,8 +85,9 @@ Route::middleware(['auth:sanctum', 'web'])->group(function () {
 
 });
 
-// Admin - Users management (token auth only)
-Route::middleware(['auth:sanctum'])->group(function () {
+// Admin - Users management
+// Explicitly use 'web' guard to ensure session authentication works
+Route::middleware(['auth:web'])->group(function () {
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);

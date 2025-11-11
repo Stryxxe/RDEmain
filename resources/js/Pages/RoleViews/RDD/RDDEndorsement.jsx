@@ -1,93 +1,76 @@
 import React, { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
-import { useAuth } from '../../../contexts/AuthContext';
-import { useNotifications } from '../../../contexts/NotificationContext';
-import { useMessages } from '../../../contexts/MessageContext';
-import { RefreshCw } from 'lucide-react';
-import AutoRefreshControls from '../../../Components/AutoRefreshControls';
-import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
-import axios from 'axios';
-import CMProposalDetails from './CMProposalDetails';
+import rddService from '../../../services/rddService';
 
-// Use window.axios which has session-based auth configured, or configure this instance
-const axiosInstance = window.axios || axios;
-if (!window.axios) {
-  axiosInstance.defaults.withCredentials = true;
-  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
-}
-
-const CMReviewProposal = () => {
-  const { user } = useAuth();
-  const { refreshAllNotifications } = useNotifications();
-  const { refreshAllMessages } = useMessages();
+const RDDEndorsement = () => {
   const [year, setYear] = useState('2025');
   const [search, setSearch] = useState('');
-  const [selectedProposal, setSelectedProposal] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [proposals, setProposals] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   const itemsPerPage = 10;
+
 
   useEffect(() => {
     fetchProposals();
-    
-    // Check for stored project data from endorsement
-    const storedProject = localStorage.getItem('selectedProjectForEndorsement');
-    if (storedProject) {
-      try {
-        const projectData = JSON.parse(storedProject);
-        setSelectedProposal(projectData);
-        localStorage.removeItem('selectedProjectForEndorsement');
-      } catch (error) {
-        console.error('Error parsing stored project data:', error);
-        localStorage.removeItem('selectedProjectForEndorsement');
-      }
-    }
   }, []);
 
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const response = await axiosInstance.get('/proposals', {
-        headers: { 'Accept': 'application/json' },
-        withCredentials: true
-      });
-      if (response.data.success) {
-        setProposals(response.data.data);
+      setError(null);
+      // Fetch only proposals that have been endorsed by CM
+      const response = await rddService.getCmEndorsedProposals();
+      if (response.success) {
+        // Transform the data to match the expected format
+        const transformedProposals = response.data.map(proposal => {
+          // Get the most recent CM endorsement
+          const cmEndorsement = proposal.endorsements
+            ?.filter(end => end.endorser?.role?.userRole === 'CM' && end.endorsementStatus === 'approved')
+            ?.sort((a, b) => new Date(b.endorsementDate) - new Date(a.endorsementDate))[0];
+
+          return {
+            id: proposal.proposalID,
+            title: proposal.researchTitle,
+            author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}` : 'Unknown',
+            dateSubmitted: new Date(proposal.uploadedAt).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            }),
+            dateEndorsed: cmEndorsement?.endorsementDate 
+              ? new Date(cmEndorsement.endorsementDate).toLocaleDateString('en-US', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })
+              : null,
+            endorser: cmEndorsement?.endorser 
+              ? `${cmEndorsement.endorser.firstName} ${cmEndorsement.endorser.lastName}`
+              : 'Unknown'
+          };
+        });
+        setProposals(transformedProposals);
+      } else {
+        setError(response.message || 'Failed to fetch proposals');
       }
-    } catch (error) {
-      console.error('Error fetching proposals:', error);
-      if (error.response?.status === 401) {
-        console.error('Unauthorized - session may have expired');
-      }
+    } catch (err) {
+      console.error('Error fetching proposals:', err);
+      setError(err.response?.data?.message || 'Error loading proposals');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleRefresh = async () => {
-    try {
-      setIsRefreshing(true);
-      await Promise.all([
-        fetchProposals(),
-        refreshAllNotifications(),
-        refreshAllMessages()
-      ]);
-    } catch (error) {
-      console.error('Refresh failed:', error);
-    } finally {
-      setIsRefreshing(false);
-    }
+  const handleViewClick = (proposal) => {
+    router.visit(`/rdd/proposal/${proposal.id}`);
   };
-
-  const handleViewClick = (proposal) => setSelectedProposal(proposal);
-  const handleBack = () => setSelectedProposal(null);
 
   // Filter proposals based on search
   const filteredProposals = proposals.filter(proposal => {
-    const matchesSearch = proposal.researchTitle.toLowerCase().includes(search.toLowerCase()) ||
-                         proposal.user?.fullName.toLowerCase().includes(search.toLowerCase());
+    const matchesSearch = proposal.title.toLowerCase().includes(search.toLowerCase()) ||
+                         proposal.author.toLowerCase().includes(search.toLowerCase());
     return matchesSearch;
   });
 
@@ -99,16 +82,37 @@ const CMReviewProposal = () => {
 
   const handlePageChange = (page) => setCurrentPage(page);
 
-  if (selectedProposal) {
-    return <CMProposalDetails proposal={selectedProposal} onBack={handleBack} />;
-  }
-
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading proposals...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading proposals...</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="text-red-600 text-6xl mb-4">⚠️</div>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <button 
+                onClick={fetchProposals}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Retry
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -174,24 +178,11 @@ const CMReviewProposal = () => {
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
-            Research Proposals for Review
+            Endorsement
           </h1>
-          <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-6">
-            Manage and review research project proposals submitted by researchers
+          <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
+            Manage and endorse research project proposals submitted by researchers
           </p>
-          
-          {/* Manual Refresh Button */}
-          <div className="flex flex-wrap justify-center items-center gap-4">
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-              title="Refresh proposals and notifications"
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
-          </div>
         </div>
       </div>
 
@@ -216,34 +207,47 @@ const CMReviewProposal = () => {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Author</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Submitted</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Endorsed</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">
                 {currentProposals.length === 0 ? (
                   <tr>
-                    <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                      No proposals found
+                    <td colSpan="6" className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <p className="text-gray-600 text-lg font-medium mb-2">No endorsed proposals found</p>
+                        <p className="text-gray-500 text-sm">Proposals will appear here once they have been endorsed by Center Managers.</p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   currentProposals.map((proposal, index) => (
-                    <tr key={proposal.proposalID} className="hover:bg-emerald-50 transition-colors duration-150">
+                    <tr key={proposal.id} className="hover:bg-emerald-50 transition-colors duration-150">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-800 text-sm font-medium rounded-full">
                           {String(indexOfFirstItem + index + 1).padStart(2, '0')}
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900 max-w-sm truncate" title={proposal.researchTitle}>
-                          {proposal.researchTitle}
+                        <div className="text-sm font-medium text-gray-900 max-w-sm truncate" title={proposal.title}>
+                          {proposal.title}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="text-sm text-gray-700">{proposal.user?.fullName || 'Unknown'}</div>
+                        <div className="text-sm text-gray-700">{proposal.author}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-gray-700">{new Date(proposal.created_at).toLocaleDateString()}</div>
+                        <div className="text-sm text-gray-700">{proposal.dateSubmitted}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-gray-700">{proposal.dateEndorsed || 'N/A'}</div>
+                        {proposal.endorser && (
+                          <div className="text-xs text-gray-500 mt-1">by {proposal.endorser}</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <button
@@ -305,4 +309,5 @@ const CMReviewProposal = () => {
   );
 };
 
-export default CMReviewProposal;
+export default RDDEndorsement;
+

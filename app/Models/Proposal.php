@@ -92,6 +92,14 @@ class Proposal extends Model
     }
 
     /**
+     * Get the progress reports for this proposal
+     */
+    public function progressReports(): HasMany
+    {
+        return $this->hasMany(ProgressReport::class, 'proposalID', 'proposalID');
+    }
+
+    /**
      * Scope to filter by status
      */
     public function scopeByStatus($query, $statusId)

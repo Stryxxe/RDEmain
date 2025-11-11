@@ -36,6 +36,20 @@ class OptimizedNotificationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
+        // Debug: Check if user is authenticated
+        if (!$request->user()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated',
+                'debug' => [
+                    'session_id' => $request->session()->getId(),
+                    'has_session' => $request->hasSession(),
+                    'auth_check' => auth()->check(),
+                    'auth_user' => auth()->user() ? 'exists' : 'null',
+                ]
+            ], 401);
+        }
+        
         $user = $request->user();
         $perPage = $request->get('per_page', 15);
         $page = $request->get('page', 1);
@@ -83,6 +97,10 @@ class OptimizedNotificationController extends Controller
 
     public function unreadCount(Request $request): JsonResponse
     {
+        if (!$request->user()) {
+            return response()->json(['count' => 0], 401);
+        }
+        
         $user = $request->user();
         
         $cacheKey = $this->getCacheKey($user, 'unread_count');
@@ -98,6 +116,10 @@ class OptimizedNotificationController extends Controller
 
     public function markAsRead(Request $request, $id): JsonResponse
     {
+        if (!$request->user()) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        
         $user = $request->user();
         $notification = Notification::where('userID', $user->userID)
             ->where('id', $id)
@@ -113,6 +135,10 @@ class OptimizedNotificationController extends Controller
 
     public function markAllAsRead(Request $request): JsonResponse
     {
+        if (!$request->user()) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        
         $user = $request->user();
         Notification::where('userID', $user->userID)
             ->where('read', false)
@@ -129,6 +155,10 @@ class OptimizedNotificationController extends Controller
 
     public function destroy(Request $request, $id): JsonResponse
     {
+        if (!$request->user()) {
+            return response()->json(['message' => 'Unauthenticated'], 401);
+        }
+        
         $user = $request->user();
         $notification = Notification::where('userID', $user->userID)
             ->where('id', $id)

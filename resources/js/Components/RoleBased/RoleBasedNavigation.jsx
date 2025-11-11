@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { Link, usePage } from '@inertiajs/react';
 import { getRoleConfig } from '../../config/roleConfigs';
 import { 
   Search, 
@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 
 const RoleBasedNavigation = ({ role, className = '' }) => {
+  const { url } = usePage();
   const config = getRoleConfig(role);
   
   if (!config || !config.routes) {
@@ -62,23 +63,21 @@ const RoleBasedNavigation = ({ role, className = '' }) => {
         // Construct the full path with role prefix
         const rolePath = `/${role.toLowerCase()}`;
         const fullPath = route.path === '' ? rolePath : `${rolePath}/${route.path}`;
+        const isActive = url === fullPath || (route.path === '' && (url === rolePath || url === `${rolePath}/`));
         
         return (
-          <NavLink
+          <Link
             key={route.path}
-            to={fullPath}
-            end={route.path === ''} // Use exact matching for root path
-            className={({ isActive }) => 
-              `flex items-center gap-4 px-6 py-4 transition-colors duration-300 ${
-                isActive 
-                  ? 'bg-white text-gray-900 shadow-md' 
-                  : 'text-white hover:bg-red-700'
-              }`
-            }
+            href={fullPath}
+            className={`flex items-center gap-4 px-6 py-4 transition-colors duration-300 ${
+              isActive 
+                ? 'bg-white text-gray-900 shadow-md' 
+                : 'text-white hover:bg-red-700'
+            }`}
           >
             {getRouteIcon(route.label)}
             <span className="font-medium">{route.label}</span>
-          </NavLink>
+          </Link>
         );
       })}
     </nav>

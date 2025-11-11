@@ -342,4 +342,42 @@ class SimpleOptimizedMessageController extends Controller
         
         return response()->json($result);
     }
+
+    /**
+     * Get available proponents for CM users
+     */
+    public function getAvailableProponents(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        
+        if (!$user->role || $user->role->userRole !== 'CM') {
+            return response()->json(['error' => 'Access denied'], 403);
+        }
+        
+        $cacheKey = "available_proponents_{$user->departmentID}";
+        
+        $result = Cache::remember($cacheKey, 600, function () use ($user) { // 10 minutes cache
+            $proponents = User::with(['role', 'department'])
+                ->whereHas('role', function ($query) {
+                    $query->where('userRole', 'Proponent');
+                })
+                ->where('departmentID', $user->departmentID)
+                ->get();
+                
+            if ($proponents->isEmpty()) {
+                return ['error' => 'No proponents found in your department'];
+            }
+            
+            return [
+                'proponents' => $proponents,
+                'canMessage' => true
+            ];
+        });
+        
+        if (isset($result['error'])) {
+            return response()->json($result, 404);
+        }
+        
+        return response()->json($result);
+    }
 }

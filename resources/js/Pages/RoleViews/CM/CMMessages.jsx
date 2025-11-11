@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
-import { useSearchParams } from 'react-router-dom';
+import { router, usePage } from '@inertiajs/react';
 import { MessageCircle, Send, Search, RefreshCw, User, Clock, AlertCircle } from 'lucide-react';
 import { useMessages } from '../../../contexts/MessageContext';
 import { useNotifications } from '../../../contexts/NotificationContext';
@@ -8,11 +8,19 @@ import AutoRefreshControls from '../../../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
+
 const CMMessages = () => {
   const { user } = useAuth();
-  const { refreshAllMessages, isRefreshing: messageRefreshing } = useMessages();
+  const { refreshAllMessages, isRefreshing: messageRefreshing, fetchAvailableProponents, sendMessage: sendMessageFromContext } = useMessages();
   const { refreshAllNotifications } = useNotifications();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { url } = usePage();
+  const searchParams = new URLSearchParams(url.split('?')[1] || '');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [currentConversation, setCurrentConversation] = useState(null);
@@ -21,28 +29,48 @@ const CMMessages = () => {
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [availableProponents, setAvailableProponents] = useState(null);
+  const [proponentsLoading, setProponentsLoading] = useState(false);
+  const [startingConversation, setStartingConversation] = useState(false);
 
   useEffect(() => {
     fetchConversations();
-  }, []);
+    // Fetch available proponents for CM
+    if (user?.role?.userRole === 'CM') {
+      setProponentsLoading(true);
+      fetchAvailableProponents().then(data => {
+        setAvailableProponents(data);
+        setProponentsLoading(false);
+      }).catch(error => {
+        setProponentsLoading(false);
+      });
+    }
+  }, [user]);
 
   // Restore conversation from URL parameter after conversations are loaded
   useEffect(() => {
     if (conversations.length > 0 && !selectedConversation) {
       const conversationId = searchParams.get('conversation');
       if (conversationId) {
-        const conversation = conversations.find(conv => conv.otherUser.userID === conversationId);
+        const conversation = conversations.find(conv => 
+          String(conv.otherUser.userID) === String(conversationId)
+        );
         if (conversation) {
-          handleConversationClick(conversation);
+          setSelectedConversation(conversation);
+          fetchConversation(conversation.otherUser.userID);
         }
       }
     }
-  }, [conversations, searchParams, selectedConversation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversations, url]);
 
   const fetchConversations = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/messages/conversations');
+      const response = await axiosInstance.get('/messages/conversations', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       if (response.data.data) {
         setConversations(response.data.data);
       }
@@ -56,7 +84,9 @@ const CMMessages = () => {
   const clearConversation = () => {
     setSelectedConversation(null);
     setCurrentConversation(null);
-    setSearchParams({});
+    // Update URL without causing navigation
+    const baseUrl = url.split('?')[0];
+    window.history.pushState({}, '', baseUrl);
   };
 
   const handleRefresh = async () => {
@@ -80,7 +110,10 @@ const CMMessages = () => {
 
   const fetchConversation = async (otherUserId) => {
     try {
-      const response = await axios.get(`/messages/conversation/${otherUserId}`);
+      const response = await axiosInstance.get(`/messages/conversation/${otherUserId}`, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       if (response.data.data) {
         setCurrentConversation(response.data.data);
         return response.data.data;
@@ -98,11 +131,14 @@ const CMMessages = () => {
     try {
       const recipientID = String(selectedConversation.otherUser.userID);
       
-      const result = await axios.post('/messages', {
+      const result = await axiosInstance.post('/messages', {
         recipientID: recipientID,
         subject: `Re: ${selectedConversation.latestMessage.subject}`,
         content: newMessage,
         type: 'reply'
+      }, {
+        headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+        withCredentials: true
       });
     
       setNewMessage('');
@@ -171,7 +207,10 @@ const CMMessages = () => {
 
   const handleConversationClick = async (conversation) => {
     setSelectedConversation(conversation);
-    setSearchParams({ conversation: conversation.otherUser.userID });
+    // Update URL without causing navigation - just update the query parameter
+    const newUrl = `${url.split('?')[0]}?conversation=${conversation.otherUser.userID}`;
+    window.history.pushState({}, '', newUrl);
+    // Fetch the conversation messages
     await fetchConversation(conversation.otherUser.userID);
   };
 
@@ -240,7 +279,10 @@ const CMMessages = () => {
               onClick={async () => {
                 if (confirm('Are you sure you want to clear all conversations? This will delete all messages.')) {
                   try {
-                    await axios.delete('/messages/clear-all');
+                    await axiosInstance.delete('/messages/clear-all', {
+                      headers: { 'Accept': 'application/json' },
+                      withCredentials: true
+                    });
                     clearConversation();
                     await fetchConversations();
                   } catch (error) {
@@ -276,12 +318,117 @@ const CMMessages = () => {
 
             {/* Conversations List */}
             <div className="max-h-96 overflow-y-auto">
-              {filteredConversations.length === 0 ? (
+              {/* Show "Start Conversation" when there are no conversations at all */}
+              {conversations.length === 0 && (
+                <>
+                  {/* CM: Show proponents to start conversation */}
+                  {availableProponents && availableProponents.proponents && availableProponents.proponents.length > 0 && (
+                    <div className="p-4 border-b border-gray-200 bg-blue-50">
+                      <p className="text-xs text-blue-700 mb-3 font-semibold">
+                        Start a conversation with a proponent from your department:
+                      </p>
+                      <div className="space-y-2">
+                        {availableProponents.proponents.map((proponent) => (
+                          <div key={proponent.userID} className="p-3 bg-white rounded-lg border border-blue-200">
+                            <div className="flex items-center gap-3 mb-2">
+                              <div className="w-8 h-8 bg-blue-200 rounded-full flex items-center justify-center">
+                                <User className="w-4 h-4 text-blue-600" />
+                              </div>
+                              <div className="flex-1">
+                                <h4 className="text-sm font-semibold text-blue-900">
+                                  {proponent.fullName}
+                                </h4>
+                                <p className="text-xs text-blue-600">{proponent.email}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                
+                                // Prevent double clicks
+                                if (startingConversation) return;
+                                
+                                try {
+                                  setStartingConversation(true);
+                                  
+                                  // Create a conversation by sending an initial message
+                                  await sendMessageFromContext(
+                                    String(proponent.userID),
+                                    'New Conversation',
+                                    'Hello! I would like to start a conversation with you.',
+                                    'general'
+                                  );
+                                  
+                                  // Wait a bit for the message to be processed
+                                  await new Promise(resolve => setTimeout(resolve, 300));
+                                  
+                                  // Wait for conversations to refresh
+                                  await fetchConversations();
+                                  
+                                  // Get updated conversations list
+                                  const updatedResponse = await axiosInstance.get('/messages/conversations', {
+                                    headers: { 'Accept': 'application/json' },
+                                    withCredentials: true
+                                  });
+                                  
+                                  if (updatedResponse.data.data) {
+                                    setConversations(updatedResponse.data.data);
+                                    
+                                    // Find the new conversation
+                                    const newConversation = updatedResponse.data.data.find(conv => 
+                                      String(conv.otherUser.userID) === String(proponent.userID)
+                                    );
+                                    
+                                    if (newConversation) {
+                                      // Select the conversation
+                                      setSelectedConversation(newConversation);
+                                      await fetchConversation(proponent.userID);
+                                    }
+                                  }
+                                } catch (error) {
+                                  console.error('Error starting conversation:', error);
+                                  alert('Failed to start conversation. Please try again.');
+                                } finally {
+                                  setStartingConversation(false);
+                                }
+                              }}
+                              disabled={startingConversation}
+                              className="w-full px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {startingConversation ? 'Starting...' : 'Start Conversation'}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Empty state when no conversations */}
+                  <div className="p-6 text-center text-gray-500">
+                    <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No conversations found</p>
+                    {availableProponents && availableProponents.proponents && availableProponents.proponents.length > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        Use the "Start Conversation" button above to begin
+                      </p>
+                    )}
+                    {(!availableProponents || !availableProponents.proponents || availableProponents.proponents.length === 0) && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        No proponents available in your department
+                      </p>
+                    )}
+                  </div>
+                </>
+              )}
+              
+              {/* Show conversations if they exist */}
+              {conversations.length > 0 && filteredConversations.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
                   <MessageCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                  <p className="text-sm">No conversations found</p>
+                  <p className="text-sm">No conversations match your search</p>
                 </div>
-              ) : (
+              ) : conversations.length > 0 && filteredConversations.length > 0 ? (
                 <div className="divide-y divide-gray-100">
                   {filteredConversations.map((conversation) => (
                     <div

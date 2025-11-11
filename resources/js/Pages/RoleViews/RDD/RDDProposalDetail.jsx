@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useRouteParams } from '../../../Components/RoleBased/InertiaRoleRouter';
 import { BiDownload, BiEdit, BiCheck, BiX, BiCalendar, BiUser, BiFile, BiDollar, BiEnvelope } from 'react-icons/bi';
 import rddService from '../../../services/rddService';
 
 const RDDProposalDetail = () => {
-  const { id } = useParams();
+  const { id } = useRouteParams();
   const [activeTab, setActiveTab] = useState('overview');
   const [reviewDecision, setReviewDecision] = useState('');
   const [reviewComments, setReviewComments] = useState('');

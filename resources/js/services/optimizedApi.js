@@ -76,16 +76,18 @@ class OptimizedApiService {
    * Make optimized API request with deduplication and caching
    */
   async request(method, url, data = null, options = {}) {
-    const token = localStorage.getItem('token');
+    // Get CSRF token from meta tag for session-based auth
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     const config = {
       method,
-      url,
+      url: url, // Use axios global instance which has baseURL set to /api
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
         'Accept': 'application/json',
+        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken }),
         ...options.headers
       },
+      withCredentials: true, // Include session cookies
       ...options
     };
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import RoleViewFactory from './RoleViewFactory';
-import RoleBasedRouter from './RoleBasedRouter';
+import InertiaRoleRouter from './InertiaRoleRouter';
 
 const RoleBasedView = ({ role }) => {
   const { user } = useAuth();
@@ -9,7 +9,7 @@ const RoleBasedView = ({ role }) => {
 
   return (
     <RoleViewFactory role={userRole}>
-      <RoleBasedRouter role={userRole} />
+      <InertiaRoleRouter role={userRole} />
     </RoleViewFactory>
   );
 };

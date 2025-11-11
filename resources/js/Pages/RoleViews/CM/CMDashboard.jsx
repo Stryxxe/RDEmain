@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from '@inertiajs/react';
 import { BiSearch, BiShow } from 'react-icons/bi';
 import { RefreshCw } from 'lucide-react';
 import { useAuth } from '../../../contexts/AuthContext';
@@ -10,6 +10,13 @@ import StatsCard from '../../../Components/UI/StatsCard';
 import { getStatusBadgeClass, getProgressBarClass } from '../../../config/statusStyles';
 import AutoRefreshControls from '../../../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const CMDashboard = () => {
   const { user } = useAuth();
@@ -39,12 +46,18 @@ const CMDashboard = () => {
   const fetchProposals = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/proposals');
+      const response = await axiosInstance.get('/proposals', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       if (response.data.success) {
         setProposals(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching proposals:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     } finally {
       setLoading(false);
     }
@@ -52,12 +65,18 @@ const CMDashboard = () => {
 
   const fetchStatistics = async () => {
     try {
-      const response = await axios.get('/proposals/statistics');
+      const response = await axiosInstance.get('/proposals/statistics', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       if (response.data.success) {
         setStats(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching statistics:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     }
   };
 
@@ -341,7 +360,7 @@ const CMDashboard = () => {
                   {/* Research Title */}
                   <div>
                     <Link 
-                      to={`/cm/proposal/${proposal.proposalID}`}
+                      href={`/cm/proposal/${proposal.proposalID}`}
                       className="font-bold text-gray-900 mb-1 hover:text-blue-600 transition-colors duration-200 cursor-pointer block"
                     >
                       {proposal.researchTitle}

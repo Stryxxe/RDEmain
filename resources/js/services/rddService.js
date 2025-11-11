@@ -1,28 +1,34 @@
 import axios from 'axios';
 
-const API_BASE_URL = '/api';
-
 class RDDService {
   constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      withCredentials: true,
-    });
+    // Use window.axios if available (has proper config from bootstrap.js), otherwise create instance
+    if (window.axios) {
+      this.api = window.axios;
+    } else {
+      // Fallback: create a properly configured axios instance
+      this.api = axios.create({
+        baseURL: `${window.location.origin}/api`,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+        },
+        withCredentials: true,
+      });
 
-    // Add request interceptor to include CSRF token
-    this.api.interceptors.request.use(async (config) => {
-      try {
-        const response = await axios.get('/api/csrf-token');
-        config.headers['X-CSRF-TOKEN'] = response.data.csrf_token;
-      } catch (error) {
-        console.warn('Could not fetch CSRF token:', error);
-      }
-      return config;
-    });
+      // Add request interceptor to include CSRF token from Inertia's meta tag
+      this.api.interceptors.request.use((config) => {
+        // Get CSRF token from Inertia's meta tag for all requests
+        const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (metaToken) {
+          config.headers['X-CSRF-TOKEN'] = metaToken;
+        }
+        // Ensure credentials are included for session-based auth
+        config.withCredentials = true;
+        return config;
+      });
+    }
   }
 
   /**
@@ -47,6 +53,19 @@ class RDDService {
       return response.data;
     } catch (error) {
       console.error('Error fetching proposals for review:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get proposals that have been endorsed by CM (Center Manager)
+   */
+  async getCmEndorsedProposals() {
+    try {
+      const response = await this.api.get('/proposals/cm-endorsed');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching CM-endorsed proposals:', error);
       throw error;
     }
   }
@@ -115,7 +134,8 @@ class RDDService {
       if (response.data.success) {
         // Transform proposals to match the expected format for report submission
         const projects = response.data.data.map(proposal => ({
-          id: `PRO-2025-${String(proposal.proposalID).padStart(5, '0')}`,
+          id: proposal.proposalID, // Use actual proposalID for form submission
+          displayId: `PRO-2025-${String(proposal.proposalID).padStart(5, '0')}`, // For display
           title: proposal.researchTitle,
           author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}` : 'Unknown'
         }));
@@ -170,6 +190,63 @@ class RDDService {
       return response.data;
     } catch (error) {
       console.error('Error fetching proposal endorsements:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all progress reports
+   */
+  async getProgressReports() {
+    try {
+      const response = await this.api.get('/progress-reports');
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching progress reports:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit a progress report
+   */
+  async submitProgressReport(reportData) {
+    try {
+      const formData = new FormData();
+      
+      // Add all text fields
+      formData.append('proposalID', reportData.proposalID);
+      formData.append('reportType', reportData.reportType);
+      formData.append('reportPeriod', reportData.reportPeriod);
+      formData.append('progressPercentage', reportData.progressPercentage);
+      formData.append('achievements', reportData.achievements);
+      formData.append('nextMilestone', reportData.nextMilestone);
+      
+      if (reportData.budgetUtilized) {
+        formData.append('budgetUtilized', reportData.budgetUtilized);
+      }
+      if (reportData.challenges) {
+        formData.append('challenges', reportData.challenges);
+      }
+      if (reportData.additionalNotes) {
+        formData.append('additionalNotes', reportData.additionalNotes);
+      }
+      
+      // Add files
+      if (reportData.files && reportData.files.length > 0) {
+        reportData.files.forEach((file) => {
+          formData.append('files[]', file);
+        });
+      }
+
+      const response = await this.api.post('/progress-reports', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting progress report:', error);
       throw error;
     }
   }

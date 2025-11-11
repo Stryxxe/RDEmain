@@ -7,6 +7,13 @@ import AutoRefreshControls from '../../../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../../../Components/RefreshStatusIndicator';
 import axios from 'axios';
 
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
+
 const CMNotifications = () => {
   const { user } = useAuth();
   const { refreshAllNotifications, isRefreshing: notificationRefreshing } = useNotifications();
@@ -17,18 +24,31 @@ const CMNotifications = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
-    fetchNotifications();
-  }, []);
+    if (user) {
+      fetchNotifications();
+    }
+  }, [user]);
 
   const fetchNotifications = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('/notifications');
+      if (!user) {
+        setNotifications([]);
+        setLoading(false);
+        return;
+      }
+      const response = await axiosInstance.get('/notifications', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       if (response.data.success) {
         setNotifications(response.data.data);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     } finally {
       setLoading(false);
     }
@@ -51,36 +71,57 @@ const CMNotifications = () => {
 
   const markAsRead = async (notificationId) => {
     try {
-      await axios.put(`/notifications/${notificationId}/read`);
+      if (!user) return;
+      await axiosInstance.put(`/notifications/${notificationId}/read`, {}, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       setNotifications(prev => 
         prev.map(notif => 
           notif.id === notificationId 
-            ? { ...notif, read_at: new Date().toISOString() }
+            ? { ...notif, read: true, read_at: new Date().toISOString() }
             : notif
         )
       );
     } catch (error) {
       console.error('Error marking notification as read:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     }
   };
 
   const markAllAsRead = async () => {
     try {
-      await axios.put('/notifications/mark-all-read');
+      if (!user) return;
+      await axiosInstance.put('/notifications/mark-all-read', {}, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       setNotifications(prev => 
-        prev.map(notif => ({ ...notif, read_at: new Date().toISOString() }))
+        prev.map(notif => ({ ...notif, read: true, read_at: new Date().toISOString() }))
       );
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     }
   };
 
   const deleteNotification = async (notificationId) => {
     try {
-      await axios.delete(`/notifications/${notificationId}`);
+      if (!user) return;
+      await axiosInstance.delete(`/notifications/${notificationId}`, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
       setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
     } catch (error) {
       console.error('Error deleting notification:', error);
+      if (error.response?.status === 401) {
+        console.error('Unauthorized - session may have expired');
+      }
     }
   };
 

@@ -1,50 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { BiSearch, BiDownload, BiShow, BiCalendar } from 'react-icons/bi';
+import { router } from '@inertiajs/react';
 import rddService from '../../../services/rddService';
 
 const RDDProgressReport = () => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [filterPeriod, setFilterPeriod] = useState('All');
+  const [fromYear, setFromYear] = useState('2025');
+  const [toYear, setToYear] = useState('2025');
+  const [search, setSearch] = useState('');
+  const [selectedResearchCenter, setSelectedResearchCenter] = useState('all');
   const [progressReports, setProgressReports] = useState([]);
-  const [statusOptions, setStatusOptions] = useState([]);
-  const [periodOptions, setPeriodOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const statusProgressMap = {
-    1: 20, // Under Review
-    2: 45, // Approved
-    3: 10, // Rejected
-    4: 70, // Ongoing
-    5: 100, // Completed
-  };
-
-  const formatCurrency = (value, fallback = null) => {
-    const numericValue = Number(value);
-    if (Number.isFinite(numericValue)) {
-      return `₱${numericValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    }
-    return fallback;
-  };
+  const researchCenters = [
+    { id: 'all', name: 'All Research Centers' },
+    { id: 'RC-001', name: 'Center for Research and Development' },
+    { id: 'RC-002', name: 'Center for Technology Innovation' },
+    { id: 'RC-003', name: 'Center for Agricultural Research' },
+    { id: 'RC-004', name: 'Center for Environmental Studies' },
+    { id: 'RC-005', name: 'Center for Health Sciences' },
+    { id: 'RC-006', name: 'Center for Engineering Research' },
+    { id: 'RC-007', name: 'Center for Social Sciences' },
+    { id: 'RC-008', name: 'Center for Business and Economics' }
+  ];
 
   const formatDate = (date) => {
     if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
       return null;
     }
-    return new Intl.DateTimeFormat('en-PH', {
-      month: 'short',
+    return new Intl.DateTimeFormat('en-US', {
+      month: 'long',
       day: 'numeric',
       year: 'numeric',
     }).format(date);
-  };
-
-  const buildReportPeriod = (date) => {
-    if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-      return 'No reporting period';
-    }
-    const quarterIndex = Math.floor(date.getMonth() / 3) + 1;
-    return `Q${quarterIndex} ${date.getFullYear()}`;
   };
 
   useEffect(() => {
@@ -55,61 +42,41 @@ const RDDProgressReport = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await rddService.getProposalsForReview();
+      // Fetch actual submitted progress reports
+      const response = await rddService.getProgressReports();
       if (response.success) {
-        const transformedReports = response.data.map((proposal) => {
-          const uploadedAt = proposal.uploadedAt ? new Date(proposal.uploadedAt) : null;
-          const updatedAt = proposal.updated_at ? new Date(proposal.updated_at) : null;
-          const reportPeriod = buildReportPeriod(uploadedAt);
-          const statusName = proposal.status?.statusName || 'Unknown';
-          const statusId = proposal.statusID;
-          const proposedBudgetValue = proposal.proposedBudget ?? null;
-          const budgetUtilizedValue = proposal.actualBudgetUtilized ?? proposal.budgetUtilized ?? null;
-          const hasBudgetUtilized = Number.isFinite(Number(budgetUtilizedValue));
-          const hasTotalBudget = Number.isFinite(Number(proposedBudgetValue));
-
-          const formattedSubmittedDate = formatDate(uploadedAt);
-          const formattedUpdatedDate = formatDate(updatedAt);
-
-          return {
-            id: proposal.proposalID,
-            displayId: `PR-${String(proposal.proposalID).padStart(5, '0')}`,
-            projectTitle: proposal.researchTitle || 'Untitled Proposal',
-            author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}`.trim() : 'Unknown User',
-            college: proposal.user?.department?.name || 'Unassigned Department',
-            status: statusName,
-            statusId,
-            reportPeriod,
-            reportPeriodSortKey: uploadedAt ? uploadedAt.getTime() : Number.MAX_SAFE_INTEGER,
-            submittedDate: formattedSubmittedDate,
-            lastUpdated: formattedUpdatedDate,
-            progress: Math.min(Math.max(statusProgressMap[statusId] ?? 0, 0), 100),
-            hasBudgetUtilized,
-            hasTotalBudget,
-            formattedBudgetUtilized: formatCurrency(budgetUtilizedValue, 'Not reported'),
-            formattedTotalBudget: formatCurrency(proposedBudgetValue, 'Not set'),
-          };
-        });
-
-        const uniqueStatuses = Array.from(
-          new Set(transformedReports.map((report) => report.status).filter(Boolean))
-        ).sort((a, b) => a.localeCompare(b));
-        setStatusOptions(uniqueStatuses);
-
-        const periodMap = new Map();
-        transformedReports.forEach((report) => {
-          if (!report.reportPeriod) return;
-          const existingSortKey = periodMap.get(report.reportPeriod);
-          if (existingSortKey === undefined || report.reportPeriodSortKey < existingSortKey) {
-            periodMap.set(report.reportPeriod, report.reportPeriodSortKey);
+        // Transform progress reports to match the reference structure
+        // Group by research center/department
+        const reportsByCenter = {};
+        
+        response.data.forEach((report) => {
+          const submittedAt = report.submittedAt ? new Date(report.submittedAt) : null;
+          const formattedDate = formatDate(submittedAt);
+          const researchCenter = report.proposal?.user?.department?.name || 'Unassigned Department';
+          const centerId = `RC-${String(report.reportID).padStart(3, '0')}`;
+          
+          // Use department as research center, create unique ID
+          if (!reportsByCenter[researchCenter]) {
+            reportsByCenter[researchCenter] = {
+              id: centerId,
+              researchCenterId: centerId,
+              researchCenter: researchCenter,
+              dateSubmitted: formattedDate || 'Not specified',
+              reportCount: 0,
+              latestReport: report
+            };
+          }
+          reportsByCenter[researchCenter].reportCount += 1;
+          
+          // Use the most recent date
+          if (submittedAt && (!reportsByCenter[researchCenter].dateSubmitted || 
+              submittedAt > new Date(reportsByCenter[researchCenter].dateSubmitted))) {
+            reportsByCenter[researchCenter].dateSubmitted = formattedDate;
+            reportsByCenter[researchCenter].latestReport = report;
           }
         });
 
-        const sortedPeriods = Array.from(periodMap.entries())
-          .sort((a, b) => a[1] - b[1])
-          .map(([label]) => label);
-        setPeriodOptions(sortedPeriods);
-
+        const transformedReports = Object.values(reportsByCenter);
         setProgressReports(transformedReports);
       } else {
         setError('Failed to fetch progress reports');
@@ -122,51 +89,25 @@ const RDDProgressReport = () => {
     }
   };
 
-  const filteredReports = progressReports.filter((report) => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    const matchesSearch =
-      normalizedSearch.length === 0 ||
-      [report.projectTitle, report.author, report.college, report.displayId]
-        .map((field) => (field || '').toLowerCase())
-        .some((field) => field.includes(normalizedSearch));
-
-    const matchesStatus = filterStatus === 'All' || report.status === filterStatus;
-    const matchesPeriod = filterPeriod === 'All' || report.reportPeriod === filterPeriod;
-
-    return matchesSearch && matchesStatus && matchesPeriod;
-  });
-
-  const summary = {
-    total: progressReports.length,
-    underReview: progressReports.filter((report) => report.statusId === 1).length,
-    ongoing: progressReports.filter((report) => report.statusId === 4).length,
-    completed: progressReports.filter((report) => report.statusId === 5).length,
-  };
-
-  const getStatusClass = (status) => {
-    switch (status) {
-      case 'Under Review':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Approved':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Rejected':
-        return 'bg-red-100 text-red-800 border-red-300';
-      case 'Ongoing':
-        return 'bg-orange-100 text-orange-800 border-orange-300';
-      case 'Completed':
-        return 'bg-green-100 text-green-800 border-green-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
+  const handleViewClick = (project) => {
+    // Navigate to proposal detail page since progress reports are linked to proposals
+    // The proposal detail page should show progress report information
+    if (project.latestReport && project.latestReport.proposalID) {
+      router.visit(`/rdd/proposal/${project.latestReport.proposalID}`);
+    } else if (project.latestReport && project.latestReport.proposal?.proposalID) {
+      router.visit(`/rdd/proposal/${project.latestReport.proposal.proposalID}`);
+    } else {
+      console.error('No proposal ID found for this progress report');
+      console.log('Project data:', project);
     }
   };
 
-  const getProgressColor = (progress) => {
-    if (progress >= 80) return 'bg-green-500';
-    if (progress >= 60) return 'bg-blue-500';
-    if (progress >= 40) return 'bg-yellow-500';
-    if (progress > 0) return 'bg-orange-500';
-    return 'bg-gray-400';
-  };
+  // Filter projects based on search and research center
+  const filteredProjects = progressReports.filter(project => {
+    const matchesSearch = project.researchCenter.toLowerCase().includes(search.toLowerCase());
+    const matchesResearchCenter = selectedResearchCenter === 'all' || project.researchCenterId === selectedResearchCenter;
+    return matchesSearch && matchesResearchCenter;
+  });
 
   if (loading) {
     return (
@@ -204,187 +145,178 @@ const RDDProgressReport = () => {
     );
   }
 
+  const SearchIcon = () => (
+    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+    </svg>
+  );
+
+  const FilterIcon = () => (
+    <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+    </svg>
+  );
+
+  const SortIcon = () => (
+    <svg className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+    </svg>
+  );
+
+  const FilterBar = () => (
+    <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Search Input */}
+        <div className="relative flex-1 min-w-64">
+          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+            <SearchIcon />
+          </div>
+          <input
+            type="text"
+            placeholder="Search reports..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+          />
+        </div>
+        
+        {/* Research Center Filter */}
+        <div className="flex items-center space-x-2">
+          <FilterIcon />
+          <span className="text-sm font-medium text-gray-700">Research Center:</span>
+          <select
+            value={selectedResearchCenter}
+            onChange={(e) => setSelectedResearchCenter(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors min-w-48"
+          >
+            {researchCenters.map(center => (
+              <option key={center.id} value={center.id}>
+                {center.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        {/* Year Filters */}
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">From:</span>
+            <input
+              type="text"
+              value={fromYear}
+              onChange={(e) => setFromYear(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-medium text-gray-700">To:</span>
+            <input
+              type="text"
+              value={toYear}
+              onChange={(e) => setToYear(e.target.value)}
+              className="border border-gray-300 rounded-md px-3 py-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+            />
+          </div>
+          
+          <SortIcon />
+        </div>
+      </div>
+    </div>
+  );
+
+  const TableSection = () => (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          {/* Header */}
+          <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
+            <h2 className="text-xl font-semibold text-gray-900">Completed Project Reports</h2>
+            <p className="text-sm text-gray-600 mt-1">{filteredProjects.length} {filteredProjects.length === 1 ? 'record' : 'records'} found</p>
+          </div>
+      
+      {/* Filter Bar */}
+      <FilterBar />
+      
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 border-b border-gray-200">
+            <tr>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">No</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Research Center ID</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Research Center</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Submitted</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+            </tr>
+          </thead>
+              <tbody className="bg-white divide-y divide-gray-100">
+            {filteredProjects.length === 0 ? (
+              <tr>
+                <td colSpan="5" className="px-6 py-12 text-center">
+                  <div className="flex flex-col items-center justify-center">
+                    <svg className="w-16 h-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <p className="text-gray-600 text-lg font-medium mb-2">No progress reports found</p>
+                    <p className="text-gray-500 text-sm">Progress reports will appear here once they have been submitted.</p>
+                  </div>
+                </td>
+              </tr>
+            ) : (
+              filteredProjects.map((project, index) => (
+                <tr key={project.id} className="hover:bg-red-50 transition-colors duration-150">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-800 text-sm font-medium rounded-full">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {project.researchCenterId}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-900">{project.researchCenter}</div>
+                    {project.reportCount > 1 && (
+                      <div className="text-xs text-gray-500 mt-1">{project.reportCount} reports</div>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="text-sm text-gray-700">{project.dateSubmitted}</div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <button 
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors duration-150"
+                      onClick={() => handleViewClick(project)}
+                    >
+                      View Details
+                    </button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      {/* Header Section */}
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
             Progress Reports
           </h1>
           <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-            Monitor and review research project progress reports
+            Monitor and track project progress across research centers
           </p>
         </div>
       </div>
 
-      {/* Filters and Search */}
-      <div className="p-6 border-b border-gray-200">
-        <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between mb-6">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search reports..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full sm:w-80 pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
-              />
-              <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
-            </div>
-            
-            <div className="flex gap-2">
-              <select 
-                value={filterStatus} 
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <option value="All">All Status</option>
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-              
-              <select 
-                value={filterPeriod} 
-                onChange={(e) => setFilterPeriod(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-              >
-                <option value="All">All Periods</option>
-                {periodOptions.map((period) => (
-                  <option key={period} value={period}>
-                    {period}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div className="flex gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-              <BiDownload className="text-sm" />
-              Export
-            </button>
-            <button className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200">
-              <BiCalendar className="text-sm" />
-              Generate Report
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Progress Reports Table */}
-      <div className="p-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          {/* Table Header */}
-          <div className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
-            <div>Project Details</div>
-            <div>Author & College</div>
-            <div>Status & Timeline</div>
-            <div>Progress</div>
-            <div>Budget</div>
-            <div>Actions</div>
-          </div>
-
-          {/* Table Body */}
-          <div className="divide-y divide-gray-100">
-            {filteredReports.map((report) => (
-              <div key={report.id} className="grid grid-cols-[2fr_1fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150">
-                {/* Project Details */}
-                <div>
-                  <h3 className="font-bold text-gray-900 mb-1">{report.projectTitle}</h3>
-                  <div className="text-sm text-gray-600">ID: {report.displayId}</div>
-                  <div className="text-sm text-gray-600">
-                    {report.submittedDate ? `Submitted: ${report.submittedDate}` : 'Submission pending'}
-                  </div>
-                </div>
-
-                {/* Author & College */}
-                <div>
-                  <div className="font-medium text-gray-900">{report.author}</div>
-                  <div className="text-sm text-gray-600">{report.college}</div>
-                </div>
-
-                {/* Status & Timeline */}
-                <div>
-                  <div className="mb-2">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusClass(report.status)}`}>
-                      {report.status}
-                    </span>
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {report.reportPeriod || 'No reporting period'}
-                  </div>
-                  {report.lastUpdated && (
-                    <div className="text-xs text-gray-500 mt-1">Updated: {report.lastUpdated}</div>
-                  )}
-                </div>
-
-                {/* Progress */}
-                <div>
-                  <div className="mb-1">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full ${getProgressColor(report.progress)} transition-all duration-300`}
-                        style={{ width: `${report.progress}%` }}
-                      ></div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-600">{report.progress}% complete</div>
-                </div>
-
-                {/* Budget */}
-                <div>
-                  <div className={`font-bold ${report.hasBudgetUtilized ? 'text-gray-900' : 'text-gray-500'}`}>
-                    {report.hasBudgetUtilized ? report.formattedBudgetUtilized : 'Not reported'}
-                  </div>
-                  <div className="text-sm text-gray-600">
-                    {report.hasTotalBudget
-                      ? `of ${report.formattedTotalBudget}`
-                      : 'Total budget not recorded'}
-                  </div>
-                </div>
-
-                {/* Actions */}
-                <div className="flex items-center gap-2">
-                  <button className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1">
-                    <BiShow className="text-sm" />
-                    Review
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* Summary Stats */}
-      <div className="p-6">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-gray-900">{summary.total}</div>
-            <div className="text-sm text-gray-600">Total Proposals</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-amber-600">
-              {summary.underReview}
-            </div>
-            <div className="text-sm text-gray-600">Under Review</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-blue-600">
-              {summary.ongoing}
-            </div>
-            <div className="text-sm text-gray-600">Ongoing</div>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 text-center">
-            <div className="text-2xl font-bold text-green-600">
-              {summary.completed}
-            </div>
-            <div className="text-sm text-gray-600">Completed</div>
-          </div>
-        </div>
+      <div className="max-w-7xl mx-auto px-6 py-8">
+        {/* Completed Project Reports */}
+        <TableSection />
       </div>
     </div>
   );

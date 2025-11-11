@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BiSearch, BiShow } from 'react-icons/bi';
-import { Link } from 'react-router-dom';
+import { Link } from '@inertiajs/react';
 import { DollarSign } from 'lucide-react';
 import StatsCard from '../../../Components/UI/StatsCard';
 import { getStatusBadgeClass, getProgressBarClass } from '../../../config/statusStyles';
@@ -271,7 +271,7 @@ const RDDDashboard = () => {
                 {/* Project Details */}
                 <div>
                   <Link 
-                    to={`/rdd/proposal/${research.id}`}
+                    href={`/rdd/proposal/${research.id}`}
                     className="font-bold text-gray-900 mb-1 hover:text-blue-600 transition-colors duration-200 cursor-pointer block"
                   >
                     {research.title}

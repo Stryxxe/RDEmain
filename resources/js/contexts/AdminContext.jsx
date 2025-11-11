@@ -1,5 +1,13 @@
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import axios from 'axios';
+import { useAuth } from './AuthContext';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const AdminContext = createContext();
 
@@ -130,13 +138,37 @@ const generateMockUsers = () => {
 
 export function AdminProvider({ children }) {
   const [state, dispatch] = useReducer(adminReducer, initialState);
+  
+  // Get user from auth context - hooks must be called unconditionally
+  let user = null;
+  try {
+    const authContext = useAuth();
+    user = authContext?.user || null;
+  } catch (error) {
+    // AuthContext might not be available, or user is not authenticated
+    // This is fine - we'll just skip loading users
+    user = null;
+  }
 
   useEffect(() => {
+    // Check current pathname - this will be checked on each effect run
+    const currentPath = window.location.pathname;
+    
+    // Only load users if user is authenticated and has an ID
+    // Also check if we're on the login page or home page (unauthenticated)
+    const isLoginPage = currentPath === '/login' || currentPath === '/';
+    const isAuthenticated = user && (user.userID || user.id);
+    
+    if (!isAuthenticated || isLoginPage) {
+      return;
+    }
+
     async function loadUsers() {
       dispatch({ type: ACTIONS.SET_LOADING, payload: true });
       try {
-        const response = await axios.get('/admin/users', {
-          headers: { 'Accept': 'application/json' }
+        const response = await axiosInstance.get('/admin/users', {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
         });
         const data = response?.data || {};
         const users = Array.isArray(data.users) ? data.users : [];
@@ -150,14 +182,15 @@ export function AdminProvider({ children }) {
       }
     }
     loadUsers();
-  }, []);
+  }, [user]);
 
   const actions = {
     setLoading: (loading) => dispatch({ type: ACTIONS.SET_LOADING, payload: loading }),
     setError: (error) => dispatch({ type: ACTIONS.SET_ERROR, payload: error }),
     addUser: async (userData) => {
-      const response = await axios.post('/admin/users', userData, {
-        headers: { 'Accept': 'application/json' }
+      const response = await axiosInstance.post('/admin/users', userData, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
       });
       const createdUser = response?.data?.user;
       if (createdUser) {
@@ -166,8 +199,9 @@ export function AdminProvider({ children }) {
       return response?.data;
     },
     updateUser: async (userId, userData) => {
-      const response = await axios.put(`/admin/users/${userId}`, userData, {
-        headers: { 'Accept': 'application/json' }
+      const response = await axiosInstance.put(`/admin/users/${userId}`, userData, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
       });
       const updatedUser = response?.data?.user;
       if (updatedUser) {

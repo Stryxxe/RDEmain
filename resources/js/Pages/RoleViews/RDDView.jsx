@@ -3,9 +3,9 @@ import { useAuth } from '../../contexts/AuthContext';
 import RoleViewFactory from '../../Components/RoleBased/RoleViewFactory';
 import InertiaRoleRouter from '../../Components/RoleBased/InertiaRoleRouter';
 
-const OSUORUView = () => {
+const RDDView = () => {
   const { user } = useAuth();
-  const userRole = user?.role?.userRole || 'OSUORU';
+  const userRole = user?.role?.userRole || 'RDD';
 
   return (
     <RoleViewFactory role={userRole}>
@@ -14,4 +14,5 @@ const OSUORUView = () => {
   );
 };
 
-export default OSUORUView;
+export default RDDView;
+

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
 import { useNotifications } from '../contexts/NotificationContext';
 import { Bell, Check, X, Filter, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
@@ -8,7 +8,6 @@ const Notification = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const notificationsPerPage = 6;
   const { notifications, loading, unreadCount, markAsRead: markAsReadContext, markAllAsRead: markAllAsReadContext, removeNotification: removeNotificationContext, refreshNotifications } = useNotifications();
-  const navigate = useNavigate();
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown time';
@@ -122,7 +121,7 @@ const Notification = () => {
     }
     // Only navigate if it's a proposal notification, otherwise stay on the page
     if (notification.type === 'proposal') {
-      navigate('/proponent/projects');
+      router.visit('/proponent/projects');
     }
     // For other notification types, just mark as read and stay on the page
   };

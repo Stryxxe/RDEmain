@@ -83,17 +83,80 @@ const RDDSubmitReport = () => {
     }));
   };
 
-  const handleSubmit = (e) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    // Handle form submission
-    console.log('Report submitted:', {
-      project: selectedProject,
-      reportType,
-      reportPeriod,
-      data: reportData,
-      files: uploadedFiles
-    });
-    alert('Report submitted successfully!');
+    
+    if (!selectedProject) {
+      alert('Please select a project');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      // Extract proposal ID from selected project
+      // The selectedProject value should be the proposalID (numeric)
+      const proposalID = parseInt(selectedProject);
+      
+      if (isNaN(proposalID)) {
+        setError('Invalid project selected');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Parse budget utilized to remove currency symbols and commas
+      const budgetUtilized = reportData.budgetUtilized
+        ? parseFloat(reportData.budgetUtilized.replace(/[₱,]/g, ''))
+        : null;
+
+      const reportPayload = {
+        proposalID: proposalID,
+        reportType,
+        reportPeriod,
+        progressPercentage: parseInt(reportData.progress),
+        budgetUtilized: budgetUtilized,
+        achievements: reportData.achievements,
+        challenges: reportData.challenges || '',
+        nextMilestone: reportData.nextMilestone,
+        additionalNotes: reportData.additionalNotes || '',
+        files: uploadedFiles
+      };
+
+      const response = await rddService.submitProgressReport(reportPayload);
+
+      if (response.success) {
+        setSubmitSuccess(true);
+        // Reset form
+        setSelectedProject('');
+        setReportType('Quarterly');
+        setReportPeriod('');
+        setUploadedFiles([]);
+        setReportData({
+          progress: '',
+          achievements: '',
+          challenges: '',
+          budgetUtilized: '',
+          nextMilestone: '',
+          additionalNotes: ''
+        });
+        
+        // Hide success message after 5 seconds
+        setTimeout(() => {
+          setSubmitSuccess(false);
+        }, 5000);
+      } else {
+        setError(response.message || 'Failed to submit report');
+      }
+    } catch (err) {
+      console.error('Error submitting report:', err);
+      setError(err.response?.data?.message || 'Error submitting report. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (loading) {
@@ -146,6 +209,19 @@ const RDDSubmitReport = () => {
       </div>
 
       <div className="max-w-4xl mx-auto p-6">
+        {submitSuccess && (
+          <div className="mb-6 bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg">
+            <div className="flex items-center">
+              <BiCheck className="text-green-600 text-xl mr-2" />
+              <span>Progress report submitted successfully!</span>
+            </div>
+          </div>
+        )}
+        {error && (
+          <div className="mb-6 bg-red-50 border border-red-200 text-red-800 px-4 py-3 rounded-lg">
+            {error}
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-8">
           {/* Project Selection */}
           <div className="mb-6">
@@ -161,7 +237,7 @@ const RDDSubmitReport = () => {
               <option value="">Choose a project...</option>
               {projects.map(project => (
                 <option key={project.id} value={project.id}>
-                  {project.title} - {project.author}
+                  {project.displayId || project.id} - {project.title} - {project.author}
                 </option>
               ))}
             </select>
@@ -356,10 +432,20 @@ const RDDSubmitReport = () => {
           <div className="flex justify-end">
             <button
               type="submit"
-              className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 font-medium"
+              disabled={isSubmitting}
+              className="flex items-center gap-2 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <BiCheck className="text-lg" />
-              Submit Report
+              {isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <BiCheck className="text-lg" />
+                  Submit Report
+                </>
+              )}
             </button>
           </div>
         </form>

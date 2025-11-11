@@ -17,6 +17,7 @@ class File extends Model
 
     protected $fillable = [
         'proposalID',
+        'reportID',
         'fileName',
         'filePath',
         'fileType',
@@ -35,6 +36,14 @@ class File extends Model
     public function proposal(): BelongsTo
     {
         return $this->belongsTo(Proposal::class, 'proposalID', 'proposalID');
+    }
+
+    /**
+     * Get the progress report that owns the file
+     */
+    public function progressReport(): BelongsTo
+    {
+        return $this->belongsTo(ProgressReport::class, 'reportID', 'reportID');
     }
 
     /**

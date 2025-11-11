@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { router } from '@inertiajs/react';
 import { Search, Eye, ChevronUp, RefreshCw } from 'lucide-react';
 import apiService from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +18,6 @@ const Projects = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadProjects();
@@ -147,7 +146,7 @@ const Projects = () => {
 
   // Handle view details click
   const handleViewDetails = (projectId) => {
-    navigate(`/proponent/projects/${projectId}`);
+    router.visit(`/proponent/projects/${projectId}`);
   };
 
   if (loading) {
@@ -347,7 +346,7 @@ const Projects = () => {
             </p>
             {!searchTerm && (
               <button
-                onClick={() => navigate('submit')}
+                onClick={() => router.visit('/proponent/submit')}
                 className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
               >
                 Submit Proposal
