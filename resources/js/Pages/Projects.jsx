@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Search, Eye, ChevronUp, RefreshCw } from 'lucide-react';
 import apiService from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +10,7 @@ import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
 
 const Projects = () => {
   const { user } = useAuth();
+  const { props } = usePage();
   const { refreshAllNotifications } = useNotifications();
   const { refreshAllMessages } = useMessages();
   const [searchTerm, setSearchTerm] = useState('');
@@ -19,18 +20,49 @@ const Projects = () => {
   const [error, setError] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+
   useEffect(() => {
-    loadProjects();
-  }, []);
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
+    }
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is a Proponent
+      if (currentUser.role?.userRole !== 'Proponent') {
+        router.visit('/dashboard');
+        return;
+      }
+      
+      loadProjects();
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [currentUser]);
 
   // Refresh projects when user name changes (e.g., after profile update)
   useEffect(() => {
-    if (user && user.fullName) {
+    if (currentUser && currentUser.fullName && currentUser.role?.userRole === 'Proponent') {
       loadProjects();
     }
-  }, [user?.fullName]);
+  }, [currentUser?.fullName]);
 
   const loadProjects = async () => {
+    // Validate authentication before loading
+    if (!currentUser || currentUser.role?.userRole !== 'Proponent') {
+      setError('You must be logged in as a Proponent to view projects.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -42,7 +74,15 @@ const Projects = () => {
         setError(response.message || 'Failed to load projects');
       }
     } catch (error) {
-      setError('Failed to load projects. Please try again.');
+      console.error('Error loading projects:', error);
+      if (error.message.includes('Unauthenticated')) {
+        setError('Your session has expired. Please log in again.');
+        setTimeout(() => {
+          router.visit('/login');
+        }, 2000);
+      } else {
+        setError('Failed to load projects. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -213,7 +253,7 @@ const Projects = () => {
                 <option value="title">Title</option>
                 <option value="author">Author</option>
                 <option value="status">Status</option>
-                <option value="funding">Funding</option>
+                <option value="funding">Proposed Funding</option>
                 <option value="date">Date</option>
               </select>
               <ChevronUp size={16} className="text-gray-500" />
@@ -249,10 +289,10 @@ const Projects = () => {
                     Status & Progress
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Funding
+                    Proposed Funding
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    Details
                   </th>
                 </tr>
               </thead>

@@ -1,13 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
 import { useNotifications } from '../contexts/NotificationContext';
+import { useAuth } from '../contexts/AuthContext';
 import { Bell, Check, X, Filter, RefreshCw, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const Notification = () => {
+  const { user } = useAuth();
   const [filter, setFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const notificationsPerPage = 6;
   const { notifications, loading, unreadCount, markAsRead: markAsReadContext, markAllAsRead: markAllAsReadContext, removeNotification: removeNotificationContext, refreshNotifications } = useNotifications();
+
+  // Validate authentication on mount
+  useEffect(() => {
+    if (!user) {
+      router.visit('/login');
+      return;
+    }
+  }, [user]);
 
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown time';

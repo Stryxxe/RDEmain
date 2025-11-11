@@ -1,10 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../../contexts/AuthContext';
+import axios from 'axios';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const CMSubmitReport = () => {
   const { user } = useAuth();
+  const [proposals, setProposals] = useState([]);
+  const [loadingProposals, setLoadingProposals] = useState(true);
   const [formData, setFormData] = useState({
-    projectId: '',
+    proposalID: '',
     reportType: '',
     title: '',
     description: '',
@@ -12,8 +22,79 @@ const CMSubmitReport = () => {
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Fetch proposals that can have reports submitted
+  useEffect(() => {
+    const fetchProposals = async () => {
+      if (!user) return;
+      
+      try {
+        setLoadingProposals(true);
+        // Fetch proposals from the same department that have been endorsed/approved
+        const response = await axiosInstance.get('/proposals', {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
+        });
+        
+        if (response.data.success) {
+          // Filter proposals that are from the same department (for monitoring purposes)
+          // CMs can submit reports for any proposal in their department regardless of status
+          const filteredProposals = response.data.data.filter(proposal => {
+            // Only show proposals from the same department
+            return proposal.user?.departmentID === user.departmentID;
+          });
+          setProposals(filteredProposals);
+        }
+      } catch (error) {
+        console.error('Error fetching proposals:', error);
+      } finally {
+        setLoadingProposals(false);
+      }
+    };
+
+    if (user) {
+      fetchProposals();
+    }
+  }, [user]);
+  
+  // Count words in text
+  const countWords = (text) => {
+    if (!text || !text.trim()) return 0;
+    return text.trim().split(/\s+/).filter(word => word.length > 0).length;
+  };
+  
+  const descriptionWordCount = countWords(formData.description);
+  const maxWords = 250;
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    
+    // Enforce word limit for description field
+    if (name === 'description') {
+      const words = value.trim().split(/\s+/).filter(word => word.length > 0);
+      if (words.length > maxWords) {
+        // Get the text up to the maxWords limit
+        let limitedText = '';
+        let wordCount = 0;
+        const textParts = value.split(/\s+/);
+        
+        for (let i = 0; i < textParts.length; i++) {
+          if (textParts[i].trim().length > 0) {
+            if (wordCount >= maxWords) {
+              break;
+            }
+            wordCount++;
+          }
+          limitedText += (i > 0 ? ' ' : '') + textParts[i];
+        }
+        
+        setFormData(prev => ({
+          ...prev,
+          [name]: limitedText
+        }));
+        return;
+      }
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -30,26 +111,62 @@ const CMSubmitReport = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // Validate required fields
+    if (!formData.proposalID) {
+      alert('Please select a project to submit a report for.');
+      return;
+    }
+    
+    // Validate word count
+    if (descriptionWordCount > maxWords) {
+      alert(`Description must not exceed ${maxWords} words. Please reduce your text.`);
+      return;
+    }
+    
     setIsSubmitting(true);
     
     try {
-      // Here you would submit the report to the backend
-      console.log('Submitting report:', formData);
+      // Prepare form data for submission
+      const submitData = new FormData();
+      submitData.append('proposalID', formData.proposalID);
+      submitData.append('reportType', formData.reportType || 'Interim');
+      submitData.append('reportPeriod', formData.title || 'Progress Report');
+      submitData.append('progressPercentage', 0); // Default, can be updated later
+      submitData.append('achievements', formData.description || '');
+      submitData.append('nextMilestone', 'Ongoing');
       
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Add attachments
+      if (formData.attachments && formData.attachments.length > 0) {
+        formData.attachments.forEach((file) => {
+          submitData.append('files[]', file);
+        });
+      }
       
-      alert('Report submitted successfully!');
-      setFormData({
-        projectId: '',
-        reportType: '',
-        title: '',
-        description: '',
-        attachments: []
+      const response = await axiosInstance.post('/progress-reports', submitData, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'multipart/form-data'
+        },
+        withCredentials: true
       });
+      
+      if (response.data.success) {
+        alert('Report submitted successfully!');
+        setFormData({
+          proposalID: '',
+          reportType: '',
+          title: '',
+          description: '',
+          attachments: []
+        });
+      } else {
+        alert('Failed to submit report: ' + (response.data.message || 'Unknown error'));
+      }
     } catch (error) {
       console.error('Error submitting report:', error);
-      alert('Error submitting report. Please try again.');
+      const errorMessage = error.response?.data?.message || error.message || 'Unknown error';
+      alert('Error submitting report: ' + errorMessage);
     } finally {
       setIsSubmitting(false);
     }
@@ -82,6 +199,56 @@ const CMSubmitReport = () => {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-6">
+          {/* Project Selection */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-medium mb-2">
+              Select Project <span className="text-red-500">*</span>
+            </label>
+            {loadingProposals ? (
+              <div className="px-3 py-2 border border-gray-300 rounded-md bg-gray-50 text-gray-500">
+                Loading projects...
+              </div>
+            ) : (
+              <select
+                value={formData.proposalID}
+                onChange={handleInputChange}
+                name="proposalID"
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">-- Select a project --</option>
+                {proposals.map((proposal) => (
+                  <option key={proposal.proposalID} value={proposal.proposalID}>
+                    {proposal.researchTitle} (ID: PRO-{proposal.proposalID.toString().padStart(6, '0')})
+                  </option>
+                ))}
+              </select>
+            )}
+            {!loadingProposals && proposals.length === 0 && (
+              <p className="text-sm text-gray-500 mt-1">
+                No projects found in your department.
+              </p>
+            )}
+          </div>
+
+          {/* Report Type */}
+          <div className="mb-6">
+            <label className="block text-gray-700 font-medium mb-2">
+              Report Type
+            </label>
+            <select
+              value={formData.reportType}
+              onChange={handleInputChange}
+              name="reportType"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value="Interim">Interim</option>
+              <option value="Quarterly">Quarterly</option>
+              <option value="Annual">Annual</option>
+              <option value="Final">Final</option>
+            </select>
+          </div>
+
           {/* File Upload Section */}
           <div className="mb-6">
             <label className="block text-gray-700 font-medium mb-2">
@@ -147,6 +314,9 @@ const CMSubmitReport = () => {
           <div className="mb-6">
             <label className="block text-gray-700 font-medium mb-2">
               Description
+              <span className="text-xs font-normal text-gray-500 ml-2">
+                ({descriptionWordCount}/{maxWords} words)
+              </span>
             </label>
             <textarea
               placeholder="Enter report description"
@@ -154,17 +324,27 @@ const CMSubmitReport = () => {
               value={formData.description}
               onChange={handleInputChange}
               name="description"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:border-transparent ${
+                descriptionWordCount > maxWords
+                  ? 'border-red-500 focus:ring-red-500'
+                  : 'border-gray-300 focus:ring-blue-500 focus:border-blue-500'
+              }`}
             />
+            {descriptionWordCount > maxWords && (
+              <p className="text-xs text-red-500 mt-1">
+                Maximum {maxWords} words allowed. Please reduce your text.
+              </p>
+            )}
           </div>
 
           {/* Submit Button */}
           <div className="flex justify-end">
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              disabled={isSubmitting || !formData.proposalID}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Submit
+              {isSubmitting ? 'Submitting...' : 'Submit'}
             </button>
           </div>
         </form>

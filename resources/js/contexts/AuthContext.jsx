@@ -26,28 +26,29 @@ export const AuthProvider = ({ children, user: initialUser }) => {
     // Clear local storage first
     localStorage.removeItem('dismissedNotifications');
     
+    // Get fresh CSRF token from meta tag
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    
+    if (!csrfToken) {
+      console.error('CSRF token not found. Attempting to refresh page to get new token.');
+      // If no CSRF token, try to get a fresh one by visiting the current page
+      window.location.reload();
+      return;
+    }
+    
     // Create a form and submit it - this is the most reliable way to handle logout
     // Forms automatically include CSRF tokens and handle redirects properly
     const form = document.createElement('form');
     form.method = 'POST';
     form.action = '/logout';
+    form.style.display = 'none';
     
     // Add CSRF token as hidden input
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    if (csrfToken) {
-      const csrfInput = document.createElement('input');
-      csrfInput.type = 'hidden';
-      csrfInput.name = '_token';
-      csrfInput.value = csrfToken;
-      form.appendChild(csrfInput);
-    }
-    
-    // Add method spoofing for POST
-    const methodInput = document.createElement('input');
-    methodInput.type = 'hidden';
-    methodInput.name = '_method';
-    methodInput.value = 'POST';
-    form.appendChild(methodInput);
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = '_token';
+    csrfInput.value = csrfToken;
+    form.appendChild(csrfInput);
     
     // Append to body and submit
     document.body.appendChild(form);

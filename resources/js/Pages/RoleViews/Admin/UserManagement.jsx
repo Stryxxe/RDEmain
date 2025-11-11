@@ -1,12 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { router, usePage } from '@inertiajs/react';
+import { useAuth } from '../../../contexts/AuthContext';
 import { useAdmin } from '../../../contexts/AdminContext';
 import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiEye } from 'react-icons/fi';
 import { format } from 'date-fns';
-import UserForm from '../../../components/Admin/UserFormFixed';
-import UserDetails from '../../../components/Admin/UserDetails';
+import UserForm from '../../../Components/Admin/UserFormFixed';
+import UserDetails from '../../../Components/Admin/UserDetails';
 
 const UserManagement = () => {
+  const { user } = useAuth();
+  const { props } = usePage();
   const { paginatedUsers, totalPages, pagination, filters, setFilters, setPagination, deleteUser, resetFilters, filteredUsers } = useAdmin();
+  
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+
+  // Validate authentication and role
+  useEffect(() => {
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
+    }
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is an Admin or Administrator
+      const isAdmin = currentUser.role?.userRole === 'Admin' || 
+                     currentUser.role?.userRole === 'Administrator';
+      
+      if (!isAdmin) {
+        router.visit('/dashboard');
+        return;
+      }
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [currentUser]);
 
   const [showUserForm, setShowUserForm] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
@@ -193,7 +227,7 @@ const UserManagement = () => {
                 <th>Status</th>
                 <th>Department</th>
                 <th>Last Login</th>
-                <th>Actions</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>

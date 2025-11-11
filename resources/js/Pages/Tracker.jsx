@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { ArrowRight, Clock, CheckCircle, AlertCircle, XCircle, Search, ChevronDown, ChevronUp, Eye, RefreshCw } from 'lucide-react';
 import { BiSearch, BiShow } from 'react-icons/bi';
+import { useAuth } from '../contexts/AuthContext';
 import apiService from '../services/api';
 import { useNotifications } from '../contexts/NotificationContext';
 import { useMessages } from '../contexts/MessageContext';
@@ -9,6 +10,8 @@ import AutoRefreshControls from '../Components/AutoRefreshControls';
 import RefreshStatusIndicator from '../Components/RefreshStatusIndicator';
 
 const Tracker = () => {
+  const { user } = useAuth();
+  const { props } = usePage();
   const { refreshAllNotifications } = useNotifications();
   const { refreshAllMessages } = useMessages();
   const [projects, setProjects] = useState([]);
@@ -21,11 +24,43 @@ const Tracker = () => {
   const [fromYear, setFromYear] = useState('2025');
   const [toYear, setToYear] = useState('2025');
 
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+
+  // Validate authentication on mount
   useEffect(() => {
-    loadProjects();
-  }, []);
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
+    }
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is a Proponent
+      if (currentUser.role?.userRole !== 'Proponent') {
+        router.visit('/dashboard');
+        return;
+      }
+      
+      loadProjects();
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [currentUser]);
 
   const loadProjects = async () => {
+    // Validate authentication before loading
+    if (!currentUser || currentUser.role?.userRole !== 'Proponent') {
+      setError('You must be logged in as a Proponent to view proposals.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -37,7 +72,15 @@ const Tracker = () => {
         setError(response.message || 'Failed to load projects');
       }
     } catch (error) {
-      setError('Failed to load projects. Please try again.');
+      console.error('Error loading projects:', error);
+      if (error.message.includes('Unauthenticated')) {
+        setError('Your session has expired. Please log in again.');
+        setTimeout(() => {
+          router.visit('/login');
+        }, 2000);
+      } else {
+        setError('Failed to load projects. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -316,8 +359,8 @@ const Tracker = () => {
             <div>Research Title</div>
             <div>Author & College</div>
             <div>Status & Progress</div>
-            <div>Budget</div>
-            <div>Actions</div>
+            <div>Proposed Funding</div>
+            <div>Details</div>
           </div>
 
           {/* Table Body */}

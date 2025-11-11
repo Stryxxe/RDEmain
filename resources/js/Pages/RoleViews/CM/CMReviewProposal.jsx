@@ -25,6 +25,7 @@ const CMReviewProposal = () => {
   const [selectedProposal, setSelectedProposal] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [proposals, setProposals] = useState([]);
+  const [endorsedProposalIds, setEndorsedProposalIds] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const itemsPerPage = 10;
@@ -46,6 +47,13 @@ const CMReviewProposal = () => {
     }
   }, []);
 
+  // Fetch endorsed proposals when user is available
+  useEffect(() => {
+    if (user) {
+      fetchEndorsedProposals();
+    }
+  }, [user]);
+
   const fetchProposals = async () => {
     try {
       setLoading(true);
@@ -66,11 +74,38 @@ const CMReviewProposal = () => {
     }
   };
 
+  // Fetch proposals that have been endorsed by the current user
+  const fetchEndorsedProposals = async () => {
+    if (!user) return;
+    
+    try {
+      // Get all endorsements by the current user
+      const response = await axiosInstance.get('/endorsements', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
+      
+      if (response.data.success && response.data.data) {
+        // Extract proposal IDs that have been endorsed by this user
+        const endorsedIds = new Set(
+          response.data.data
+            .filter(endorsement => endorsement.endorsementStatus === 'approved')
+            .map(endorsement => endorsement.proposalID || endorsement.proposal?.proposalID)
+            .filter(id => id !== undefined)
+        );
+        setEndorsedProposalIds(endorsedIds);
+      }
+    } catch (error) {
+      console.error('Error fetching endorsed proposals:', error);
+    }
+  };
+
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
       await Promise.all([
         fetchProposals(),
+        fetchEndorsedProposals(),
         refreshAllNotifications(),
         refreshAllMessages()
       ]);
@@ -82,10 +117,28 @@ const CMReviewProposal = () => {
   };
 
   const handleViewClick = (proposal) => setSelectedProposal(proposal);
-  const handleBack = () => setSelectedProposal(null);
+  
+  const handleBack = () => {
+    setSelectedProposal(null);
+    // Refresh the list when going back to remove endorsed proposals
+    fetchEndorsedProposals();
+  };
 
-  // Filter proposals based on search
+  // Remove a proposal from the list when it's endorsed
+  const handleProposalEndorsed = (proposalId) => {
+    setEndorsedProposalIds(prev => new Set([...prev, proposalId]));
+    // Remove from proposals list
+    setProposals(prev => prev.filter(p => (p.proposalID || p.id) !== proposalId));
+  };
+
+  // Filter proposals based on search and exclude already endorsed proposals
   const filteredProposals = proposals.filter(proposal => {
+    const proposalId = proposal.proposalID || proposal.id;
+    // Exclude proposals that have been endorsed by the current user
+    if (endorsedProposalIds.has(proposalId)) {
+      return false;
+    }
+    
     const matchesSearch = proposal.researchTitle.toLowerCase().includes(search.toLowerCase()) ||
                          proposal.user?.fullName.toLowerCase().includes(search.toLowerCase());
     return matchesSearch;
@@ -100,7 +153,13 @@ const CMReviewProposal = () => {
   const handlePageChange = (page) => setCurrentPage(page);
 
   if (selectedProposal) {
-    return <CMProposalDetails proposal={selectedProposal} onBack={handleBack} />;
+    return (
+      <CMProposalDetails 
+        proposal={selectedProposal} 
+        onBack={handleBack}
+        onEndorsed={handleProposalEndorsed}
+      />
+    );
   }
 
   if (loading) {
@@ -216,7 +275,7 @@ const CMReviewProposal = () => {
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Title</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Author</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Submitted</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-100">

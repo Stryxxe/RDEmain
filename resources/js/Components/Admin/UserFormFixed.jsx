@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { useAdmin } from '../../contexts/AdminContext';
 import { FiX, FiUser, FiMail, FiPhone, FiHome } from 'react-icons/fi';
+import axios from 'axios';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const UserFormFixed = ({ user, onClose }) => {
   const { addUser, updateUser } = useAdmin();
+  const [departments, setDepartments] = useState([]);
+  const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -15,19 +25,57 @@ const UserFormFixed = ({ user, onClose }) => {
   });
   const [errors, setErrors] = useState({});
 
+  // Fetch departments on mount
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        setLoadingDepartments(true);
+        const response = await axiosInstance.get('/admin/departments', {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
+        });
+        
+        if (response.data.success) {
+          setDepartments(response.data.data || []);
+        }
+      } catch (error) {
+        console.error('Error fetching departments:', error);
+        // If API fails, use empty array - form will still work with text input fallback
+        setDepartments([]);
+      } finally {
+        setLoadingDepartments(false);
+      }
+    };
+
+    fetchDepartments();
+  }, []);
+
   useEffect(() => {
     if (user) {
+      // When editing, try to match the department name with the departments list
+      let departmentValue = user.department || '';
+      
+      // If departments are loaded and user has a department, try to match it
+      if (departments.length > 0 && departmentValue) {
+        const matchedDept = departments.find(
+          dept => (dept.name || dept.departmentName) === departmentValue
+        );
+        if (matchedDept) {
+          departmentValue = matchedDept.name || matchedDept.departmentName;
+        }
+      }
+      
       setFormData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
         role: user.role || 'proponent',
         status: user.status || 'active',
-        department: user.department || '',
+        department: departmentValue,
         phone: user.phone || ''
       });
     }
-  }, [user]);
+  }, [user, departments]);
 
   const validateForm = () => {
     const newErrors = {};
@@ -123,8 +171,35 @@ const UserFormFixed = ({ user, onClose }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
                   <div className="relative">
-                    <FiHome className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input type="text" name="department" value={formData.department} onChange={handleChange} className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''}`} placeholder="Enter department" />
+                    <FiHome className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10" />
+                    {loadingDepartments ? (
+                      <div className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''} bg-gray-50`}>
+                        <span className="text-gray-500 text-sm">Loading departments...</span>
+                      </div>
+                    ) : departments.length > 0 ? (
+                      <select 
+                        name="department" 
+                        value={formData.department} 
+                        onChange={handleChange} 
+                        className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''}`}
+                      >
+                        <option value="">-- Select a department --</option>
+                        {departments.map((dept) => (
+                          <option key={dept.departmentID} value={dept.name || dept.departmentName}>
+                            {dept.name || dept.departmentName}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <input 
+                        type="text" 
+                        name="department" 
+                        value={formData.department} 
+                        onChange={handleChange} 
+                        className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''}`} 
+                        placeholder="Enter department" 
+                      />
+                    )}
                   </div>
                   {errors.department && <p className="mt-1 text-sm text-red-600">{errors.department}</p>}
                 </div>

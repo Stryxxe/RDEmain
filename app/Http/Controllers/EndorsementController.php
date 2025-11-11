@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Endorsement;
 use App\Models\Proposal;
+use App\Models\Notification;
+use App\Models\User;
 use App\Events\ProposalEndorsed;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -81,8 +83,56 @@ class EndorsementController extends Controller
                 'endorsementStatus' => $request->endorsementStatus
             ]);
 
-            // If approved, dispatch the ProposalEndorsed event
+            // If approved, notify RDD users and dispatch the ProposalEndorsed event
             if ($request->endorsementStatus === 'approved') {
+                // Ensure proposal user and department relationships are loaded
+                if (!$proposal->relationLoaded('user')) {
+                    $proposal->load('user');
+                }
+                if (!$proposal->user->relationLoaded('department')) {
+                    $proposal->user->load('department');
+                }
+
+                // Get department name
+                $departmentName = $proposal->user->department ? $proposal->user->department->name : 'Unknown Department';
+
+                // Notify the proponent that their proposal has been endorsed
+                Notification::create([
+                    'userID' => $proposal->userID,
+                    'type' => 'success',
+                    'title' => 'Proposal Endorsed',
+                    'message' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and forwarded to RDD.",
+                    'data' => [
+                        'proposal_id' => $proposal->proposalID,
+                        'proposal_title' => $proposal->researchTitle,
+                        'endorser_name' => $user->fullName,
+                        'event' => 'proposal.endorsed.proponent'
+                    ]
+                ]);
+
+                // Find all RDD users and notify them
+                $rddUsers = User::whereHas('role', function($query) {
+                    $query->where('userRole', 'RDD');
+                })->get();
+
+                foreach ($rddUsers as $rddUser) {
+                    Notification::create([
+                        'userID' => $rddUser->userID,
+                        'type' => 'info',
+                        'title' => 'New Proposal Endorsed',
+                        'message' => "A proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} ({$departmentName}) and is ready for RDD review.",
+                        'data' => [
+                            'proposal_id' => $proposal->proposalID,
+                            'proposal_title' => $proposal->researchTitle,
+                            'endorser_name' => $user->fullName,
+                            'proponent_name' => $proposal->user->fullName,
+                            'department' => $departmentName,
+                            'event' => 'proposal.endorsed.rdd'
+                        ]
+                    ]);
+                }
+
+                // Dispatch the ProposalEndorsed event (which also creates notifications as a backup)
                 event(new ProposalEndorsed($proposal, $user));
             }
 

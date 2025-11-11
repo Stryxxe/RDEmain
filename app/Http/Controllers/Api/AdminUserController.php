@@ -228,6 +228,45 @@ class AdminUserController extends Controller
 
         return Department::create($data);
     }
+
+    public function getDepartments(Request $request)
+    {
+        if (!$request->user()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthenticated'
+            ], 401);
+        }
+
+        try {
+            $table = (new Department())->getTable();
+            $hasDepartmentName = Schema::hasColumn($table, 'departmentName');
+            
+            // Order by departmentName if column exists, otherwise by name
+            $orderColumn = $hasDepartmentName ? 'departmentName' : 'name';
+            $departments = Department::orderBy($orderColumn, 'asc')->get();
+
+            // Format departments to return both name and departmentName if available
+            $formattedDepartments = $departments->map(function($dept) {
+                return [
+                    'departmentID' => $dept->departmentID,
+                    'name' => $dept->departmentName ?? $dept->name ?? 'Unknown',
+                    'departmentName' => $dept->departmentName ?? $dept->name ?? 'Unknown'
+                ];
+            })->unique('name')->values();
+
+            return response()->json([
+                'success' => true,
+                'data' => $formattedDepartments
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch departments',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
 
 

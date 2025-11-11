@@ -29,10 +29,11 @@ export const roleConfigs = {
     displayName: 'RDD',
     color: 'green',
     routes: [
-      { path: '', component: 'RDDDashboard', label: 'Tracker' },
+      { path: '', component: 'RDDDashboard', label: 'R&D Initiative Status' },
       { path: 'statistics', component: 'RDDStatistics', label: 'Statistics' },
       { path: 'review-proposal', component: 'RDDEndorsement', label: 'Endorsement' },
       { path: 'progress-report', component: 'RDDProgressReport', label: 'Progress Reports' },
+      { path: 'progress-report/:id', component: 'RDDProgressReportDetail', label: 'Progress Report Detail' },
       { path: 'submit-report', component: 'RDDSubmitReport', label: 'Submit Report' },
       { path: 'resources', component: 'RDDResources', label: 'Resources' },
       { path: 'account', component: 'RDDAccount', label: 'Account' },

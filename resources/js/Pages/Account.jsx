@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { router } from '@inertiajs/react';
 import { User, Mail, Building, Shield, Save, LogOut } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -16,15 +17,29 @@ const Account = () => {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
+  // Validate authentication on mount
+  useEffect(() => {
+    if (!user) {
+      router.visit('/login');
+      return;
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
+      // Handle department name - check both 'name' and 'departmentName'
+      const departmentName = user.department?.name || 
+                            user.department?.departmentName || 
+                            user.department || 
+                            '';
+      
       setFormData({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        department: user.department?.name || '',
+        department: departmentName,
         role: user.role?.userRole || '',
-        researchCenter: user.department?.name || ''
+        researchCenter: departmentName
       });
     }
   }, [user]);

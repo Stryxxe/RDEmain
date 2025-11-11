@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { router } from '@inertiajs/react';
+import React, { useState, useRef, useEffect } from 'react';
+import { router, usePage } from '@inertiajs/react';
+import { useAuth } from '../contexts/AuthContext';
 import FormField from '../Components/FormField';
 import CheckboxGroup from '../Components/CheckboxGroup';
 import FileUpload from '../Components/FileUpload';
@@ -8,6 +9,35 @@ import DragDropUpload from '../Components/DragDropUpload';
 import apiService from '../services/api';
 
 const SubmitPage = () => {
+  const { user } = useAuth();
+  const { props } = usePage();
+  
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+  
+  // Validate authentication on mount
+  useEffect(() => {
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
+    }
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is a Proponent
+      if (currentUser.role?.userRole !== 'Proponent') {
+        router.visit('/dashboard');
+        return;
+      }
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [currentUser]);
   const [formData, setFormData] = useState({
     reportFile: null,
     reportTitle: '',
@@ -151,12 +181,19 @@ const SubmitPage = () => {
       fieldErrors.reportFile = 'Report file is required';
     }
     if (!formData.reportTitle.trim()) {
-      errors.push('Report title is required');
-      fieldErrors.reportTitle = 'Report title is required';
+      errors.push('Research title is required');
+      fieldErrors.reportTitle = 'Research title is required';
     }
     if (!formData.description.trim()) {
       errors.push('Description is required');
       fieldErrors.description = 'Description is required';
+    } else {
+      // Validate word count (250 words max)
+      const wordCount = formData.description.trim().split(/\s+/).filter(word => word.length > 0).length;
+      if (wordCount > 250) {
+        errors.push('Description must not exceed 250 words');
+        fieldErrors.description = 'Description must not exceed 250 words';
+      }
     }
     if (!formData.objectives.trim()) {
       errors.push('Objectives are required');
@@ -212,15 +249,34 @@ const SubmitPage = () => {
       return;
     }
 
+    // Validate authentication before submission
+    if (!currentUser) {
+      setSubmitError('You must be logged in to submit a proposal. Redirecting to login...');
+      setTimeout(() => {
+        router.visit('/login');
+      }, 2000);
+      return;
+    }
+
+    if (currentUser.role?.userRole !== 'Proponent') {
+      setSubmitError('Only proponents can submit proposals.');
+      return;
+    }
+
     setIsSubmitting(true);
     setSubmitError('');
     setSubmitSuccess(false);
 
     try {
       // Parse the budget value before sending to API
+      // Get researchCenter from user's department if not provided in form
+      const researchCenter = formData.researchCenter || currentUser?.department?.name || 'Not specified';
+      
       const submissionData = {
         ...formData,
-        proposedBudget: parseNumber(formData.proposedBudget)
+        researchCenter: researchCenter,
+        proposedBudget: parseNumber(formData.proposedBudget),
+        user: currentUser // Pass user object for API service to use if needed
       };
       const response = await apiService.createProposal(submissionData);
       
@@ -241,19 +297,52 @@ const SubmitPage = () => {
           matrixOfCompliance: null
         });
         
-        // Redirect to projects page after 2 seconds
+        // Redirect to tracker page after 2 seconds
         setTimeout(() => {
-          router.visit('/proponent/projects');
+          router.visit('/proponent/tracker');
         }, 2000);
       } else {
         setSubmitError(response.message || 'Failed to submit proposal');
       }
     } catch (error) {
-      setSubmitError(error.message || 'An error occurred while submitting the proposal');
+      console.error('Error submitting proposal:', error);
+      if (error.message.includes('Unauthenticated')) {
+        setSubmitError('Your session has expired. Please log in again. Redirecting...');
+        setTimeout(() => {
+          router.visit('/login');
+        }, 2000);
+      } else if (error.message.includes('Validation failed')) {
+        // Show validation errors in a user-friendly way
+        setSubmitError(error.message || 'Please check the form and fix the errors before submitting.');
+      } else {
+        setSubmitError(error.message || 'Failed to submit proposal. Please try again.');
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Show loading or redirect if not authenticated
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Redirecting to login...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentUser.role?.userRole !== 'Proponent') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Access denied. Only proponents can submit proposals.</p>
+        </div>
+      </div>
+    );
+  }
 
   if (submitSuccess) {
     return (
@@ -301,18 +390,18 @@ const SubmitPage = () => {
             <DragDropUpload 
               onFileSelect={handleFileSelect}
               acceptedTypes="PDF, DOC, DOCX"
-              maxSize="10MB"
+              maxSize="5MB"
               selectedFile={formData.reportFile}
             />
           </div>
 
           <div className="mb-8" ref={reportTitleRef}>
             <FormField
-              label="Report Title"
+              label="Research Title"
               required
               value={formData.reportTitle}
               onChange={(value) => handleInputChange('reportTitle', value)}
-              placeholder="Enter report title"
+              placeholder="Enter research title"
             />
           </div>
 
@@ -324,6 +413,7 @@ const SubmitPage = () => {
               onChange={(value) => handleInputChange('description', value)}
               placeholder="Enter report description"
               rows={4}
+              maxWords={250}
             />
           </div>
 

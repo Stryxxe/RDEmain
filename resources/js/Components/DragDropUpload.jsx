@@ -5,7 +5,7 @@ import FileIcon from './FileIcon';
 const DragDropUpload = ({ 
   onFileSelect, 
   acceptedTypes = 'PDF, DOC, DOCX', 
-  maxSize = '10MB',
+  maxSize = '5MB',
   selectedFile = null
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -27,6 +27,26 @@ const DragDropUpload = ({
     setIsDragOver(false);
   };
 
+  const parseMaxSize = (maxSizeStr) => {
+    const match = maxSizeStr.match(/(\d+)(MB|KB|GB)/i);
+    if (!match) return 5 * 1024 * 1024; // Default 5MB
+    const size = parseInt(match[1]);
+    const unit = match[2].toUpperCase();
+    if (unit === 'MB') return size * 1024 * 1024;
+    if (unit === 'KB') return size * 1024;
+    if (unit === 'GB') return size * 1024 * 1024 * 1024;
+    return 5 * 1024 * 1024;
+  };
+
+  const validateFile = (file) => {
+    const maxSizeBytes = parseMaxSize(maxSize);
+    if (file.size > maxSizeBytes) {
+      alert(`File size exceeds the maximum allowed size of ${maxSize}. Please select a smaller file.`);
+      return false;
+    }
+    return true;
+  };
+
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragOver(false);
@@ -34,16 +54,25 @@ const DragDropUpload = ({
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const selectedFile = files[0];
-      setFile(selectedFile);
-      onFileSelect(selectedFile);
+      if (validateFile(selectedFile)) {
+        setFile(selectedFile);
+        onFileSelect(selectedFile);
+      }
     }
   };
 
   const handleFileInputChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
-      setFile(selectedFile);
-      onFileSelect(selectedFile);
+      if (validateFile(selectedFile)) {
+        setFile(selectedFile);
+        onFileSelect(selectedFile);
+      } else {
+        // Reset input
+        if (e.target) {
+          e.target.value = '';
+        }
+      }
     }
   };
 

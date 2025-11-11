@@ -18,6 +18,7 @@ const lazyComponents = {
   RDDStatistics: lazy(() => import('../../Pages/RoleViews/RDD/RDDStatistics')),
   RDDEndorsement: lazy(() => import('../../Pages/RoleViews/RDD/RDDEndorsement')),
   RDDProgressReport: lazy(() => import('../../Pages/RoleViews/RDD/RDDProgressReport')),
+  RDDProgressReportDetail: lazy(() => import('../../Pages/RoleViews/RDD/RDDProgressReportDetail')),
   RDDSubmitReport: lazy(() => import('../../Pages/RoleViews/RDD/RDDSubmitReport')),
   RDDResources: lazy(() => import('../../Pages/RoleViews/RDD/RDDResources')),
   RDDAccount: lazy(() => import('../../Pages/RoleViews/RDD/RDDAccount')),

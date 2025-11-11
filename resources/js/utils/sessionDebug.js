@@ -29,3 +29,7 @@ export const checkSessionCookie = () => {
 // Call this function in browser console to debug
 window.checkSessionCookie = checkSessionCookie;
 
+
+
+
+

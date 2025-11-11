@@ -6,6 +6,7 @@ use Illuminate\Support\Str;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\EndorsementController;
+use App\Http\Controllers\ReviewController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OptimizedNotificationController;
@@ -59,6 +60,9 @@ Route::middleware(['auth:web'])->group(function () {
     // Progress Report routes
     Route::apiResource('progress-reports', \App\Http\Controllers\ProgressReportController::class);
     
+    // Review routes
+    Route::post('/reviews', [ReviewController::class, 'store']);
+    
     // Optimized Notification routes with caching and deduplication
     Route::middleware([RequestDeduplication::class])->group(function () {
         Route::get('/notifications', [OptimizedNotificationController::class, 'index']);
@@ -91,4 +95,5 @@ Route::middleware(['auth:web'])->group(function () {
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
+    Route::get('/admin/departments', [AdminUserController::class, 'getDepartments']);
 });

@@ -1,7 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { router } from '@inertiajs/react';
+import { useAuth } from '../contexts/AuthContext';
 import ResourceGrid from '../Components/UI/ResourceGrid';
 
 const Resources = () => {
+  const { user } = useAuth();
+
+  // Validate authentication on mount
+  useEffect(() => {
+    if (!user) {
+      router.visit('/login');
+      return;
+    }
+  }, [user]);
   const resources = [
     {
       id: 1,

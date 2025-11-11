@@ -33,13 +33,19 @@ const RDDAccount = () => {
       const response = await rddService.getUserProfile();
       if (response.success) {
         const user = response.data;
+        // Handle department name - check both 'name' and 'departmentName'
+        const departmentName = user.department?.name || 
+                              user.department?.departmentName || 
+                              user.department || 
+                              'Research and Development Division';
+        
         const transformedUserData = {
           firstName: user.firstName || '',
           lastName: user.lastName || '',
           email: user.email || '',
           phone: user.phone || '',
           position: user.position || 'Research Director',
-          department: user.department?.name || 'Research and Development Division',
+          department: departmentName,
           office: user.office || 'RDD Building, Room 201',
           campus: user.campus || 'Main Campus',
           address: user.address || 'University of Southeastern Philippines, Davao City',

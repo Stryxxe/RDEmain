@@ -65,3 +65,7 @@ Modified `bootstrap/app.php` to use the custom middleware instead of the standar
 4. Ensure you're using the network IP, not localhost, from the other device
 5. Clear browser cache and cookies on the other device
 
+
+
+
+

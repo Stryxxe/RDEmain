@@ -1,9 +1,43 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { router, usePage } from '@inertiajs/react';
+import { useAuth } from '../../../contexts/AuthContext';
 import { useAdmin } from '../../../contexts/AdminContext';
 import { FiDownload, FiTrendingUp, FiFileText, FiBarChart, FiTarget } from 'react-icons/fi';
 
 const Reports = () => {
+  const { user } = useAuth();
+  const { props } = usePage();
   const { users } = useAdmin();
+  
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+
+  // Validate authentication and role
+  useEffect(() => {
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
+    }
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is an Admin or Administrator
+      const isAdmin = currentUser.role?.userRole === 'Admin' || 
+                     currentUser.role?.userRole === 'Administrator';
+      
+      if (!isAdmin) {
+        router.visit('/dashboard');
+        return;
+      }
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [currentUser]);
   const [selectedReport, setSelectedReport] = useState('user-summary');
   const [dateRange, setDateRange] = useState('30');
   const [loading, setLoading] = useState(false);
@@ -176,7 +210,7 @@ const Reports = () => {
                 <th>Generated</th>
                 <th>Size</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Details</th>
               </tr>
             </thead>
             <tbody>
@@ -222,6 +256,7 @@ const Reports = () => {
 };
 
 export default Reports;
+
 
 
 

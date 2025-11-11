@@ -130,7 +130,34 @@ class ProgressReportController extends Controller
                 $user->load('role');
             }
 
-            if ($user->role && $user->role->userRole !== 'RDD' && $proposal->userID !== $user->userID) {
+            // Load proposal user and department relationships
+            if (!$proposal->relationLoaded('user')) {
+                $proposal->load('user');
+            }
+            if (!$proposal->user->relationLoaded('department')) {
+                $proposal->user->load('department');
+            }
+            if (!$user->relationLoaded('department')) {
+                $user->load('department');
+            }
+
+            $userRole = $user->role ? $user->role->userRole : null;
+            
+            // RDD users can submit reports for any proposal
+            if ($userRole === 'RDD') {
+                // Allow
+            }
+            // CM users can submit reports for any proposal in their department (for monitoring)
+            else if ($userRole === 'CM') {
+                if ($proposal->user->departmentID !== $user->departmentID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'You can only submit reports for proposals in your department'
+                    ], 403);
+                }
+            }
+            // Other users can only submit reports for their own proposals
+            else if ($proposal->userID !== $user->userID) {
                 return response()->json([
                     'success' => false,
                     'message' => 'You can only submit reports for your own proposals'

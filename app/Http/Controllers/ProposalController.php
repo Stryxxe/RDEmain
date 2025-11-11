@@ -64,7 +64,15 @@ class ProposalController extends Controller
         }
         
         // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
-        $query = Proposal::where('proposalID', $id)->with(['status', 'files', 'user.department', 'user.role']);
+        $query = Proposal::where('proposalID', $id)->with([
+            'status', 
+            'files', 
+            'user.department', 
+            'user.role',
+            'reviews.reviewer',
+            'reviews.decision',
+            'endorsements.endorser.role'
+        ]);
         if ($user->role && $user->role->userRole === 'RDD') {
             // RDD users can see all proposals - no filtering needed
         } elseif ($user->role && $user->role->userRole === 'CM') {
@@ -112,6 +120,20 @@ class ProposalController extends Controller
             ], 403);
         }
 
+        // Load user's department if not already loaded
+        if (!$user->relationLoaded('department')) {
+            $user->load('department');
+        }
+        
+        // Get user's department as research center (fallback if not provided)
+        $userDepartment = $user->department;
+        $defaultResearchCenter = $userDepartment ? $userDepartment->name : 'Not specified';
+        
+        // Merge request data with default research center if not provided
+        if (empty($request->input('researchCenter'))) {
+            $request->merge(['researchCenter' => $defaultResearchCenter]);
+        }
+        
         $validator = Validator::make($request->all(), [
             'researchTitle' => 'required|string|max:255',
             'description' => 'required|string',
@@ -121,13 +143,58 @@ class ProposalController extends Controller
             'dostSPs' => 'required|string', // Will be JSON string from frontend
             'sustainableDevelopmentGoals' => 'required|string', // Will be JSON string from frontend
             'proposedBudget' => 'required|numeric|min:0',
-            'reportFile' => 'required|file|mimes:pdf,doc,docx|max:10240', // 10MB max
-            'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
-            'gadCertificate' => 'nullable|file|mimes:pdf,doc,docx|max:10240',
-            'matrixOfCompliance' => 'nullable|file|mimes:pdf,doc,docx|max:10240'
+            'reportFile' => 'required|file|mimes:pdf,doc,docx|max:5120', // 5MB max
+            'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:5120', // 5MB max
+            'gadCertificate' => 'nullable|file|mimes:pdf,doc,docx|max:5120', // 5MB max
+            'matrixOfCompliance' => [
+                'nullable',
+                'file',
+                function ($attribute, $value, $fail) use ($request) {
+                    if ($value) {
+                        // Check file extension
+                        $extension = strtolower($value->getClientOriginalExtension());
+                        $allowedExtensions = ['pdf', 'doc', 'docx'];
+                        
+                        if (!in_array($extension, $allowedExtensions)) {
+                            $fail('The matrix of compliance must be a PDF, DOC, or DOCX file.');
+                            return;
+                        }
+                        
+                        // Check file size (5MB = 5120 KB)
+                        $maxSize = 5120 * 1024; // 5MB in bytes
+                        if ($value->getSize() > $maxSize) {
+                            $fail('The matrix of compliance file must not exceed 5MB.');
+                            return;
+                        }
+                        
+                        // Check if file is valid
+                        if (!$value->isValid()) {
+                            $fail('The matrix of compliance file is invalid or corrupted.');
+                            return;
+                        }
+                    }
+                }
+            ]
         ]);
 
         if ($validator->fails()) {
+            // Log validation errors for debugging, especially for matrixOfCompliance
+            if ($request->hasFile('matrixOfCompliance')) {
+                try {
+                    $matrixFile = $request->file('matrixOfCompliance');
+                    \Log::warning('Matrix of Compliance validation failed', [
+                        'file_size' => $matrixFile->getSize(),
+                        'file_mime' => $matrixFile->getMimeType(),
+                        'file_extension' => $matrixFile->getClientOriginalExtension(),
+                        'is_valid' => $matrixFile->isValid(),
+                        'error_code' => $matrixFile->getError(),
+                        'validation_errors' => $validator->errors()->get('matrixOfCompliance')
+                    ]);
+                } catch (\Exception $e) {
+                    \Log::error('Error logging matrixOfCompliance file info', ['error' => $e->getMessage()]);
+                }
+            }
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
@@ -146,9 +213,8 @@ class ProposalController extends Controller
             $dostSPs = json_decode($request->dostSPs, true);
             $sustainableDevelopmentGoals = json_decode($request->sustainableDevelopmentGoals, true);
             
-            // Get user's department as research center
-            $userDepartment = $user->department;
-            $researchCenter = $userDepartment ? $userDepartment->name : 'Not specified';
+            // Use researchCenter from request (already set in validation if not provided)
+            $researchCenter = $request->input('researchCenter', $defaultResearchCenter);
             
             // Create the proposal
             $proposal = Proposal::create([
@@ -202,17 +268,35 @@ class ProposalController extends Controller
 
             foreach ($supportingDocs as $field => $type) {
                 if ($request->hasFile($field)) {
-                    $file = $request->file($field);
-                    $filename = time() . '_' . $file->getClientOriginalName();
-                    $path = $file->storeAs('proposals/' . $proposal->proposalID, $filename, 'public');
-                    
-                    $files[] = File::create([
-                        'proposalID' => $proposal->proposalID,
-                        'fileName' => $filename,
-                        'filePath' => $path,
-                        'fileType' => $type,
-                        'fileSize' => $file->getSize()
-                    ]);
+                    try {
+                        $file = $request->file($field);
+                        
+                        // Validate file is valid and not empty
+                        if (!$file->isValid()) {
+                            \Log::warning("Invalid file uploaded for field: {$field}", [
+                                'proposalID' => $proposal->proposalID,
+                                'error' => $file->getError()
+                            ]);
+                            continue; // Skip invalid files
+                        }
+                        
+                        $filename = time() . '_' . $file->getClientOriginalName();
+                        $path = $file->storeAs('proposals/' . $proposal->proposalID, $filename, 'public');
+                        
+                        $files[] = File::create([
+                            'proposalID' => $proposal->proposalID,
+                            'fileName' => $filename,
+                            'filePath' => $path,
+                            'fileType' => $type,
+                            'fileSize' => $file->getSize()
+                        ]);
+                    } catch (\Exception $e) {
+                        \Log::error("Error uploading file for field: {$field}", [
+                            'proposalID' => $proposal->proposalID,
+                            'error' => $e->getMessage()
+                        ]);
+                        // Continue with other files even if one fails
+                    }
                 }
             }
 
@@ -234,17 +318,18 @@ class ProposalController extends Controller
                 ]
             ]);
 
-            // Find CM of the same department and notify them
-            $cmUser = User::whereHas('role', function($query) {
+            // Find ALL CMs of the same department and notify them
+            $cmUsers = User::whereHas('role', function($query) {
                 $query->where('userRole', 'CM');
             })
             ->where('departmentID', $user->departmentID)
-            ->first();
+            ->get();
 
-            if ($cmUser) {
+            // Notify all CMs in the department
+            foreach ($cmUsers as $cmUser) {
                 Notification::create([
                     'userID' => $cmUser->userID,
-                    'type' => 'info',
+                    'type' => 'proposal_submitted',
                     'title' => 'New Proposal Submitted',
                     'message' => "A new proposal \"{$proposal->researchTitle}\" has been submitted by {$user->fullName} for review.",
                     'data' => [
@@ -256,6 +341,29 @@ class ProposalController extends Controller
                 ]);
             }
 
+            // Log notification creation for debugging
+            if ($cmUsers->count() > 0) {
+                \Log::info('Notifications created for CMs', [
+                    'proposalID' => $proposal->proposalID,
+                    'departmentID' => $user->departmentID,
+                    'cm_count' => $cmUsers->count(),
+                    'cm_userIDs' => $cmUsers->pluck('userID')->toArray()
+                ]);
+            } else {
+                \Log::warning('No CM users found for department', [
+                    'proposalID' => $proposal->proposalID,
+                    'departmentID' => $user->departmentID
+                ]);
+            }
+
+            // Log successful proposal creation for debugging
+            \Log::info('Proposal created successfully', [
+                'proposalID' => $proposal->proposalID,
+                'userID' => $proposal->userID,
+                'researchTitle' => $proposal->researchTitle,
+                'statusID' => $proposal->statusID
+            ]);
+            
             return response()->json([
                 'success' => true,
                 'message' => 'Proposal submitted successfully',
@@ -263,6 +371,13 @@ class ProposalController extends Controller
             ], 201);
 
         } catch (\Exception $e) {
+            // Log the full error for debugging
+            \Log::error('Failed to create proposal', [
+                'userID' => $user->userID ?? null,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create proposal',

@@ -18,30 +18,49 @@ const CMProgressReport = () => {
   const { user } = useAuth();
   const { refreshAllNotifications } = useNotifications();
   const { refreshAllMessages } = useMessages();
-  const [reports, setReports] = useState([]);
+  const [proposals, setProposals] = useState([]);
+  const [progressReports, setProgressReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [expandedProposals, setExpandedProposals] = useState(new Set());
 
   useEffect(() => {
-    fetchProgressReports();
-  }, []);
+    if (user) {
+      fetchData();
+    }
+  }, [user]);
 
-  const fetchProgressReports = async () => {
+  const fetchData = async () => {
     try {
       setLoading(true);
-      // This would be a new API endpoint for progress reports
-      // For now, we'll use proposals as a placeholder
-      const response = await axiosInstance.get('/proposals', {
-        headers: { 'Accept': 'application/json' },
-        withCredentials: true
-      });
-      if (response.data.success) {
-        setReports(response.data.data);
+      
+      // Fetch proposals and progress reports in parallel
+      const [proposalsResponse, reportsResponse] = await Promise.all([
+        axiosInstance.get('/proposals', {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
+        }),
+        axiosInstance.get('/progress-reports', {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true
+        })
+      ]);
+      
+      if (proposalsResponse.data.success) {
+        // Filter proposals from the same department
+        const filteredProposals = proposalsResponse.data.data.filter(proposal => {
+          return proposal.user?.departmentID === user?.departmentID;
+        });
+        setProposals(filteredProposals);
+      }
+      
+      if (reportsResponse.data.success) {
+        setProgressReports(reportsResponse.data.data || []);
       }
     } catch (error) {
-      console.error('Error fetching progress reports:', error);
+      console.error('Error fetching data:', error);
       if (error.response?.status === 401) {
         console.error('Unauthorized - session may have expired');
       }
@@ -50,11 +69,25 @@ const CMProgressReport = () => {
     }
   };
 
+  const fetchProgressReports = async () => {
+    try {
+      const response = await axiosInstance.get('/progress-reports', {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
+      });
+      if (response.data.success) {
+        setProgressReports(response.data.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching progress reports:', error);
+    }
+  };
+
   const handleRefresh = async () => {
     try {
       setIsRefreshing(true);
       await Promise.all([
-        fetchProgressReports(),
+        fetchData(),
         refreshAllNotifications(),
         refreshAllMessages()
       ]);
@@ -65,12 +98,36 @@ const CMProgressReport = () => {
     }
   };
 
-  const filteredReports = reports.filter(report => {
-    const matchesSearch = report.researchTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         report.user?.fullName.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = filterStatus === 'all' || report.status?.statusName === filterStatus;
+  // Group progress reports by proposal ID
+  const reportsByProposal = progressReports.reduce((acc, report) => {
+    const proposalId = report.proposalID || report.proposal?.proposalID;
+    if (!acc[proposalId]) {
+      acc[proposalId] = [];
+    }
+    acc[proposalId].push(report);
+    return acc;
+  }, {});
+
+  // Filter proposals based on search
+  const filteredProposals = proposals.filter(proposal => {
+    const matchesSearch = proposal.researchTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         proposal.user?.fullName.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = filterStatus === 'all' || proposal.status?.statusName === filterStatus;
     return matchesSearch && matchesStatus;
   });
+
+  // Toggle proposal expansion
+  const toggleProposal = (proposalId) => {
+    setExpandedProposals(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(proposalId)) {
+        newSet.delete(proposalId);
+      } else {
+        newSet.add(proposalId);
+      }
+      return newSet;
+    });
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -100,10 +157,6 @@ const CMProgressReport = () => {
     );
   }
 
-  // Use real data from database - reports are actually proposals for now
-  const completedProjects = filteredReports.filter(report => 
-    report.status?.statusName === 'Completed' || report.status?.statusName === 'Approved'
-  );
 
   const SearchIcon = () => (
     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -193,76 +246,130 @@ const CMProgressReport = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-        {/* Completed Project Reports */}
+        {/* Projects and Reports */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
           {/* Header */}
           <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-            <h2 className="text-xl font-semibold text-gray-900">Completed Project Reports</h2>
-            <p className="text-sm text-gray-600 mt-1">{completedProjects.length} records found</p>
+            <h2 className="text-xl font-semibold text-gray-900">Projects and Progress Reports</h2>
+            <p className="text-sm text-gray-600 mt-1">{filteredProposals.length} projects found</p>
           </div>
           
           {/* Filter Bar */}
           <FilterBar />
           
-          {/* Table */}
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">No</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Proposal ID</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Research Title</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Researcher</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Submitted</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-100">
-                {completedProjects.map((project, index) => (
-                  <tr key={project.proposalID} className="hover:bg-blue-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                        {String(index + 1).padStart(2, '0')}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                        {project.proposalID}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm font-medium text-gray-900 max-w-xs truncate" title={project.researchTitle}>
-                        {project.researchTitle}
+          {/* Projects List */}
+          <div className="divide-y divide-gray-200">
+            {filteredProposals.length === 0 ? (
+              <div className="p-8 text-center text-gray-500">
+                No projects found
+              </div>
+            ) : (
+              filteredProposals.map((proposal, index) => {
+                const proposalId = proposal.proposalID;
+                const reports = reportsByProposal[proposalId] || [];
+                const isExpanded = expandedProposals.has(proposalId);
+                
+                return (
+                  <div key={proposalId} className="hover:bg-gray-50 transition-colors">
+                    {/* Proposal Row */}
+                    <div 
+                      className="px-6 py-4 cursor-pointer"
+                      onClick={() => toggleProposal(proposalId)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4 flex-1">
+                          <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
+                            {String(index + 1).padStart(2, '0')}
+                          </span>
+                          <div className="flex-1">
+                            <div className="flex items-center space-x-3">
+                              <h3 className="text-sm font-medium text-gray-900">
+                                {proposal.researchTitle}
+                              </h3>
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                                PRO-{proposalId.toString().padStart(6, '0')}
+                              </span>
+                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(proposal.status?.statusName)}`}>
+                                {proposal.status?.statusName || 'Unknown'}
+                              </span>
+                            </div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              Researcher: {proposal.user?.fullName || 'Unknown'} | 
+                              Submitted: {new Date(proposal.created_at).toLocaleDateString()} |
+                              Reports: {reports.length}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm text-gray-500">
+                            {reports.length} report{reports.length !== 1 ? 's' : ''}
+                          </span>
+                          <svg 
+                            className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'transform rotate-180' : ''}`}
+                            fill="none" 
+                            stroke="currentColor" 
+                            viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-700">
-                        {project.user?.fullName || 'Unknown'}
+                    </div>
+                    
+                    {/* Progress Reports for this Proposal */}
+                    {isExpanded && (
+                      <div className="bg-gray-50 border-t border-gray-200">
+                        {reports.length === 0 ? (
+                          <div className="px-14 py-4 text-sm text-gray-500">
+                            No progress reports submitted for this project yet.
+                          </div>
+                        ) : (
+                          <div className="px-14 py-4 space-y-3">
+                            {reports.map((report) => (
+                              <div 
+                                key={report.reportID} 
+                                className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
+                              >
+                                <div className="flex items-start justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center space-x-2 mb-2">
+                                      <span className="text-sm font-medium text-gray-900">
+                                        {report.reportType || 'Progress Report'}
+                                      </span>
+                                      <span className="text-xs text-gray-500">
+                                        {report.reportPeriod || 'N/A'}
+                                      </span>
+                                      {report.progressPercentage !== null && (
+                                        <span className="text-xs text-blue-600 font-medium">
+                                          {report.progressPercentage}% Complete
+                                        </span>
+                                      )}
+                                    </div>
+                                    {report.achievements && (
+                                      <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                                        {report.achievements}
+                                      </p>
+                                    )}
+                                    <div className="text-xs text-gray-500">
+                                      Submitted: {new Date(report.submittedAt || report.created_at).toLocaleString()}
+                                    </div>
+                                    {report.files && report.files.length > 0 && (
+                                      <div className="mt-2 text-xs text-gray-500">
+                                        {report.files.length} file{report.files.length !== 1 ? 's' : ''} attached
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(project.status?.statusName)}`}>
-                        {project.status?.statusName || 'Unknown'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-700">
-                        {new Date(project.created_at).toLocaleDateString()}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <button 
-                        className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors duration-150"
-                        onClick={() => window.location.href = `/cm/proposal/${project.proposalID}`}
-                      >
-                        View Details
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                    )}
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

@@ -15,7 +15,7 @@ const RDDLayout = ({ children }) => {
   const { url } = usePage();
 
   const menuItems = [
-    { path: '/rdd', label: 'Tracker', icon: BiSearch },
+    { path: '/rdd', label: 'R&D Initiative Status', icon: BiSearch },
     { path: '/rdd/statistics', label: 'Statistics', icon: BiBarChart },
     { path: '/rdd/review-proposal', label: 'Endorsement', icon: BiFile },
     { path: '/rdd/progress-report', label: 'Progress Reports', icon: BiBarChart },
@@ -36,7 +36,16 @@ const RDDLayout = ({ children }) => {
           <nav className="flex flex-col h-full mt-5">
             {menuItems.map((item) => {
               const IconComponent = item.icon;
-              const isActive = url === item.path || url.startsWith(item.path + '/');
+              // Special handling for root path (/rdd) - only match exact path or /rdd/
+              // For other paths, match exact or paths that start with the path + /
+              let isActive;
+              if (item.path === '/rdd') {
+                // Tracker should only be active on exact /rdd or /rdd/ paths
+                isActive = url === '/rdd' || url === '/rdd/';
+              } else {
+                // Other menu items match exact path or paths starting with path + /
+                isActive = url === item.path || url.startsWith(item.path + '/');
+              }
               return (
                 <Link
                   key={item.path}

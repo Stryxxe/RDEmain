@@ -17,11 +17,17 @@ const CMAccount = () => {
 
   useEffect(() => {
     if (user) {
+      // Handle department name - check both 'name' and 'departmentName'
+      const departmentName = user.department?.name || 
+                            user.department?.departmentName || 
+                            user.department || 
+                            '';
+      
       setProfile({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        department: user.department?.name || '',
+        department: departmentName,
         role: user.role?.userRole || ''
       });
     }
@@ -41,20 +47,29 @@ const CMAccount = () => {
     setMessage('');
 
     try {
-      const response = await api.put('/user', {
+      // Use window.axios for proper session handling
+      const axiosInstance = window.axios || api;
+      const response = await axiosInstance.put('/api/user', {
         firstName: profile.firstName,
         lastName: profile.lastName,
         email: profile.email
+      }, {
+        headers: { 'Accept': 'application/json' },
+        withCredentials: true
       });
 
       if (response.data) {
         setMessage('Profile updated successfully!');
         setIsEditing(false);
-        // Update the user context if needed
+        // Reload the page to refresh user data from Inertia
+        window.location.reload();
       }
     } catch (error) {
       console.error('Error updating profile:', error);
-      setMessage('Error updating profile. Please try again.');
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errors || 
+                          'Error updating profile. Please try again.';
+      setMessage(typeof errorMessage === 'string' ? errorMessage : JSON.stringify(errorMessage));
     } finally {
       setIsLoading(false);
     }
@@ -62,11 +77,17 @@ const CMAccount = () => {
 
   const handleCancel = () => {
     if (user) {
+      // Handle department name - check both 'name' and 'departmentName'
+      const departmentName = user.department?.name || 
+                            user.department?.departmentName || 
+                            user.department || 
+                            '';
+      
       setProfile({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        department: user.department?.name || '',
+        department: departmentName,
         role: user.role?.userRole || ''
       });
     }
@@ -74,14 +95,9 @@ const CMAccount = () => {
     setMessage('');
   };
 
-  const handleLogout = async () => {
-    try {
-      await api.post('/logout');
-      logout();
-    } catch (error) {
-      console.error('Error logging out:', error);
-      logout(); // Still logout locally even if API call fails
-    }
+  const handleLogout = () => {
+    // Use the logout function from AuthContext which properly handles CSRF tokens
+    logout();
   };
 
   const userProfile = {
@@ -177,31 +193,133 @@ const CMAccount = () => {
           <div className="bg-white rounded-lg shadow-md p-6">
             <h3 className="text-lg font-bold text-gray-900 mb-6">User Details</h3>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Name:</span>
-                  <p className="text-sm text-gray-900 mt-1">{userProfile.name}</p>
+            {message && (
+              <div className={`mb-4 p-3 rounded-lg ${
+                message.includes('successfully') 
+                  ? 'bg-green-50 border border-green-200 text-green-800' 
+                  : 'bg-red-50 border border-red-200 text-red-800'
+              }`}>
+                {message}
+              </div>
+            )}
+            
+            {isEditing ? (
+              <form onSubmit={handleSave} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="firstName"
+                      value={profile.firstName}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Last Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      name="lastName"
+                      value={profile.lastName}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={profile.email}
+                      onChange={handleInputChange}
+                      required
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Department
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.department}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Department cannot be changed</p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Role
+                    </label>
+                    <input
+                      type="text"
+                      value={profile.role}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Role cannot be changed</p>
+                  </div>
                 </div>
                 
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Office:</span>
-                  <p className="text-sm text-gray-900 mt-1">{userProfile.office}</p>
+                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+                  <button
+                    type="button"
+                    onClick={handleCancel}
+                    disabled={isLoading}
+                    className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
                 </div>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Username:</span>
-                  <p className="text-sm text-gray-900 mt-1">{userProfile.username}</p>
+              </form>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Name:</span>
+                    <p className="text-sm text-gray-900 mt-1">{userProfile.name}</p>
+                  </div>
+                  
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Office:</span>
+                    <p className="text-sm text-gray-900 mt-1">{userProfile.office}</p>
+                  </div>
                 </div>
                 
-                <div>
-                  <span className="text-sm font-medium text-gray-700">Password:</span>
-                  <p className="text-sm text-gray-900 mt-1">••••••••••</p>
+                <div className="space-y-4">
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Username:</span>
+                    <p className="text-sm text-gray-900 mt-1">{userProfile.username}</p>
+                  </div>
+                  
+                  <div>
+                    <span className="text-sm font-medium text-gray-700">Email:</span>
+                    <p className="text-sm text-gray-900 mt-1">{userProfile.email}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Action Buttons */}

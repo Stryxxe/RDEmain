@@ -37,17 +37,37 @@ const CMNotifications = () => {
         setLoading(false);
         return;
       }
-      const response = await axiosInstance.get('/notifications', {
-        headers: { 'Accept': 'application/json' },
+      
+      // Use window.axios for proper session handling (baseURL is already set to /api)
+      const response = await (window.axios || axiosInstance).get('/notifications', {
+        headers: { 
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
         withCredentials: true
       });
-      if (response.data.success) {
-        setNotifications(response.data.data);
+      
+      if (response.data && response.data.success) {
+        setNotifications(response.data.data || []);
+      } else if (response.data && Array.isArray(response.data)) {
+        // Fallback: if response is directly an array
+        setNotifications(response.data);
+      } else {
+        console.warn('Unexpected notification response format:', response.data);
+        setNotifications([]);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
       if (error.response?.status === 401) {
         console.error('Unauthorized - session may have expired');
+        setNotifications([]);
+      } else if (error.response?.status === 500) {
+        console.error('Server error fetching notifications');
+        setNotifications([]);
+      } else {
+        // Network error or other issues
+        console.error('Failed to fetch notifications:', error.message);
+        setNotifications([]);
       }
     } finally {
       setLoading(false);
@@ -72,8 +92,11 @@ const CMNotifications = () => {
   const markAsRead = async (notificationId) => {
     try {
       if (!user) return;
-      await axiosInstance.put(`/notifications/${notificationId}/read`, {}, {
-        headers: { 'Accept': 'application/json' },
+      await (window.axios || axiosInstance).put(`/notifications/${notificationId}/read`, {}, {
+        headers: { 
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
         withCredentials: true
       });
       setNotifications(prev => 
@@ -83,6 +106,8 @@ const CMNotifications = () => {
             : notif
         )
       );
+      // Refresh notifications to get updated state
+      fetchNotifications();
     } catch (error) {
       console.error('Error marking notification as read:', error);
       if (error.response?.status === 401) {
@@ -94,13 +119,18 @@ const CMNotifications = () => {
   const markAllAsRead = async () => {
     try {
       if (!user) return;
-      await axiosInstance.put('/notifications/mark-all-read', {}, {
-        headers: { 'Accept': 'application/json' },
+      await (window.axios || axiosInstance).put('/notifications/mark-all-read', {}, {
+        headers: { 
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
         withCredentials: true
       });
       setNotifications(prev => 
         prev.map(notif => ({ ...notif, read: true, read_at: new Date().toISOString() }))
       );
+      // Refresh notifications to get updated state
+      fetchNotifications();
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
       if (error.response?.status === 401) {
@@ -112,8 +142,11 @@ const CMNotifications = () => {
   const deleteNotification = async (notificationId) => {
     try {
       if (!user) return;
-      await axiosInstance.delete(`/notifications/${notificationId}`, {
-        headers: { 'Accept': 'application/json' },
+      await (window.axios || axiosInstance).delete(`/notifications/${notificationId}`, {
+        headers: { 
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
         withCredentials: true
       });
       setNotifications(prev => prev.filter(notif => notif.id !== notificationId));
@@ -131,12 +164,19 @@ const CMNotifications = () => {
     return true;
   });
 
-  const getNotificationIcon = (type) => {
-    switch (type) {
+  const getNotificationIcon = (notification) => {
+    // Check data.event first, then fall back to type
+    const eventType = notification.data?.event || notification.type;
+    
+    switch (eventType) {
+      case 'proposal.submitted.cm':
+      case 'proposal.submitted':
       case 'proposal_submitted':
         return '📄';
+      case 'proposal.approved':
       case 'proposal_approved':
         return '✅';
+      case 'proposal.rejected':
       case 'proposal_rejected':
         return '❌';
       case 'progress_report':
@@ -148,12 +188,19 @@ const CMNotifications = () => {
     }
   };
 
-  const getNotificationColor = (type) => {
-    switch (type) {
+  const getNotificationColor = (notification) => {
+    // Check data.event first, then fall back to type
+    const eventType = notification.data?.event || notification.type;
+    
+    switch (eventType) {
+      case 'proposal.submitted.cm':
+      case 'proposal.submitted':
       case 'proposal_submitted':
         return 'bg-blue-100 text-blue-800';
+      case 'proposal.approved':
       case 'proposal_approved':
         return 'bg-green-100 text-green-800';
+      case 'proposal.rejected':
       case 'proposal_rejected':
         return 'bg-red-100 text-red-800';
       case 'progress_report':
@@ -262,7 +309,7 @@ const CMNotifications = () => {
                     <div className="flex items-start space-x-4 flex-1">
                       <div className="flex-shrink-0">
                         <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                          <span className="text-xl">{getNotificationIcon(notification.type)}</span>
+                          <span className="text-xl">{getNotificationIcon(notification)}</span>
                         </div>
                       </div>
                       
@@ -271,8 +318,8 @@ const CMNotifications = () => {
                           <h3 className="text-sm font-medium text-gray-900">
                             {notification.title}
                           </h3>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getNotificationColor(notification.type)}`}>
-                            {notification.type.replace('_', ' ').toUpperCase()}
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${getNotificationColor(notification)}`}>
+                            {(notification.data?.event || notification.type || 'notification').replace(/[._]/g, ' ').toUpperCase()}
                           </span>
                           {!notification.read_at && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">

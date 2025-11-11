@@ -32,7 +32,14 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
         
         if ($user) {
+            // Load relationships
             $user->load(['role', 'department']);
+            
+            // Ensure department name is accessible (handle both 'name' and 'departmentName')
+            if ($user->department) {
+                // This ensures the department name is available in the frontend
+                $user->department->makeVisible(['name', 'departmentName']);
+            }
         }
         
         return [

@@ -45,7 +45,14 @@ const Messages = () => {
     isRefreshing,
     lastRefresh
   } = useMessages();
-  
+
+  // Validate authentication on mount
+  useEffect(() => {
+    if (!user) {
+      router.visit('/login');
+      return;
+    }
+  }, [user]);
 
   // Check if user is a proponent
   const isProponent = user?.role?.userRole === 'Proponent';

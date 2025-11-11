@@ -208,6 +208,19 @@ class RDDService {
   }
 
   /**
+   * Get a specific progress report by ID
+   */
+  async getProgressReportById(id) {
+    try {
+      const response = await this.api.get(`/progress-reports/${id}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching progress report:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Submit a progress report
    */
   async submitProgressReport(reportData) {
@@ -247,6 +260,19 @@ class RDDService {
       return response.data;
     } catch (error) {
       console.error('Error submitting progress report:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Submit a review for a proposal
+   */
+  async submitReview(reviewData) {
+    try {
+      const response = await this.api.post('/reviews', reviewData);
+      return response.data;
+    } catch (error) {
+      console.error('Error submitting review:', error);
       throw error;
     }
   }

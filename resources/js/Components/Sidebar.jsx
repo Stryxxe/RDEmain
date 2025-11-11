@@ -5,10 +5,16 @@ const Sidebar = () => {
   const { url } = usePage();
 
   const isActive = (path) => {
-    if (path === '/proponent/tracker' || path === '/proponent') {
-      return url === '/proponent/tracker' || url === '/proponent' || url === '/proponent/';
+    // For tracker, only match exact path or paths starting with /proponent/tracker/
+    if (path === '/proponent/tracker') {
+      return url === '/proponent/tracker' || url.startsWith('/proponent/tracker/');
     }
-    return url === path;
+    // For submit, match /proponent, /proponent/, or /proponent/submit
+    if (path === '/proponent/submit') {
+      return url === '/proponent/submit' || url === '/proponent' || url === '/proponent/';
+    }
+    // For other paths, match exact path or paths starting with path + /
+    return url === path || url.startsWith(path + '/');
   };
 
   return (

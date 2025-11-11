@@ -34,10 +34,23 @@ class ApiService {
   }
   // Helper method to handle responses
   async handleResponse(response) {
+    // Handle 401 Unauthorized - redirect to login
+    if (response.status === 401) {
+      // Clear any stored auth data
+      localStorage.removeItem('dismissedNotifications');
+      
+      // Redirect to login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+      
+      throw new Error('Unauthenticated. Please log in again.');
+    }
+    
     const data = await response.json();
     
     if (!response.ok) {
-      throw new Error(data.message || 'An error occurred');
+      throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
     }
     
     return data;
@@ -83,7 +96,9 @@ class ApiService {
       formData.append('researchTitle', proposalData.reportTitle);
       formData.append('description', proposalData.description);
       formData.append('objectives', proposalData.objectives);
-      formData.append('researchCenter', proposalData.researchCenter);
+      // Get researchCenter from user's department or use provided value
+      const researchCenter = proposalData.researchCenter || proposalData.user?.department?.name || 'Not specified';
+      formData.append('researchCenter', researchCenter);
       formData.append('proposedBudget', proposalData.proposedBudget);
       
       // Add arrays as JSON strings
@@ -91,42 +106,155 @@ class ApiService {
       formData.append('dostSPs', JSON.stringify(proposalData.dostSPs));
       formData.append('sustainableDevelopmentGoals', JSON.stringify(proposalData.sustainableDevelopmentGoals));
       
-      // Add files
-      if (proposalData.reportFile) {
-        formData.append('reportFile', proposalData.reportFile);
-      }
-      if (proposalData.setiScorecard) {
-        formData.append('setiScorecard', proposalData.setiScorecard);
-      }
-      if (proposalData.gadCertificate) {
-        formData.append('gadCertificate', proposalData.gadCertificate);
-      }
-      if (proposalData.matrixOfCompliance) {
-        formData.append('matrixOfCompliance', proposalData.matrixOfCompliance);
-      }
-
-      // Prepare headers with CSRF token from Inertia
-      // Using session-based auth, so no bearer tokens needed
-      const csrfToken = this.getCsrfToken();
-      const headers = {
-        'Accept': 'application/json',
-        ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+      // Add files - only append if file exists, is a valid File object, and has valid size
+      const isValidFile = (file) => {
+        if (!file) return false;
+        if (!(file instanceof File)) {
+          console.warn('Invalid file object:', typeof file, file);
+          return false;
+        }
+        if (file.size === 0) {
+          console.warn('File is empty:', file.name);
+          return false;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          console.warn('File exceeds 5MB limit:', file.name, (file.size / 1024 / 1024).toFixed(2) + 'MB');
+          return false;
+        }
+        return true;
       };
       
-      const response = await fetch(`${this.baseURL}/proposals`, {
-        method: 'POST',
-        credentials: 'include',
-        headers: headers,
-        body: formData
-      });
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Proposal submission failed:', errorData);
-        throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+      if (isValidFile(proposalData.reportFile)) {
+        formData.append('reportFile', proposalData.reportFile);
+      } else if (!proposalData.reportFile) {
+        console.warn('reportFile is missing or invalid');
       }
       
-      return await this.handleResponse(response);
+      if (isValidFile(proposalData.setiScorecard)) {
+        formData.append('setiScorecard', proposalData.setiScorecard);
+      }
+      
+      if (isValidFile(proposalData.gadCertificate)) {
+        formData.append('gadCertificate', proposalData.gadCertificate);
+      }
+      
+      // Only append matrixOfCompliance if it's a valid file
+      // Don't append if it's null, undefined, or invalid
+      if (isValidFile(proposalData.matrixOfCompliance)) {
+        formData.append('matrixOfCompliance', proposalData.matrixOfCompliance);
+      } else {
+        // Explicitly log if matrixOfCompliance is being skipped
+        if (proposalData.matrixOfCompliance !== null && proposalData.matrixOfCompliance !== undefined) {
+          console.warn('matrixOfCompliance file is invalid and will not be sent:', {
+            type: typeof proposalData.matrixOfCompliance,
+            isFile: proposalData.matrixOfCompliance instanceof File,
+            size: proposalData.matrixOfCompliance?.size,
+            name: proposalData.matrixOfCompliance?.name
+          });
+        }
+      }
+      
+      // Debug: Log what files are being sent (only in development)
+      if (!import.meta.env.PROD) {
+        const logFileInfo = (file, name) => {
+          if (!file) return null;
+          if (!(file instanceof File)) {
+            console.warn(`${name} is not a File object:`, typeof file, file);
+            return { error: 'Not a File object', type: typeof file };
+          }
+          return { 
+            name: file.name, 
+            size: file.size, 
+            sizeMB: (file.size / 1024 / 1024).toFixed(2),
+            type: file.type 
+          };
+        };
+        
+        console.log('Files being sent:', {
+          reportFile: logFileInfo(proposalData.reportFile, 'reportFile'),
+          setiScorecard: logFileInfo(proposalData.setiScorecard, 'setiScorecard'),
+          gadCertificate: logFileInfo(proposalData.gadCertificate, 'gadCertificate'),
+          matrixOfCompliance: logFileInfo(proposalData.matrixOfCompliance, 'matrixOfCompliance')
+        });
+      }
+
+      // Use window.axios if available (properly configured with session cookies)
+      // Otherwise fall back to fetch
+      if (window.axios) {
+        try {
+          // Don't set Content-Type for FormData - axios will set it automatically with boundary
+          const response = await window.axios.post('/proposals', formData, {
+            headers: {
+              'Accept': 'application/json'
+            },
+            withCredentials: true
+          });
+          
+          return response.data;
+        } catch (axiosError) {
+          // Handle axios errors
+          if (axiosError.response) {
+            const errorData = axiosError.response.data;
+            console.error('Proposal submission failed:', errorData);
+            
+            // Handle 401 specifically
+            if (axiosError.response.status === 401) {
+              // Clear any stored auth data
+              localStorage.removeItem('dismissedNotifications');
+              
+              // Redirect to login page
+              if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+              }
+              
+              throw new Error('Unauthenticated. Please log in again.');
+            }
+            
+            // Include validation errors in the error message for 422
+            if (axiosError.response.status === 422 && errorData.errors) {
+              const errorMessages = Object.entries(errorData.errors)
+                .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
+                .join('; ');
+              throw new Error(`Validation failed: ${errorMessages}`);
+            }
+            
+            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
+          }
+          throw axiosError;
+        }
+      } else {
+        // Fallback to fetch if axios is not available
+        const csrfToken = this.getCsrfToken();
+        const headers = {
+          'Accept': 'application/json',
+          ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+        };
+        
+        const response = await fetch(`${this.baseURL}/proposals`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: headers,
+          body: formData
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          console.error('Proposal submission failed:', errorData);
+          
+          // Handle 401 specifically
+          if (response.status === 401) {
+            localStorage.removeItem('dismissedNotifications');
+            if (window.location.pathname !== '/login') {
+              window.location.href = '/login';
+            }
+            throw new Error('Unauthenticated. Please log in again.');
+          }
+          
+          throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        return await this.handleResponse(response);
+      }
     } catch (error) {
       console.error('Proposal submission error:', error);
       throw error;
@@ -136,13 +264,45 @@ class ApiService {
   // Get all proposals
   async getProposals() {
     try {
-      const response = await fetch(`${this.baseURL}/proposals`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: this.getHeaders(false) // GET requests don't need CSRF
-      });
-      
-      return await this.handleResponse(response);
+      // Use window.axios if available (properly configured with session cookies)
+      if (window.axios) {
+        try {
+          const response = await window.axios.get('/proposals', {
+            headers: {
+              'Accept': 'application/json'
+            },
+            withCredentials: true
+          });
+          
+          return response.data;
+        } catch (axiosError) {
+          // Handle axios errors
+          if (axiosError.response) {
+            const errorData = axiosError.response.data;
+            
+            // Handle 401 specifically
+            if (axiosError.response.status === 401) {
+              localStorage.removeItem('dismissedNotifications');
+              if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+              }
+              throw new Error('Unauthenticated. Please log in again.');
+            }
+            
+            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
+          }
+          throw axiosError;
+        }
+      } else {
+        // Fallback to fetch if axios is not available
+        const response = await fetch(`${this.baseURL}/proposals`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: this.getHeaders(false) // GET requests don't need CSRF
+        });
+        
+        return await this.handleResponse(response);
+      }
     } catch (error) {
       throw error;
     }
@@ -151,14 +311,46 @@ class ApiService {
   // Get single proposal
   async getProposal(id) {
     try {
-      const response = await fetch(`${this.baseURL}/proposals/${id}`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: this.getHeaders(false) // GET requests don't need CSRF
-      });
-      
-      const data = await this.handleResponse(response);
-      return data;
+      // Use window.axios if available (properly configured with session cookies)
+      if (window.axios) {
+        try {
+          const response = await window.axios.get(`/proposals/${id}`, {
+            headers: {
+              'Accept': 'application/json'
+            },
+            withCredentials: true
+          });
+          
+          return response.data;
+        } catch (axiosError) {
+          // Handle axios errors
+          if (axiosError.response) {
+            const errorData = axiosError.response.data;
+            
+            // Handle 401 specifically
+            if (axiosError.response.status === 401) {
+              localStorage.removeItem('dismissedNotifications');
+              if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+              }
+              throw new Error('Unauthenticated. Please log in again.');
+            }
+            
+            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
+          }
+          throw axiosError;
+        }
+      } else {
+        // Fallback to fetch if axios is not available
+        const response = await fetch(`${this.baseURL}/proposals/${id}`, {
+          method: 'GET',
+          credentials: 'include',
+          headers: this.getHeaders(false) // GET requests don't need CSRF
+        });
+        
+        const data = await this.handleResponse(response);
+        return data;
+      }
     } catch (error) {
       throw error;
     }

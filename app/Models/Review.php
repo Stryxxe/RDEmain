@@ -18,15 +18,15 @@ class Review extends Model
     protected $fillable = [
         'proposalID',
         'reviewerID',
-        'reviewComments',
-        'reviewScore',
-        'reviewDate',
-        'reviewStatus'
+        'remarks',
+        'matrixOfCompliance',
+        'reviewedAt',
+        'decisionID'
     ];
 
     protected $casts = [
-        'reviewDate' => 'datetime',
-        'reviewScore' => 'integer'
+        'reviewedAt' => 'datetime',
+        'matrixOfCompliance' => 'array'
     ];
 
     /**
@@ -43,5 +43,13 @@ class Review extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewerID', 'userID');
+    }
+
+    /**
+     * Get the decision for this review
+     */
+    public function decision(): BelongsTo
+    {
+        return $this->belongsTo(ReviewDecision::class, 'decisionID', 'decisionID');
     }
 }

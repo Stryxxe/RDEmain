@@ -21,6 +21,36 @@ const FileUpload = ({
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      // Validate file type
+      const allowedTypes = ['.pdf', '.doc', '.docx'];
+      const fileExtension = '.' + selectedFile.name.split('.').pop().toLowerCase();
+      const mimeTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      
+      const isValidType = allowedTypes.includes(fileExtension) || 
+                         mimeTypes.includes(selectedFile.type) ||
+                         selectedFile.type === ''; // Some browsers don't set MIME type
+      
+      if (!isValidType) {
+        alert(`Invalid file type. Please select a PDF, DOC, or DOCX file.`);
+        e.target.value = ''; // Reset input
+        return;
+      }
+      
+      // Validate file size (5MB max)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (selectedFile.size > maxSize) {
+        alert(`File size exceeds 5MB limit. Please select a smaller file.`);
+        e.target.value = ''; // Reset input
+        return;
+      }
+      
+      // Validate file is not empty
+      if (selectedFile.size === 0) {
+        alert(`File is empty. Please select a valid file.`);
+        e.target.value = ''; // Reset input
+        return;
+      }
+      
       setFile(selectedFile);
       onChange(selectedFile);
     }

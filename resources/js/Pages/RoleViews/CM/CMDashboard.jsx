@@ -344,8 +344,8 @@ const CMDashboard = () => {
             <div>Research Title</div>
             <div>Author & College</div>
             <div>Status & Progress</div>
-            <div>Budget</div>
-            <div>Actions</div>
+            <div>Proposed Funding</div>
+            <div>Details</div>
           </div>
 
           {/* Table Body */}

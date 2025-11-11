@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { useRouteParams } from '../Components/RoleBased/InertiaRoleRouter';
 import { ArrowLeft, Download, Eye, X } from 'lucide-react';
 import apiService from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 
 const ProposalDetail = () => {
+  const { user } = useAuth();
+  const { props } = usePage();
   const routeParams = useRouteParams();
   const id = routeParams.id;
   const [proposal, setProposal] = useState(null);
@@ -18,13 +21,46 @@ const ProposalDetail = () => {
     evidence6Ps: null
   });
 
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+
   useEffect(() => {
-    if (id) {
-      loadProposal();
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
     }
-  }, [id]);
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is a Proponent
+      if (currentUser.role?.userRole !== 'Proponent') {
+        router.visit('/dashboard');
+        return;
+      }
+      
+      if (id) {
+        loadProposal();
+      } else {
+        setLoading(false);
+      }
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [id, currentUser]);
 
   const loadProposal = async () => {
+    // Validate authentication before loading
+    if (!currentUser || currentUser.role?.userRole !== 'Proponent') {
+      setError('You must be logged in as a Proponent to view proposal details.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -36,7 +72,15 @@ const ProposalDetail = () => {
         setError(response.message || 'Failed to load proposal');
       }
     } catch (error) {
-      setError('Failed to load proposal. Please try again.');
+      console.error('Error loading proposal:', error);
+      if (error.message.includes('Unauthenticated')) {
+        setError('Your session has expired. Please log in again.');
+        setTimeout(() => {
+          router.visit('/login');
+        }, 2000);
+      } else {
+        setError('Failed to load proposal. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

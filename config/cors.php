@@ -23,6 +23,7 @@ return [
         'http://localhost:8000',
         'http://127.0.0.1:8000',
         'http://192.168.1.38:8000',
+        'http://192.168.23.104:8000',
     ],
 
     'allowed_origins_patterns' => [

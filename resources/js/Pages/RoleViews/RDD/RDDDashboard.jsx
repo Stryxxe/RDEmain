@@ -188,7 +188,7 @@ const RDDDashboard = () => {
       <div className="max-w-7xl mx-auto px-6 py-12">
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
-            Research Project Tracker
+            R&D Initiative Status
           </h1>
           <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
             Monitor and manage all research projects with comprehensive tracking and analytics
@@ -260,8 +260,8 @@ const RDDDashboard = () => {
             <div>Project Details</div>
             <div>Author & Research Center</div>
             <div>Status & Progress</div>
-            <div>Funding</div>
-            <div>Actions</div>
+            <div>Proposed Funding</div>
+            <div>Details</div>
           </div>
 
           {/* Table Body */}

@@ -90,14 +90,11 @@ const RDDProgressReport = () => {
   };
 
   const handleViewClick = (project) => {
-    // Navigate to proposal detail page since progress reports are linked to proposals
-    // The proposal detail page should show progress report information
-    if (project.latestReport && project.latestReport.proposalID) {
-      router.visit(`/rdd/proposal/${project.latestReport.proposalID}`);
-    } else if (project.latestReport && project.latestReport.proposal?.proposalID) {
-      router.visit(`/rdd/proposal/${project.latestReport.proposal.proposalID}`);
+    // Navigate to progress report detail page
+    if (project.latestReport && project.latestReport.reportID) {
+      router.visit(`/rdd/progress-report/${project.latestReport.reportID}`);
     } else {
-      console.error('No proposal ID found for this progress report');
+      console.error('No report ID found for this progress report');
       console.log('Project data:', project);
     }
   };
@@ -245,7 +242,7 @@ const RDDProgressReport = () => {
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Research Center ID</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Research Center</th>
               <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Date Submitted</th>
-              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Action</th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Details</th>
             </tr>
           </thead>
               <tbody className="bg-white divide-y divide-gray-100">

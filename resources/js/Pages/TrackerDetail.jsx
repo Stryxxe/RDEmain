@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { useRouteParams } from '../Components/RoleBased/InertiaRoleRouter';
+import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft } from 'lucide-react';
 import apiService from '../services/api';
 
 const TrackerDetail = ({ id: propId }) => {
+  const { user } = useAuth();
+  const { props } = usePage();
   const routeParams = useRouteParams();
   const id = propId || routeParams.id;
   const [proposal, setProposal] = useState(null);
@@ -16,15 +19,47 @@ const TrackerDetail = ({ id: propId }) => {
     evidence6Ps: null
   });
 
+  // Get user from Inertia props (more reliable than context on initial load)
+  const currentUser = user || props?.auth?.user;
+
+  // Validate authentication on mount
   useEffect(() => {
-    if (id) {
-      loadProposal();
-    } else {
-      setLoading(false);
+    // Prevent redirect loop - check if we're already on login page
+    if (window.location.pathname === '/login' || window.location.pathname === '/') {
+      return;
     }
-  }, [id]);
+
+    // Wait a bit for user to be available (in case of initial page load)
+    const checkAuth = setTimeout(() => {
+      if (!currentUser) {
+        router.visit('/login');
+        return;
+      }
+      
+      // Check if user is a Proponent
+      if (currentUser.role?.userRole !== 'Proponent') {
+        router.visit('/dashboard');
+        return;
+      }
+      
+      if (id) {
+        loadProposal();
+      } else {
+        setLoading(false);
+      }
+    }, 100);
+
+    return () => clearTimeout(checkAuth);
+  }, [id, currentUser]);
 
   const loadProposal = async () => {
+    // Validate authentication before loading
+    if (!currentUser || currentUser.role?.userRole !== 'Proponent') {
+      setError('You must be logged in as a Proponent to view proposal details.');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError('');
@@ -36,7 +71,15 @@ const TrackerDetail = ({ id: propId }) => {
         setError(response.message || 'Failed to load proposal');
       }
     } catch (error) {
-      setError('Failed to load proposal. Please try again.');
+      console.error('Error loading proposal:', error);
+      if (error.message.includes('Unauthenticated')) {
+        setError('Your session has expired. Please log in again.');
+        setTimeout(() => {
+          router.visit('/login');
+        }, 2000);
+      } else {
+        setError('Failed to load proposal. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -149,25 +192,48 @@ const TrackerDetail = ({ id: propId }) => {
     return timelineStages.filter(stage => stage.status === 'completed').length;
   };
 
+  // Format date and time for display (accepts Date object or date string)
+  const formatDateTime = (dateInput) => {
+    if (!dateInput) return 'Not available';
+    
+    try {
+      const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+      if (isNaN(date.getTime())) return 'Invalid date';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    } catch (error) {
+      return 'Invalid date';
+    }
+  };
+
   const getStatusHistory = () => {
     if (!proposal) return [];
     
     const timelineStages = getTimelineStages();
     const statusId = proposal.statusID;
-    const baseDate = new Date(proposal.created_at);
+    const baseDate = new Date(proposal.uploadedAt || proposal.created_at);
     
-    // Generate status history based on timeline stages
+    // Get actual dates from proposal data
+    const cmEndorsements = proposal.endorsements?.filter(e => 
+      e.endorser?.role?.userRole === 'CM' && e.endorsementStatus === 'approved'
+    ) || [];
+    const rddEndorsements = proposal.endorsements?.filter(e => 
+      e.endorser?.role?.userRole === 'RDD' && e.endorsementStatus === 'approved'
+    ) || [];
+    const reviews = proposal.reviews?.filter(r => r.reviewedAt) || [];
+    
+    // Create a proper chronological timeline using actual dates
+    const timelineEntries = [];
     const statusHistory = [];
     
-    // Get stages in chronological order
-    const completedStages = timelineStages.filter(stage => stage.status === 'completed');
-    const currentStage = timelineStages.find(stage => stage.status === 'current');
-    const rejectedStage = timelineStages.find(stage => stage.status === 'rejected');
-    
-    // Create a proper chronological timeline
-    const timelineEntries = [];
-    
-    // 1. Add initial proposal submission (always first)
+    // 1. Proposal Submitted (always first, use actual submission date)
     timelineEntries.push({
       date: baseDate,
       status: 'Proposal Submitted',
@@ -176,65 +242,158 @@ const TrackerDetail = ({ id: propId }) => {
       type: 'completed'
     });
     
-    // 2. Add completed stages in chronological order (excluding Proposal Submitted to avoid duplication)
-    completedStages.filter(stage => stage.name !== 'Proposal Submitted').forEach((stage, index) => {
-      const stageDate = new Date(baseDate);
-      // Add realistic time progression: 1-2 weeks between stages
-      const daysToAdd = (index + 1) * 7 + Math.floor(Math.random() * 7);
-      stageDate.setDate(stageDate.getDate() + daysToAdd);
-      
-      // Add random time during business hours (9 AM - 5 PM)
-      const randomHour = 9 + Math.floor(Math.random() * 8);
-      const randomMinute = Math.floor(Math.random() * 60);
-      stageDate.setHours(randomHour, randomMinute, 0, 0);
-      
-      let action = '';
-      switch (stage.name) {
-        case 'College Endorsement':
-          action = 'Proposal endorsed by the college committee and forwarded for further review.';
-          break;
-        case 'R&D Division':
-          action = 'Technical assessment completed by R&D Division with positive evaluation.';
-          break;
-        case 'Proposal Review':
-          action = 'Initial proposal review completed with recommendations for improvement.';
-          break;
-        case 'Ethics Review':
-          action = 'Ethics committee review completed with compliance approval.';
-          break;
-        case 'OVPRDE':
-          action = 'Office of Vice President for Research and Development approval granted.';
-          break;
-        case 'President':
-          action = 'Presidential approval received for project implementation.';
-          break;
-        case 'OSOURU':
-          action = 'Office of Student Organizations and University Relations approval completed.';
-          break;
-        case 'Implementation':
-          action = 'Project implementation phase initiated and research work commenced.';
-          break;
-        case 'Monitoring':
-          action = 'Project monitoring and progress tracking phase activated.';
-          break;
-        case 'For Completion':
-          action = 'Project completed successfully with all deliverables submitted.';
-          break;
-        default:
-          action = `${stage.name} stage completed successfully.`;
-      }
-      
+    // 2. College Endorsement (use actual endorsement date if available)
+    const cmEndorsement = cmEndorsements[0];
+    if (cmEndorsement && cmEndorsement.endorsementDate) {
+      const endorsementDate = new Date(cmEndorsement.endorsementDate);
       timelineEntries.push({
-        date: stageDate,
-        status: stage.name,
-        action: action,
-        priority: stage.name === 'Ethics Review' || stage.name === 'President' ? 'high' : 'medium',
+        date: endorsementDate,
+        status: 'College Endorsement',
+        action: `Proposal endorsed by ${cmEndorsement.endorser?.fullName || 'College Manager'} and forwarded to R&D Division for review.`,
+        priority: 'high',
         type: 'completed'
       });
-    });
+    } else if (statusId >= 2) {
+      // If status is beyond submission but no endorsement date, estimate based on submission date
+      const estimatedDate = new Date(baseDate);
+      estimatedDate.setDate(estimatedDate.getDate() + 7); // Estimate 1 week after submission
+      timelineEntries.push({
+        date: estimatedDate,
+        status: 'College Endorsement',
+        action: 'Proposal endorsed by the college committee and forwarded to R&D Division for review.',
+        priority: 'high',
+        type: 'completed'
+      });
+    }
     
-    // 3. Add current stage (most recent)
-    if (currentStage) {
+    // 3. R&D Division Review (use actual RDD endorsement date or review date)
+    if (statusId >= 2) {
+      const rddDate = rddEndorsements[0]?.endorsementDate 
+        ? new Date(rddEndorsements[0].endorsementDate)
+        : reviews[0]?.reviewedAt 
+          ? new Date(reviews[0].reviewedAt)
+          : cmEndorsement?.endorsementDate
+            ? new Date(new Date(cmEndorsement.endorsementDate).getTime() + 7 * 24 * 60 * 60 * 1000)
+            : new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000);
+      
+      timelineEntries.push({
+        date: rddDate,
+        status: 'R&D Division',
+        action: 'Technical assessment completed by R&D Division with positive evaluation.',
+        priority: 'high',
+        type: statusId >= 3 ? 'completed' : 'current'
+      });
+    }
+    
+    // 4. Proposal Review (use actual review dates)
+    if (reviews.length > 0) {
+      reviews.forEach((review, index) => {
+        const reviewDate = new Date(review.reviewedAt);
+        const reviewerName = review.reviewer?.fullName || 'Reviewer';
+        const decision = review.decision?.decision || 'reviewed';
+        
+        timelineEntries.push({
+          date: reviewDate,
+          status: 'Proposal Review',
+          action: `Proposal reviewed by ${reviewerName}. Decision: ${decision}. ${review.remarks ? `Remarks: ${review.remarks}` : ''}`,
+          priority: 'high',
+          type: 'completed'
+        });
+      });
+    } else if (statusId >= 3) {
+      // If status is beyond RDD but no reviews, estimate
+      const estimatedDate = new Date(baseDate);
+      estimatedDate.setDate(estimatedDate.getDate() + 21);
+      timelineEntries.push({
+        date: estimatedDate,
+        status: 'Proposal Review',
+        action: 'Initial proposal review completed with recommendations for improvement.',
+        priority: 'high',
+        type: 'completed'
+      });
+    }
+    
+    // 5. Additional stages based on status (estimate dates if not available)
+    if (statusId >= 2) {
+      const stagesToAdd = [];
+      
+      if (statusId >= 3) {
+        stagesToAdd.push({
+          name: 'Ethics Review',
+          action: 'Ethics committee review completed with compliance approval.',
+          daysAfterBase: 28
+        });
+      }
+      
+      if (statusId >= 3) {
+        stagesToAdd.push({
+          name: 'OVPRDE',
+          action: 'Office of Vice President for Research and Development approval granted.',
+          daysAfterBase: 35
+        });
+      }
+      
+      if (statusId >= 3) {
+        stagesToAdd.push({
+          name: 'President',
+          action: 'Presidential approval received for project implementation.',
+          daysAfterBase: 42
+        });
+      }
+      
+      if (statusId >= 3) {
+        stagesToAdd.push({
+          name: 'OSOURU',
+          action: 'Office of Student Organizations and University Relations approval completed.',
+          daysAfterBase: 49
+        });
+      }
+      
+      if (statusId >= 2) {
+        stagesToAdd.push({
+          name: 'Implementation',
+          action: 'Project implementation phase initiated and research work commenced.',
+          daysAfterBase: 56,
+          isCurrent: statusId === 2 || statusId === 4
+        });
+      }
+      
+      if (statusId >= 4) {
+        stagesToAdd.push({
+          name: 'Monitoring',
+          action: 'Project monitoring and progress tracking phase activated.',
+          daysAfterBase: 90,
+          isCurrent: statusId === 4
+        });
+      }
+      
+      if (statusId === 5) {
+        stagesToAdd.push({
+          name: 'For Completion',
+          action: 'Project completed successfully with all deliverables submitted.',
+          daysAfterBase: 120
+        });
+      }
+      
+      stagesToAdd.forEach((stage, index) => {
+        const stageDate = new Date(baseDate);
+        stageDate.setDate(stageDate.getDate() + stage.daysAfterBase);
+        // Set time to business hours (10 AM)
+        stageDate.setHours(10, 0, 0, 0);
+        
+        timelineEntries.push({
+          date: stageDate,
+          status: stage.name,
+          action: stage.action,
+          priority: stage.name === 'Ethics Review' || stage.name === 'President' ? 'high' : 'medium',
+          type: stage.isCurrent ? 'current' : 'completed'
+        });
+      });
+    }
+    
+    // 6. Add current stage if not already added
+    const currentStage = timelineStages.find(stage => stage.status === 'current');
+    if (currentStage && !timelineEntries.find(e => e.status === currentStage.name && e.type === 'current')) {
       const currentDate = new Date();
       timelineEntries.push({
         date: currentDate,
@@ -245,7 +404,8 @@ const TrackerDetail = ({ id: propId }) => {
       });
     }
     
-    // 4. Add rejected stage (if applicable)
+    // 7. Add rejected stage (if applicable)
+    const rejectedStage = timelineStages.find(stage => stage.status === 'rejected');
     if (rejectedStage) {
       const rejectedDate = new Date();
       timelineEntries.push({
@@ -263,14 +423,8 @@ const TrackerDetail = ({ id: propId }) => {
     // Format the entries for display
     timelineEntries.forEach(entry => {
       statusHistory.push({
-        date: entry.date.toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-          hour12: true
-        }),
+        date: formatDateTime(entry.date),
+        dateObj: entry.date, // Keep original date object for sorting
         status: entry.status,
         action: entry.action,
         priority: entry.priority,
@@ -341,7 +495,7 @@ const TrackerDetail = ({ id: propId }) => {
           <p className="text-gray-600 mb-4">The requested project could not be found.</p>
           <p className="text-sm text-gray-500 mb-4">Project ID: {id}</p>
           <button
-            onClick={() => navigate('/proponent/tracker')}
+            onClick={() => router.visit('/proponent/tracker')}
             className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
             Back to Tracker
@@ -359,7 +513,7 @@ const TrackerDetail = ({ id: propId }) => {
       {/* Header */}
       <div className="">
         <button
-          onClick={() => navigate('/proponent/tracker')}
+          onClick={() => router.visit('/proponent/tracker')}
           className="flex items-center gap-2 text-gray-600 hover:text-gray-800 mb-1 transition-colors duration-200 group"
         >
           <ArrowLeft size={20} className="group-hover:-translate-x-1 transition-transform duration-200" />
@@ -475,6 +629,7 @@ const TrackerDetail = ({ id: propId }) => {
         {/* Timeline stages data */}
         {(() => {
           const timelineStages = getTimelineStages();
+          const statusHistory = getStatusHistory(); // Compute once to get dates
 
           const getStatusColor = (status) => {
             switch (status) {
@@ -507,54 +662,65 @@ const TrackerDetail = ({ id: propId }) => {
               {/* Scrollable Timeline Container */}
               <div className="overflow-x-auto pb-4">
                 <div className="flex justify-between items-start relative min-w-max px-4">
-                  {timelineStages.map((stage, index) => (
-                    <div key={stage.id} className="flex flex-col items-center relative mx-4 sm:mx-8">
-                      {/* Stage Dot */}
-                      <div 
-                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(stage.status)} mb-4 relative z-10 ${
-                          stage.name === 'For Completion' ? 'cursor-pointer hover:scale-110 transition-transform duration-200' : ''
-                        }`}
-                        onClick={stage.name === 'For Completion' ? handleCompletionClick : undefined}
-                      >
-                        {stage.status === 'completed' && (
-                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
-                            <svg className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                            </svg>
+                  {timelineStages.map((stage, index) => {
+                    // Get date for this stage from status history
+                    const stageEntry = statusHistory.find(e => e.status === stage.name);
+                    const stageDate = stageEntry?.dateObj || null;
+                    
+                    return (
+                      <div key={stage.id} className="flex flex-col items-center relative mx-4 sm:mx-8">
+                        {/* Stage Dot */}
+                        <div 
+                          className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(stage.status)} mb-4 relative z-10 ${
+                            stage.name === 'For Completion' ? 'cursor-pointer hover:scale-110 transition-transform duration-200' : ''
+                          }`}
+                          onClick={stage.name === 'For Completion' ? handleCompletionClick : undefined}
+                        >
+                          {stage.status === 'completed' && (
+                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
+                              <svg className="w-5 h-5 sm:w-6 sm:h-6 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Connecting Line */}
+                        {index < timelineStages.length - 1 && (
+                          <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
+                            <div
+                              className="h-full bg-green-500 transition-all duration-500"
+                              style={{
+                                width: stage.status === 'completed' ? '100%' : '0%'
+                              }}
+                            ></div>
                           </div>
                         )}
-                      </div>
 
-                      {/* Connecting Line */}
-                      {index < timelineStages.length - 1 && (
-                        <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
-                          <div
-                            className="h-full bg-green-500 transition-all duration-500"
-                            style={{
-                              width: stage.status === 'completed' ? '100%' : '0%'
-                            }}
-                          ></div>
+                        {/* Stage Label with Date */}
+                        <div 
+                          className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
+                            stage.status === 'current' ? 'bg-blue-50 border border-blue-200' :
+                            stage.status === 'completed' ? 'bg-green-50 border border-green-200' :
+                            stage.status === 'rejected' ? 'bg-red-50 border border-red-200' :
+                            'bg-gray-50 border border-gray-200'
+                          } ${stage.name === 'For Completion' ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors duration-200' : ''}`}
+                          onClick={stage.name === 'For Completion' ? handleCompletionClick : undefined}
+                        >
+                          <span className={`text-xs sm:text-sm font-medium ${getStatusTextColor(stage.status)} leading-tight block ${
+                            stage.name === 'For Completion' ? 'hover:text-blue-700' : ''
+                          }`}>
+                            {stage.name}
+                          </span>
+                          {stageDate && (stage.status === 'completed' || stage.status === 'current') && (
+                            <span className="text-xs text-gray-500 mt-1 block whitespace-nowrap">
+                              {formatDateTime(stageDate)}
+                            </span>
+                          )}
                         </div>
-                      )}
-
-                      {/* Stage Label */}
-                      <div 
-                        className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
-                          stage.status === 'current' ? 'bg-blue-50 border border-blue-200' :
-                          stage.status === 'completed' ? 'bg-green-50 border border-green-200' :
-                          stage.status === 'rejected' ? 'bg-red-50 border border-red-200' :
-                          'bg-gray-50 border border-gray-200'
-                        } ${stage.name === 'For Completion' ? 'cursor-pointer hover:bg-blue-50 hover:border-blue-200 transition-colors duration-200' : ''}`}
-                        onClick={stage.name === 'For Completion' ? handleCompletionClick : undefined}
-                      >
-                        <span className={`text-xs sm:text-sm font-medium ${getStatusTextColor(stage.status)} leading-tight ${
-                          stage.name === 'For Completion' ? 'hover:text-blue-700' : ''
-                        }`}>
-                          {stage.name}
-                        </span>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             </div>

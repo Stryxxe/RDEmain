@@ -483,7 +483,7 @@ const CMMessages = () => {
                     </div>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
