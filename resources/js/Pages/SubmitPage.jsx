@@ -1,536 +1,626 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { router, usePage } from '@inertiajs/react';
-import { useAuth } from '../contexts/AuthContext';
-import FormField from '../Components/FormField';
-import CheckboxGroup from '../Components/CheckboxGroup';
-import FileUpload from '../Components/FileUpload';
-import TextAreaField from '../Components/TextAreaField';
-import DragDropUpload from '../Components/DragDropUpload';
-import apiService from '../services/api';
+import React, { useState, useRef, useEffect } from "react";
+import { router, usePage } from "@inertiajs/react";
+import { useAuth } from "../contexts/AuthContext";
+import FormField from "../Components/FormField";
+import CheckboxGroup from "../Components/CheckboxGroup";
+import FileUpload from "../Components/FileUpload";
+import TextAreaField from "../Components/TextAreaField";
+import DragDropUpload from "../Components/DragDropUpload";
+import apiService from "../services/api";
+import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 
 const SubmitPage = () => {
-  const { user } = useAuth();
-  const { props } = usePage();
-  
-  // Get user from Inertia props (more reliable than context on initial load)
-  const currentUser = user || props?.auth?.user;
-  
-  // Validate authentication on mount
-  useEffect(() => {
-    // Prevent redirect loop - check if we're already on login page
-    if (window.location.pathname === '/login' || window.location.pathname === '/') {
-      return;
-    }
+    const { user } = useAuth();
+    const { props } = usePage();
 
-    // Wait a bit for user to be available (in case of initial page load)
-    const checkAuth = setTimeout(() => {
-      if (!currentUser) {
-        router.visit('/login');
-        return;
-      }
-      
-      // Check if user is a Proponent
-      if (currentUser.role?.userRole !== 'Proponent') {
-        router.visit('/dashboard');
-        return;
-      }
-    }, 100);
+    // Get user from Inertia props (more reliable than context on initial load)
+    const currentUser = user || props?.auth?.user;
 
-    return () => clearTimeout(checkAuth);
-  }, [currentUser]);
-  const [formData, setFormData] = useState({
-    reportFile: null,
-    reportTitle: '',
-    description: '',
-    objectives: '',
-    researchAgenda: [],
-    dostSPs: [],
-    sustainableDevelopmentGoals: [],
-    proposedBudget: '',
-    setiScorecard: null,
-    gadCertificate: null,
-    matrixOfCompliance: null
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState('');
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  // Refs for form fields to enable scrolling
-  const reportFileRef = useRef(null);
-  const reportTitleRef = useRef(null);
-  const descriptionRef = useRef(null);
-  const objectivesRef = useRef(null);
-  const researchAgendaRef = useRef(null);
-  const dostSPsRef = useRef(null);
-  const sustainableDevelopmentGoalsRef = useRef(null);
-  const proposedBudgetRef = useRef(null);
-
-
-  const researchAgendaOptions = [
-    'Agriculture, Aquatic, and Agro-Forestry',
-    'Business and Trade',
-    'Social Sciences and Education',
-    'Engineering and Technology',
-    'Environment and Natural Resources',
-    'Health and Wellness',
-    'Peace and Security'
-  ];
-
-  const dostSPsOptions = [
-    'Publication',
-    'Patent',
-    'Product',
-    'People Services',
-    'Places and Partnership',
-    'Policies'
-  ];
-
-  const sdgOptions = [
-    'No Poverty',
-    'Zero Hunger',
-    'Good Health and Well-being',
-    'Quality Education',
-    'Gender Equality',
-    'Clean Water and Sanitation',
-    'Affordable and Clean Energy',
-    'Decent Work and Economic Growth',
-    'Industry, Innovation and Infrastructure',
-    'Reduced Inequalities',
-    'Sustainable Cities and Communities',
-    'Responsible Consumption and Production',
-    'Climate Action',
-    'Life Below Water',
-    'Life on Land',
-    'Peace, Justice and Strong Institutions',
-    'Partnerships for the Goals'
-  ];
-
-  const formatNumber = (value) => {
-    // Remove all non-numeric characters
-    const numericValue = value.replace(/[^0-9]/g, '');
-    // Add commas for thousands
-    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-  };
-
-  const parseNumber = (formattedValue) => {
-    // Remove commas and return numeric value
-    return formattedValue.replace(/,/g, '');
-  };
-
-  const handleInputChange = (field, value) => {
-    if (field === 'proposedBudget') {
-      // Format the budget with commas
-      const formattedValue = formatNumber(value);
-      setFormData(prev => ({
-        ...prev,
-        [field]: formattedValue
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [field]: value
-      }));
-    }
-  };
-
-  const handleFileSelect = (file) => {
-    setFormData(prev => ({
-      ...prev,
-      reportFile: file
-    }));
-  };
-
-  const handleCheckboxChange = (field, value, checked) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: checked 
-        ? [...prev[field], value]
-        : prev[field].filter(item => item !== value)
-    }));
-  };
-
-  const handleFileChange = (field, file) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: file
-    }));
-  };
-
-  const scrollToField = (ref) => {
-    if (ref.current) {
-      ref.current.scrollIntoView({ 
-        behavior: 'smooth', 
-        block: 'center' 
-      });
-      // Add a temporary highlight effect
-      ref.current.style.borderColor = '#ef4444';
-      ref.current.style.boxShadow = '0 0 0 3px rgba(239, 68, 68, 0.1)';
-      setTimeout(() => {
-        ref.current.style.borderColor = '';
-        ref.current.style.boxShadow = '';
-      }, 3000);
-    }
-  };
-
-  const validateForm = () => {
-    const errors = [];
-    const fieldErrors = {};
-
-    if (!formData.reportFile) {
-      errors.push('Report file is required');
-      fieldErrors.reportFile = 'Report file is required';
-    }
-    if (!formData.reportTitle.trim()) {
-      errors.push('Research title is required');
-      fieldErrors.reportTitle = 'Research title is required';
-    }
-    if (!formData.description.trim()) {
-      errors.push('Description is required');
-      fieldErrors.description = 'Description is required';
-    } else {
-      // Validate word count (250 words max)
-      const wordCount = formData.description.trim().split(/\s+/).filter(word => word.length > 0).length;
-      if (wordCount > 250) {
-        errors.push('Description must not exceed 250 words');
-        fieldErrors.description = 'Description must not exceed 250 words';
-      }
-    }
-    if (!formData.objectives.trim()) {
-      errors.push('Objectives are required');
-      fieldErrors.objectives = 'Objectives are required';
-    }
-    if (formData.researchAgenda.length === 0) {
-      errors.push('At least one research agenda must be selected');
-      fieldErrors.researchAgenda = 'At least one research agenda must be selected';
-    }
-    if (formData.dostSPs.length === 0) {
-      errors.push('At least one DOST SP must be selected');
-      fieldErrors.dostSPs = 'At least one DOST SP must be selected';
-    }
-    if (formData.sustainableDevelopmentGoals.length === 0) {
-      errors.push('At least one SDG must be selected');
-      fieldErrors.sustainableDevelopmentGoals = 'At least one SDG must be selected';
-    }
-    if (!formData.proposedBudget || parseFloat(parseNumber(formData.proposedBudget)) <= 0) {
-      errors.push('Valid proposed budget is required');
-      fieldErrors.proposedBudget = 'Valid proposed budget is required';
-    }
-
-    return { errors, fieldErrors };
-  };
-
-
-  const handleSubmit = async (e) => {
-    console.log('Submitting form with data:', formData);
-    e.preventDefault();
-    
-    const { errors, fieldErrors } = validateForm();
-    if (errors.length > 0) {
-      setSubmitError(errors.join(', '));
-      
-      // Scroll to the first invalid field
-      const fieldRefs = {
-        reportFile: reportFileRef,
-        reportTitle: reportTitleRef,
-        description: descriptionRef,
-        objectives: objectivesRef,
-        researchAgenda: researchAgendaRef,
-        dostSPs: dostSPsRef,
-        sustainableDevelopmentGoals: sustainableDevelopmentGoalsRef,
-        proposedBudget: proposedBudgetRef
-      };
-
-      // Find the first invalid field and scroll to it
-      for (const [fieldName, errorMessage] of Object.entries(fieldErrors)) {
-        if (fieldRefs[fieldName]) {
-          scrollToField(fieldRefs[fieldName]);
-          break;
+    // Validate authentication on mount
+    useEffect(() => {
+        // Prevent redirect loop - check if we're already on login page
+        if (
+            window.location.pathname === "/login" ||
+            window.location.pathname === "/"
+        ) {
+            return;
         }
-      }
-      
-      return;
-    }
 
-    // Validate authentication before submission
+        // Wait a bit for user to be available (in case of initial page load)
+        const checkAuth = setTimeout(() => {
+            if (!currentUser) {
+                router.visit("/login");
+                return;
+            }
+
+            // Check if user is a Proponent
+            if (currentUser.role?.userRole !== "Proponent") {
+                router.visit("/dashboard");
+                return;
+            }
+        }, 100);
+
+        return () => clearTimeout(checkAuth);
+    }, [currentUser]);
+    const [formData, setFormData] = useState({
+        reportFile: null,
+        reportTitle: "",
+        description: "",
+        objectives: "",
+        researchAgenda: [],
+        dostSPs: [],
+        sustainableDevelopmentGoals: [],
+        proposedBudget: "",
+        setiScorecard: null,
+        gadCertificate: null,
+        matrixOfCompliance: null,
+    });
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState("");
+    const [submitSuccess, setSubmitSuccess] = useState(false);
+
+    // Refs for form fields to enable scrolling
+    const reportFileRef = useRef(null);
+    const reportTitleRef = useRef(null);
+    const descriptionRef = useRef(null);
+    const objectivesRef = useRef(null);
+    const researchAgendaRef = useRef(null);
+    const dostSPsRef = useRef(null);
+    const sustainableDevelopmentGoalsRef = useRef(null);
+    const proposedBudgetRef = useRef(null);
+
+    const researchAgendaOptions = [
+        "Agriculture, Aquatic, and Agro-Forestry",
+        "Business and Trade",
+        "Social Sciences and Education",
+        "Engineering and Technology",
+        "Environment and Natural Resources",
+        "Health and Wellness",
+        "Peace and Security",
+    ];
+
+    const dostSPsOptions = [
+        "Publication",
+        "Patent",
+        "Product",
+        "People Services",
+        "Places and Partnership",
+        "Policies",
+    ];
+
+    const sdgOptions = [
+        "No Poverty",
+        "Zero Hunger",
+        "Good Health and Well-being",
+        "Quality Education",
+        "Gender Equality",
+        "Clean Water and Sanitation",
+        "Affordable and Clean Energy",
+        "Decent Work and Economic Growth",
+        "Industry, Innovation and Infrastructure",
+        "Reduced Inequalities",
+        "Sustainable Cities and Communities",
+        "Responsible Consumption and Production",
+        "Climate Action",
+        "Life Below Water",
+        "Life on Land",
+        "Peace, Justice and Strong Institutions",
+        "Partnerships for the Goals",
+    ];
+
+    const formatNumber = (value) => {
+        // Remove all non-numeric characters
+        const numericValue = value.replace(/[^0-9]/g, "");
+        // Add commas for thousands
+        return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    };
+
+    const parseNumber = (formattedValue) => {
+        // Remove commas and return numeric value
+        return formattedValue.replace(/,/g, "");
+    };
+
+    const handleInputChange = (field, value) => {
+        if (field === "proposedBudget") {
+            // Format the budget with commas
+            const formattedValue = formatNumber(value);
+            setFormData((prev) => ({
+                ...prev,
+                [field]: formattedValue,
+            }));
+        } else {
+            setFormData((prev) => ({
+                ...prev,
+                [field]: value,
+            }));
+        }
+    };
+
+    const handleFileSelect = (file) => {
+        setFormData((prev) => ({
+            ...prev,
+            reportFile: file,
+        }));
+    };
+
+    const handleCheckboxChange = (field, value, checked) => {
+        setFormData((prev) => ({
+            ...prev,
+            [field]: checked
+                ? [...prev[field], value]
+                : prev[field].filter((item) => item !== value),
+        }));
+    };
+
+    const handleFileChange = (field, file) => {
+        setFormData((prev) => ({
+            ...prev,
+            [field]: file,
+        }));
+    };
+
+    const scrollToField = (ref) => {
+        if (ref.current) {
+            ref.current.scrollIntoView({
+                behavior: "smooth",
+                block: "center",
+            });
+            // Add a temporary highlight effect
+            ref.current.style.borderColor = "#ef4444";
+            ref.current.style.boxShadow = "0 0 0 3px rgba(239, 68, 68, 0.1)";
+            setTimeout(() => {
+                ref.current.style.borderColor = "";
+                ref.current.style.boxShadow = "";
+            }, 3000);
+        }
+    };
+
+    const validateForm = () => {
+        const errors = [];
+        const fieldErrors = {};
+
+        if (!formData.reportFile) {
+            errors.push("Report file is required");
+            fieldErrors.reportFile = "Report file is required";
+        }
+        if (!formData.reportTitle.trim()) {
+            errors.push("Research title is required");
+            fieldErrors.reportTitle = "Research title is required";
+        }
+        if (!formData.description.trim()) {
+            errors.push("Description is required");
+            fieldErrors.description = "Description is required";
+        } else {
+            // Validate word count (250 words max)
+            const wordCount = formData.description
+                .trim()
+                .split(/\s+/)
+                .filter((word) => word.length > 0).length;
+            if (wordCount > 250) {
+                errors.push("Description must not exceed 250 words");
+                fieldErrors.description =
+                    "Description must not exceed 250 words";
+            }
+        }
+        if (!formData.objectives.trim()) {
+            errors.push("Objectives are required");
+            fieldErrors.objectives = "Objectives are required";
+        }
+        if (formData.researchAgenda.length === 0) {
+            errors.push("At least one research agenda must be selected");
+            fieldErrors.researchAgenda =
+                "At least one research agenda must be selected";
+        }
+        if (formData.dostSPs.length === 0) {
+            errors.push("At least one DOST SP must be selected");
+            fieldErrors.dostSPs = "At least one DOST SP must be selected";
+        }
+        if (formData.sustainableDevelopmentGoals.length === 0) {
+            errors.push("At least one SDG must be selected");
+            fieldErrors.sustainableDevelopmentGoals =
+                "At least one SDG must be selected";
+        }
+        if (
+            !formData.proposedBudget ||
+            parseFloat(parseNumber(formData.proposedBudget)) <= 0
+        ) {
+            errors.push("Valid proposed budget is required");
+            fieldErrors.proposedBudget = "Valid proposed budget is required";
+        }
+
+        return { errors, fieldErrors };
+    };
+
+    const handleSubmit = async (e) => {
+        console.log("Submitting form with data:", formData);
+        e.preventDefault();
+
+        const { errors, fieldErrors } = validateForm();
+        if (errors.length > 0) {
+            setSubmitError(errors.join(", "));
+
+            // Scroll to the first invalid field
+            const fieldRefs = {
+                reportFile: reportFileRef,
+                reportTitle: reportTitleRef,
+                description: descriptionRef,
+                objectives: objectivesRef,
+                researchAgenda: researchAgendaRef,
+                dostSPs: dostSPsRef,
+                sustainableDevelopmentGoals: sustainableDevelopmentGoalsRef,
+                proposedBudget: proposedBudgetRef,
+            };
+
+            // Find the first invalid field and scroll to it
+            for (const [fieldName, errorMessage] of Object.entries(
+                fieldErrors
+            )) {
+                if (fieldRefs[fieldName]) {
+                    scrollToField(fieldRefs[fieldName]);
+                    break;
+                }
+            }
+
+            return;
+        }
+
+        // Validate authentication before submission
+        if (!currentUser) {
+            setSubmitError(
+                "You must be logged in to submit a proposal. Redirecting to login..."
+            );
+            setTimeout(() => {
+                router.visit("/login");
+            }, 2000);
+            return;
+        }
+
+        if (currentUser.role?.userRole !== "Proponent") {
+            setSubmitError("Only proponents can submit proposals.");
+            return;
+        }
+
+        setIsSubmitting(true);
+        setSubmitError("");
+        setSubmitSuccess(false);
+
+        try {
+            // Parse the budget value before sending to API
+            // Get researchCenter from user's department if not provided in form
+            const researchCenter =
+                formData.researchCenter ||
+                currentUser?.department?.name ||
+                "Not specified";
+
+            const submissionData = {
+                ...formData,
+                researchCenter: researchCenter,
+                proposedBudget: parseNumber(formData.proposedBudget),
+                user: currentUser, // Pass user object for API service to use if needed
+            };
+            const response = await apiService.createProposal(submissionData);
+
+            if (response.success) {
+                setSubmitSuccess(true);
+                // Reset form
+                setFormData({
+                    reportFile: null,
+                    reportTitle: "",
+                    description: "",
+                    objectives: "",
+                    researchAgenda: [],
+                    dostSPs: [],
+                    sustainableDevelopmentGoals: [],
+                    proposedBudget: "",
+                    setiScorecard: null,
+                    gadCertificate: null,
+                    matrixOfCompliance: null,
+                });
+
+                // Redirect to tracker page after 2 seconds
+                setTimeout(() => {
+                    router.visit("/proponent/tracker");
+                }, 2000);
+            } else {
+                setSubmitError(response.message || "Failed to submit proposal");
+            }
+        } catch (error) {
+            console.error("Error submitting proposal:", error);
+            if (error.message.includes("Unauthenticated")) {
+                setSubmitError(
+                    "Your session has expired. Please log in again. Redirecting..."
+                );
+                setTimeout(() => {
+                    router.visit("/login");
+                }, 2000);
+            } else if (error.message.includes("Validation failed")) {
+                // Show validation errors in a user-friendly way
+                setSubmitError(
+                    error.message ||
+                        "Please check the form and fix the errors before submitting."
+                );
+            } else {
+                setSubmitError(
+                    error.message ||
+                        "Failed to submit proposal. Please try again."
+                );
+            }
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    // Show loading or redirect if not authenticated
     if (!currentUser) {
-      setSubmitError('You must be logged in to submit a proposal. Redirecting to login...');
-      setTimeout(() => {
-        router.visit('/login');
-      }, 2000);
-      return;
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Redirecting to login...</p>
+                </div>
+            </div>
+        );
     }
 
-    if (currentUser.role?.userRole !== 'Proponent') {
-      setSubmitError('Only proponents can submit proposals.');
-      return;
+    if (currentUser.role?.userRole !== "Proponent") {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <p className="text-gray-600">
+                        Access denied. Only proponents can submit proposals.
+                    </p>
+                </div>
+            </div>
+        );
     }
 
-    setIsSubmitting(true);
-    setSubmitError('');
-    setSubmitSuccess(false);
-
-    try {
-      // Parse the budget value before sending to API
-      // Get researchCenter from user's department if not provided in form
-      const researchCenter = formData.researchCenter || currentUser?.department?.name || 'Not specified';
-      
-      const submissionData = {
-        ...formData,
-        researchCenter: researchCenter,
-        proposedBudget: parseNumber(formData.proposedBudget),
-        user: currentUser // Pass user object for API service to use if needed
-      };
-      const response = await apiService.createProposal(submissionData);
-      
-      if (response.success) {
-        setSubmitSuccess(true);
-        // Reset form
-        setFormData({
-          reportFile: null,
-          reportTitle: '',
-          description: '',
-          objectives: '',
-          researchAgenda: [],
-          dostSPs: [],
-          sustainableDevelopmentGoals: [],
-          proposedBudget: '',
-          setiScorecard: null,
-          gadCertificate: null,
-          matrixOfCompliance: null
-        });
-        
-        // Redirect to tracker page after 2 seconds
-        setTimeout(() => {
-          router.visit('/proponent/tracker');
-        }, 2000);
-      } else {
-        setSubmitError(response.message || 'Failed to submit proposal');
-      }
-    } catch (error) {
-      console.error('Error submitting proposal:', error);
-      if (error.message.includes('Unauthenticated')) {
-        setSubmitError('Your session has expired. Please log in again. Redirecting...');
-        setTimeout(() => {
-          router.visit('/login');
-        }, 2000);
-      } else if (error.message.includes('Validation failed')) {
-        // Show validation errors in a user-friendly way
-        setSubmitError(error.message || 'Please check the form and fix the errors before submitting.');
-      } else {
-        setSubmitError(error.message || 'Failed to submit proposal. Please try again.');
-      }
-    } finally {
-      setIsSubmitting(false);
+    if (submitSuccess) {
+        return (
+            <div className="max-w-4xl w-full">
+                <div className="text-center py-12">
+                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <svg
+                            className="w-8 h-8 text-green-600"
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2}
+                                d="M5 13l4 4L19 7"
+                            />
+                        </svg>
+                    </div>
+                    <h1 className="text-2xl font-bold text-gray-900 mb-2">
+                        Proposal Submitted Successfully!
+                    </h1>
+                    <p className="text-gray-600 mb-4">
+                        Your research proposal has been submitted for review.
+                    </p>
+                    <p className="text-sm text-gray-500">
+                        Redirecting to projects page...
+                    </p>
+                </div>
+            </div>
+        );
     }
-  };
 
-  // Show loading or redirect if not authenticated
-  if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Redirecting to login...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (currentUser.role?.userRole !== 'Proponent') {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-gray-600">Access denied. Only proponents can submit proposals.</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (submitSuccess) {
-    return (
-      <div className="max-w-4xl w-full">
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Proposal Submitted Successfully!</h1>
-          <p className="text-gray-600 mb-4">Your research proposal has been submitted for review.</p>
-          <p className="text-sm text-gray-500">Redirecting to projects page...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="max-w-4xl w-full">
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Submit Proposal</h1>
-      </div>
-
-      {submitError && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
+        <div className="max-w-4xl w-full">
+            <div className="text-center mb-8">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                    Submit Proposal
+                </h1>
             </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error</h3>
-              <div className="mt-2 text-sm text-red-700">
-                <p>{submitError}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-md p-8">
-          <div className="mb-8" ref={reportFileRef}>
-            <DragDropUpload 
-              onFileSelect={handleFileSelect}
-              acceptedTypes="PDF, DOC, DOCX"
-              maxSize="5MB"
-              selectedFile={formData.reportFile}
-            />
-          </div>
+            {submitError && (
+                <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex">
+                        <div className="flex-shrink-0">
+                            <svg
+                                className="h-5 w-5 text-red-400"
+                                viewBox="0 0 20 20"
+                                fill="currentColor"
+                            >
+                                <path
+                                    fillRule="evenodd"
+                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                                    clipRule="evenodd"
+                                />
+                            </svg>
+                        </div>
+                        <div className="ml-3">
+                            <h3 className="text-sm font-medium text-red-800">
+                                Error
+                            </h3>
+                            <div className="mt-2 text-sm text-red-700">
+                                <p>{submitError}</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
-          <div className="mb-8" ref={reportTitleRef}>
-            <FormField
-              label="Research Title"
-              required
-              value={formData.reportTitle}
-              onChange={(value) => handleInputChange('reportTitle', value)}
-              placeholder="Enter research title"
-            />
-          </div>
-
-          <div className="mb-8" ref={descriptionRef}>
-            <TextAreaField
-              label="Description"
-              required
-              value={formData.description}
-              onChange={(value) => handleInputChange('description', value)}
-              placeholder="Enter report description"
-              rows={4}
-              maxWords={250}
-            />
-          </div>
-
-          <div className="mb-8" ref={objectivesRef}>
-            <TextAreaField
-              label="Objectives"
-              required
-              value={formData.objectives}
-              onChange={(value) => handleInputChange('objectives', value)}
-              placeholder="Enter research objectives"
-              rows={4}
-            />
-          </div>
-
-
-          <div className="mb-8" ref={researchAgendaRef}>
-            <CheckboxGroup
-              label="Research Agenda"
-              required
-              options={researchAgendaOptions}
-              selectedValues={formData.researchAgenda}
-              onChange={(value, checked) => handleCheckboxChange('researchAgenda', value, checked)}
-              hint="Select the RDE Agenda that aligns best with your study."
-              columns={2}
-            />
-          </div>
-
-          <div className="mb-8" ref={dostSPsRef}>
-            <CheckboxGroup
-              label="DOST 6P's"
-              required
-              options={dostSPsOptions}
-              selectedValues={formData.dostSPs}
-              onChange={(value, checked) => handleCheckboxChange('dostSPs', value, checked)}
-              hint="Select the most applicable category from the DOST 6Ps that best aligns with your study"
-              columns={1}
-            />
-          </div>
-
-          <div className="mb-8" ref={sustainableDevelopmentGoalsRef}>
-            <CheckboxGroup
-              label="Sustainable Development Goal"
-              required
-              options={sdgOptions}
-              selectedValues={formData.sustainableDevelopmentGoals}
-              onChange={(value, checked) => handleCheckboxChange('sustainableDevelopmentGoals', value, checked)}
-              hint="Select the SDG that best aligns with your study"
-              columns={2}
-            />
-          </div>
-
-          <div className="mb-8" ref={proposedBudgetRef}>
-            <FormField
-              label="Proposed Budget"
-              required
-              type="text"
-              value={formData.proposedBudget}
-              onChange={(value) => handleInputChange('proposedBudget', value)}
-              placeholder="Enter proposed budget amount"
-              hint="Enter the proposed budget amount in Philippine Peso (₱)"
-            />
-          </div>
-
-          <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-900 mb-6 pb-2">
-              Supporting Documents
-            </h3>
-            
-            <div className="space-y-6">
-              <FileUpload
-                label="Upload SETI Scorecard"
-                onChange={(file) => handleFileChange('setiScorecard', file)}
-                accept=".pdf,.doc,.docx"
-                selectedFile={formData.setiScorecard}
-              />
-              
-              <FileUpload
-                label="Upload GAD Certificate"
-                onChange={(file) => handleFileChange('gadCertificate', file)}
-                accept=".pdf,.doc,.docx"
-                selectedFile={formData.gadCertificate}
-              />
-              
-              <FileUpload
-                label="Upload Matrix of Compliance (If Applicable)"
-                onChange={(file) => handleFileChange('matrixOfCompliance', file)}
-                accept=".pdf,.doc,.docx"
-                selectedFile={formData.matrixOfCompliance}
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={() => navigate('/proponent/projects')}
-              className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-              disabled={isSubmitting}
+            <form
+                onSubmit={handleSubmit}
+                className="bg-white rounded-lg shadow-md p-8"
             >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-            >
-              {isSubmitting && (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              )}
-              {isSubmitting ? 'Submitting...' : 'Submit Proposal'}
-            </button>
-          </div>
-        </form>
-    </div>
-  );
+                <div className="mb-8" ref={reportFileRef}>
+                    <DragDropUpload
+                        onFileSelect={handleFileSelect}
+                        acceptedTypes="PDF, DOC, DOCX"
+                        maxSize="5MB"
+                        selectedFile={formData.reportFile}
+                    />
+                </div>
+
+                <div className="mb-8" ref={reportTitleRef}>
+                    <FormField
+                        label="Research Title"
+                        required
+                        value={formData.reportTitle}
+                        onChange={(value) =>
+                            handleInputChange("reportTitle", value)
+                        }
+                        placeholder="Enter research title"
+                    />
+                </div>
+
+                <div className="mb-8" ref={descriptionRef}>
+                    <TextAreaField
+                        label="Description"
+                        required
+                        value={formData.description}
+                        onChange={(value) =>
+                            handleInputChange("description", value)
+                        }
+                        placeholder="Enter report description"
+                        rows={4}
+                        maxWords={250}
+                    />
+                </div>
+
+                <div className="mb-8" ref={objectivesRef}>
+                    <TextAreaField
+                        label="Objectives"
+                        required
+                        value={formData.objectives}
+                        onChange={(value) =>
+                            handleInputChange("objectives", value)
+                        }
+                        placeholder="Enter research objectives"
+                        rows={4}
+                    />
+                </div>
+
+                <div className="mb-8" ref={researchAgendaRef}>
+                    <CheckboxGroup
+                        label="Research Agenda"
+                        required
+                        options={researchAgendaOptions}
+                        selectedValues={formData.researchAgenda}
+                        onChange={(value, checked) =>
+                            handleCheckboxChange(
+                                "researchAgenda",
+                                value,
+                                checked
+                            )
+                        }
+                        hint="Select the RDE Agenda that aligns best with your study."
+                        columns={2}
+                    />
+                </div>
+
+                <div className="mb-8" ref={dostSPsRef}>
+                    <CheckboxGroup
+                        label="DOST 6P's"
+                        required
+                        options={dostSPsOptions}
+                        selectedValues={formData.dostSPs}
+                        onChange={(value, checked) =>
+                            handleCheckboxChange("dostSPs", value, checked)
+                        }
+                        hint="Select the most applicable category from the DOST 6Ps that best aligns with your study"
+                        columns={1}
+                    />
+                </div>
+
+                <div className="mb-8" ref={sustainableDevelopmentGoalsRef}>
+                    <CheckboxGroup
+                        label="Sustainable Development Goal"
+                        required
+                        options={sdgOptions}
+                        selectedValues={formData.sustainableDevelopmentGoals}
+                        onChange={(value, checked) =>
+                            handleCheckboxChange(
+                                "sustainableDevelopmentGoals",
+                                value,
+                                checked
+                            )
+                        }
+                        hint="Select the SDG that best aligns with your study"
+                        columns={2}
+                    />
+                </div>
+
+                <div className="mb-8" ref={proposedBudgetRef}>
+                    <FormField
+                        label="Proposed Budget"
+                        required
+                        type="text"
+                        value={formData.proposedBudget}
+                        onChange={(value) =>
+                            handleInputChange("proposedBudget", value)
+                        }
+                        placeholder="Enter proposed budget amount"
+                        hint="Enter the proposed budget amount in Philippine Peso (₱)"
+                    />
+                </div>
+
+                <div className="mb-8">
+                    <h3 className="text-xl font-semibold text-gray-900 mb-6 pb-2">
+                        Supporting Documents
+                    </h3>
+
+                    <div className="space-y-6">
+                        <FileUpload
+                            label="Upload SETI Scorecard"
+                            onChange={(file) =>
+                                handleFileChange("setiScorecard", file)
+                            }
+                            accept=".pdf,.doc,.docx"
+                            selectedFile={formData.setiScorecard}
+                        />
+
+                        <FileUpload
+                            label="Upload GAD Certificate"
+                            onChange={(file) =>
+                                handleFileChange("gadCertificate", file)
+                            }
+                            accept=".pdf,.doc,.docx"
+                            selectedFile={formData.gadCertificate}
+                        />
+
+                        <FileUpload
+                            label="Upload Matrix of Compliance (If Applicable)"
+                            onChange={(file) =>
+                                handleFileChange("matrixOfCompliance", file)
+                            }
+                            accept=".pdf,.doc,.docx"
+                            selectedFile={formData.matrixOfCompliance}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
+                    <button
+                        type="button"
+                        onClick={() => navigate("/proponent/projects")}
+                        className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
+                        disabled={isSubmitting}
+                    >
+                        Cancel
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="px-6 py-3 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                        {isSubmitting && (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        )}
+                        {isSubmitting ? "Submitting..." : "Submit Proposal"}
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
 };
+
+SubmitPage.layout = (page) => (
+    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+);
 
 export default SubmitPage;
