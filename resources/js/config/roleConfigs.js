@@ -85,7 +85,6 @@ export const roleConfigs = {
     color: 'purple',
     routes: [
       { path: '', component: 'SubmitPage', label: 'Submit Proposal' },
-      { path: 'submit', component: 'SubmitPage', label: 'Submit Proposal' },
       { path: 'tracker', component: 'Tracker', label: 'Tracker' },
       { path: 'tracker/:id', component: 'TrackerDetail', label: 'Tracker Detail' },
       { path: 'resources', component: 'ResourcesPage', label: 'Resources' },
