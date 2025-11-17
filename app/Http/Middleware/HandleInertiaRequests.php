@@ -30,23 +30,30 @@ class HandleInertiaRequests extends Middleware
     public function share(Request $request): array
     {
         $user = $request->user();
-        
+
         if ($user) {
             // Load relationships
             $user->load(['role', 'department']);
-            
+
             // Ensure department name is accessible (handle both 'name' and 'departmentName')
             if ($user->department) {
                 // This ensures the department name is available in the frontend
                 $user->department->makeVisible(['name', 'departmentName']);
             }
         }
-        
+
         return [
             ...parent::share($request),
             'auth' => [
                 'user' => $user,
             ],
+            'flash' => [
+                'message' => $request->session()->get('message'),
+                'userRole' => $request->session()->get('userRole'),
+                'roleName' => $request->session()->get('roleName'),
+            ],
+            // Share CSRF token so it can be updated on navigation
+            'csrf_token' => csrf_token(),
         ];
     }
 }
