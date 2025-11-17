@@ -44,7 +44,6 @@ Route::middleware('auth:web')->group(function () {
     // ============================================================================
     Route::prefix('proponent')->name('proponent.')->group(function () {
         Route::get('/', fn() => Inertia::render('SubmitPage'))->name('dashboard');
-        Route::get('/submit', fn() => Inertia::render('SubmitPage'))->name('submit');
         Route::get('/tracker', fn() => Inertia::render('Tracker'))->name('tracker');
         Route::get('/tracker/{id}', fn($id) => Inertia::render('TrackerDetail', ['id' => $id]))->name('tracker.detail');
         Route::get('/resources', fn() => Inertia::render('Resources'))->name('resources');
