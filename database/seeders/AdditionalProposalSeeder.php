@@ -41,10 +41,9 @@ class AdditionalProposalSeeder extends Seeder
     {
         // Get departments
         $academicDept = Department::where('name', 'Academic Affairs')->first();
-        $cmDept = Department::where('name', 'College of Medicine')->first();
         $rddDept = Department::where('name', 'Research and Development Division')->first();
-        
-        if (!$academicDept || !$cmDept || !$rddDept) {
+
+        if (!$academicDept || !$rddDept) {
             $this->command->error('Required departments not found. Please run DepartmentSeeder first.');
             return;
         }
@@ -312,7 +311,7 @@ class AdditionalProposalSeeder extends Seeder
         foreach ($proposals as $proposalData) {
             // Check if proposal already exists by title
             $existingProposal = Proposal::where('researchTitle', $proposalData['researchTitle'])->first();
-            
+
             if (!$existingProposal) {
                 Proposal::create($proposalData);
                 $this->command->info("Created proposal: {$proposalData['researchTitle']}");
