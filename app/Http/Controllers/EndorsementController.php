@@ -35,7 +35,7 @@ class EndorsementController extends Controller
 
         try {
             $user = Auth::user();
-            
+
             // Check if user has CM role
             if (!$user->role || $user->role->userRole !== 'CM') {
                 return response()->json([
@@ -46,7 +46,7 @@ class EndorsementController extends Controller
 
             // Get the proposal
             $proposal = Proposal::with('user')->find($request->proposalID);
-            
+
             if (!$proposal) {
                 return response()->json([
                     'success' => false,
@@ -79,7 +79,7 @@ class EndorsementController extends Controller
                 'proposalID' => $request->proposalID,
                 'endorserID' => $user->userID,
                 'endorsementComments' => $request->endorsementComments,
-                'endorsementDate' => now(),
+                'endorsementAt' => now(),
                 'endorsementStatus' => $request->endorsementStatus
             ]);
 
@@ -111,7 +111,7 @@ class EndorsementController extends Controller
                 ]);
 
                 // Find all RDD users and notify them
-                $rddUsers = User::whereHas('role', function($query) {
+                $rddUsers = User::whereHas('role', function ($query) {
                     $query->where('userRole', 'RDD');
                 })->get();
 
@@ -141,7 +141,6 @@ class EndorsementController extends Controller
                 'message' => 'Endorsement created successfully',
                 'data' => $endorsement->load(['proposal', 'endorser'])
             ], 201);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -165,7 +164,6 @@ class EndorsementController extends Controller
                 'success' => true,
                 'data' => $endorsements
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -182,7 +180,7 @@ class EndorsementController extends Controller
     {
         try {
             $user = Auth::user();
-            
+
             $endorsements = Endorsement::with(['proposal.user', 'endorser'])
                 ->where('endorserID', $user->userID)
                 ->orderBy('endorsementDate', 'desc')
@@ -192,7 +190,6 @@ class EndorsementController extends Controller
                 'success' => true,
                 'data' => $endorsements
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
