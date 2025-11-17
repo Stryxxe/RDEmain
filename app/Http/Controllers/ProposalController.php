@@ -12,8 +12,9 @@ use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProposalController extends Controller
 {
@@ -23,27 +24,18 @@ class ProposalController extends Controller
     public function index(Request $request): JsonResponse
     {
         $user = Auth::user();
-        
-        // Load the role relationship if not already loaded
-        if (!$user->relationLoaded('role')) {
-            $user->load('role');
-        }
-        
+        $user->loadMissing('role');
+
         // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::with(['status', 'files', 'user.department', 'user.role']);
-        if ($user->role && $user->role->userRole === 'RDD') {
-            // RDD users can see all proposals - no filtering needed
-        } elseif ($user->role && $user->role->userRole === 'CM') {
-            // For CM users, filter by department
-            $query->whereHas('user', function($q) use ($user) {
-                $q->where('departmentID', $user->departmentID);
-            });
-        } else {
-            // For other users (like Proponents), show only their own proposals
-            $query->where('userID', $user->userID);
-        }
-        
-        $proposals = $query->orderBy('proposalID', 'asc')->get();
+
+        match ($user->role?->userRole) {
+            'RDD' => null, // RDD users can see all proposals - no filtering needed
+            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID)),
+            default => $query->where('userID', $user->userID),
+        };
+
+        $proposals = $query->orderBy('proposalID')->get();
 
         return response()->json([
             'success' => true,
@@ -54,45 +46,29 @@ class ProposalController extends Controller
     /**
      * Get a specific proposal by ID
      */
-    public function show(Request $request, $id): JsonResponse
+    public function show(Request $request, int $id): JsonResponse
     {
         $user = Auth::user();
-        
-        // Load the role relationship if not already loaded
-        if (!$user->relationLoaded('role')) {
-            $user->load('role');
-        }
-        
+        $user->loadMissing('role');
+
         // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::where('proposalID', $id)->with([
-            'status', 
-            'files', 
-            'user.department', 
+            'status',
+            'files',
+            'user.department',
             'user.role',
             'reviews.reviewer',
             'reviews.decision',
             'endorsements.endorser.role'
         ]);
-        if ($user->role && $user->role->userRole === 'RDD') {
-            // RDD users can see all proposals - no filtering needed
-        } elseif ($user->role && $user->role->userRole === 'CM') {
-            // For CM users, filter by department
-            $query->whereHas('user', function($q) use ($user) {
-                $q->where('departmentID', $user->departmentID);
-            });
-        } else {
-            // For other users (like Proponents), show only their own proposals
-            $query->where('userID', $user->userID);
-        }
-        
-        $proposal = $query->first();
 
-        if (!$proposal) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Proposal not found'
-            ], 404);
-        }
+        match ($user->role?->userRole) {
+            'RDD' => null, // RDD users can see all proposals - no filtering needed
+            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID)),
+            default => $query->where('userID', $user->userID),
+        };
+
+        $proposal = $query->firstOrFail();
 
         return response()->json([
             'success' => true,
@@ -106,99 +82,56 @@ class ProposalController extends Controller
     public function store(Request $request): JsonResponse
     {
         $user = Auth::user();
-        
-        // Load the role relationship if not already loaded
-        if (!$user->relationLoaded('role')) {
-            $user->load('role');
-        }
-        
+        $user->loadMissing(['role', 'department']);
+
         // Only proponents can submit proposals
-        if (!$user->role || $user->role->userRole !== 'Proponent') {
+        if ($user->role?->userRole !== 'Proponent') {
             return response()->json([
                 'success' => false,
                 'message' => 'Only proponents can submit proposals'
             ], 403);
         }
 
-        // Load user's department if not already loaded
-        if (!$user->relationLoaded('department')) {
-            $user->load('department');
-        }
-        
         // Get user's department as research center (fallback if not provided)
-        $userDepartment = $user->department;
-        $defaultResearchCenter = $userDepartment ? $userDepartment->name : 'Not specified';
-        
+        $defaultResearchCenter = $user->department?->name ?? 'Not specified';
+
         // Merge request data with default research center if not provided
         if (empty($request->input('researchCenter'))) {
             $request->merge(['researchCenter' => $defaultResearchCenter]);
         }
-        
-        $validator = Validator::make($request->all(), [
-            'researchTitle' => 'required|string|max:255',
-            'description' => 'required|string',
-            'objectives' => 'required|string',
-            'researchCenter' => 'required|string',
-            'researchAgenda' => 'required|string', // Will be JSON string from frontend
-            'dostSPs' => 'required|string', // Will be JSON string from frontend
-            'sustainableDevelopmentGoals' => 'required|string', // Will be JSON string from frontend
-            'proposedBudget' => 'required|numeric|min:0',
-            'reportFile' => 'required|file|mimes:pdf,doc,docx|max:5120', // 5MB max
-            'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:5120', // 5MB max
-            'gadCertificate' => 'nullable|file|mimes:pdf,doc,docx|max:5120', // 5MB max
-            'matrixOfCompliance' => [
-                'nullable',
-                'file',
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($value) {
-                        // Check file extension
-                        $extension = strtolower($value->getClientOriginalExtension());
-                        $allowedExtensions = ['pdf', 'doc', 'docx'];
-                        
-                        if (!in_array($extension, $allowedExtensions)) {
-                            $fail('The matrix of compliance must be a PDF, DOC, or DOCX file.');
-                            return;
-                        }
-                        
-                        // Check file size (5MB = 5120 KB)
-                        $maxSize = 5120 * 1024; // 5MB in bytes
-                        if ($value->getSize() > $maxSize) {
-                            $fail('The matrix of compliance file must not exceed 5MB.');
-                            return;
-                        }
-                        
-                        // Check if file is valid
-                        if (!$value->isValid()) {
-                            $fail('The matrix of compliance file is invalid or corrupted.');
-                            return;
-                        }
-                    }
-                }
-            ]
-        ]);
 
-        if ($validator->fails()) {
-            // Log validation errors for debugging, especially for matrixOfCompliance
+        try {
+            $validated = $request->validate([
+                'researchTitle' => 'required|string|max:255',
+                'description' => 'required|string',
+                'objectives' => 'required|string',
+                'researchCenter' => 'required|string',
+                'researchAgenda' => 'required|string', // Will be JSON string from frontend
+                'dostSPs' => 'required|string', // Will be JSON string from frontend
+                'sustainableDevelopmentGoals' => 'required|string', // Will be JSON string from frontend
+                'proposedBudget' => 'required|numeric|min:0',
+                'reportFile' => 'required|file|mimes:pdf,doc,docx|max:5120', // 5MB max
+                'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+                'gadCertificate' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+                'matrixOfCompliance' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+            ]);
+        } catch (ValidationException $e) {
+            // Log validation errors for debugging
             if ($request->hasFile('matrixOfCompliance')) {
-                try {
-                    $matrixFile = $request->file('matrixOfCompliance');
-                    \Log::warning('Matrix of Compliance validation failed', [
-                        'file_size' => $matrixFile->getSize(),
-                        'file_mime' => $matrixFile->getMimeType(),
-                        'file_extension' => $matrixFile->getClientOriginalExtension(),
-                        'is_valid' => $matrixFile->isValid(),
-                        'error_code' => $matrixFile->getError(),
-                        'validation_errors' => $validator->errors()->get('matrixOfCompliance')
-                    ]);
-                } catch (\Exception $e) {
-                    \Log::error('Error logging matrixOfCompliance file info', ['error' => $e->getMessage()]);
-                }
+                $matrixFile = $request->file('matrixOfCompliance');
+                Log::warning('Matrix of Compliance validation failed', [
+                    'file_size' => $matrixFile->getSize(),
+                    'file_mime' => $matrixFile->getMimeType(),
+                    'file_extension' => $matrixFile->getClientOriginalExtension(),
+                    'is_valid' => $matrixFile->isValid(),
+                    'error_code' => $matrixFile->getError(),
+                ]);
             }
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Validation failed',
-                'errors' => $validator->errors()
+                'errors' => $e->errors()
             ], 422);
         }
 
@@ -212,10 +145,10 @@ class ProposalController extends Controller
             $researchAgenda = json_decode($request->researchAgenda, true);
             $dostSPs = json_decode($request->dostSPs, true);
             $sustainableDevelopmentGoals = json_decode($request->sustainableDevelopmentGoals, true);
-            
+
             // Use researchCenter from request (already set in validation if not provided)
             $researchCenter = $request->input('researchCenter', $defaultResearchCenter);
-            
+
             // Create the proposal
             $proposal = Proposal::create([
                 'researchTitle' => $request->researchTitle,
@@ -243,13 +176,13 @@ class ProposalController extends Controller
 
             // Handle file uploads
             $files = [];
-            
+
             // Main report file
             if ($request->hasFile('reportFile')) {
                 $file = $request->file('reportFile');
                 $filename = time() . '_' . $file->getClientOriginalName();
                 $path = $file->storeAs('proposals/' . $proposal->proposalID, $filename, 'public');
-                
+
                 $files[] = File::create([
                     'proposalID' => $proposal->proposalID,
                     'fileName' => $filename,
@@ -270,19 +203,19 @@ class ProposalController extends Controller
                 if ($request->hasFile($field)) {
                     try {
                         $file = $request->file($field);
-                        
+
                         // Validate file is valid and not empty
                         if (!$file->isValid()) {
-                            \Log::warning("Invalid file uploaded for field: {$field}", [
+                            Log::warning("Invalid file uploaded for field: {$field}", [
                                 'proposalID' => $proposal->proposalID,
                                 'error' => $file->getError()
                             ]);
                             continue; // Skip invalid files
                         }
-                        
+
                         $filename = time() . '_' . $file->getClientOriginalName();
                         $path = $file->storeAs('proposals/' . $proposal->proposalID, $filename, 'public');
-                        
+
                         $files[] = File::create([
                             'proposalID' => $proposal->proposalID,
                             'fileName' => $filename,
@@ -291,7 +224,7 @@ class ProposalController extends Controller
                             'fileSize' => $file->getSize()
                         ]);
                     } catch (\Exception $e) {
-                        \Log::error("Error uploading file for field: {$field}", [
+                        Log::error("Error uploading file for field: {$field}", [
                             'proposalID' => $proposal->proposalID,
                             'error' => $e->getMessage()
                         ]);
@@ -319,11 +252,11 @@ class ProposalController extends Controller
             ]);
 
             // Find ALL CMs of the same department and notify them
-            $cmUsers = User::whereHas('role', function($query) {
+            $cmUsers = User::whereHas('role', function ($query) {
                 $query->where('userRole', 'CM');
             })
-            ->where('departmentID', $user->departmentID)
-            ->get();
+                ->where('departmentID', $user->departmentID)
+                ->get();
 
             // Notify all CMs in the department
             foreach ($cmUsers as $cmUser) {
@@ -343,41 +276,40 @@ class ProposalController extends Controller
 
             // Log notification creation for debugging
             if ($cmUsers->count() > 0) {
-                \Log::info('Notifications created for CMs', [
+                Log::info('Notifications created for CMs', [
                     'proposalID' => $proposal->proposalID,
                     'departmentID' => $user->departmentID,
                     'cm_count' => $cmUsers->count(),
                     'cm_userIDs' => $cmUsers->pluck('userID')->toArray()
                 ]);
             } else {
-                \Log::warning('No CM users found for department', [
+                Log::warning('No CM users found for department', [
                     'proposalID' => $proposal->proposalID,
                     'departmentID' => $user->departmentID
                 ]);
             }
 
             // Log successful proposal creation for debugging
-            \Log::info('Proposal created successfully', [
+            Log::info('Proposal created successfully', [
                 'proposalID' => $proposal->proposalID,
                 'userID' => $proposal->userID,
                 'researchTitle' => $proposal->researchTitle,
                 'statusID' => $proposal->statusID
             ]);
-            
+
             return response()->json([
                 'success' => true,
                 'message' => 'Proposal submitted successfully',
                 'data' => $proposal
             ], 201);
-
         } catch (\Exception $e) {
             // Log the full error for debugging
-            \Log::error('Failed to create proposal', [
+            Log::error('Failed to create proposal', [
                 'userID' => $user->userID ?? null,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
-            
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create proposal',
@@ -389,22 +321,15 @@ class ProposalController extends Controller
     /**
      * Update a proposal
      */
-    public function update(Request $request, $id): JsonResponse
+    public function update(Request $request, int $id): JsonResponse
     {
         $user = Auth::user();
-        
+
         $proposal = Proposal::where('proposalID', $id)
             ->where('userID', $user->userID)
-            ->first();
+            ->firstOrFail();
 
-        if (!$proposal) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Proposal not found'
-            ], 404);
-        }
-
-        $validator = Validator::make($request->all(), [
+        $validated = $request->validate([
             'researchTitle' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
             'objectives' => 'sometimes|string',
@@ -416,17 +341,12 @@ class ProposalController extends Controller
             'budgetBreakdown' => 'sometimes|array'
         ]);
 
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
-        }
-
         try {
             $updateData = $request->only([
-                'researchTitle', 'description', 'objectives', 'researchCenter'
+                'researchTitle',
+                'description',
+                'objectives',
+                'researchCenter'
             ]);
 
             $proposedBudget = $request->has('proposedBudget')
@@ -444,7 +364,7 @@ class ProposalController extends Controller
 
             if ($request->hasAny(['researchAgenda', 'dostSPs', 'sustainableDevelopmentGoals', 'proposedBudget', 'budgetBreakdown'])) {
                 $matrixData = $proposal->matrixOfCompliance ?: [];
-                
+
                 if ($request->has('researchAgenda')) $matrixData['researchAgenda'] = $request->researchAgenda;
                 if ($request->has('dostSPs')) $matrixData['dostSPs'] = $request->dostSPs;
                 if ($request->has('sustainableDevelopmentGoals')) $matrixData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
@@ -455,7 +375,7 @@ class ProposalController extends Controller
                 if ($request->has('researchCenter')) $matrixData['researchCenter'] = $request->researchCenter;
                 if ($request->has('description')) $matrixData['description'] = $request->description;
                 if ($request->has('objectives')) $matrixData['objectives'] = $request->objectives;
-                
+
                 $updateData['matrixOfCompliance'] = json_encode($matrixData);
             }
 
@@ -467,7 +387,6 @@ class ProposalController extends Controller
                 'message' => 'Proposal updated successfully',
                 'data' => $proposal
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -480,20 +399,13 @@ class ProposalController extends Controller
     /**
      * Delete a proposal
      */
-    public function destroy(Request $request, $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
         $user = Auth::user();
-        
+
         $proposal = Proposal::where('proposalID', $id)
             ->where('userID', $user->userID)
-            ->first();
-
-        if (!$proposal) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Proposal not found'
-            ], 404);
-        }
+            ->firstOrFail();
 
         try {
             // Delete associated files from storage
@@ -511,7 +423,6 @@ class ProposalController extends Controller
                 'success' => true,
                 'message' => 'Proposal deleted successfully'
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -524,29 +435,20 @@ class ProposalController extends Controller
     /**
      * Get proposal statistics for dashboard
      */
-public function statistics(Request $request): JsonResponse
+    public function statistics(Request $request): JsonResponse
     {
         $user = Auth::user();
-        
-        // Load the role relationship if not already loaded
-        if (!$user->relationLoaded('role')) {
-            $user->load('role');
-        }
-        
+        $user->loadMissing('role');
+
         // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::query();
-        if ($user->role && $user->role->userRole === 'RDD') {
-            // RDD users can see all proposals - no filtering needed
-        } elseif ($user->role && $user->role->userRole === 'CM') {
-            // For CM users, filter by department
-            $query->whereHas('user', function($q) use ($user) {
-                $q->where('departmentID', $user->departmentID);
-            });
-        } else {
-            // For other users (like Proponents), show only their own proposals
-            $query->where('userID', $user->userID);
-        }
-        
+
+        match ($user->role?->userRole) {
+            'RDD' => null, // RDD users can see all proposals - no filtering needed
+            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID)),
+            default => $query->where('userID', $user->userID),
+        };
+
         $stats = [
             'total' => $query->count(),
             'under_review' => (clone $query)->where('statusID', 1)->count(),
@@ -568,35 +470,32 @@ public function statistics(Request $request): JsonResponse
     public function rddAnalytics(Request $request): JsonResponse
     {
         $user = Auth::user();
-        
-        // Load the role relationship if not already loaded
-        if (!$user->relationLoaded('role')) {
-            $user->load('role');
-        }
-        
+        $user->loadMissing('role');
+
         // For RDD users, show all proposals; for others, show only their own
         $query = Proposal::with(['status', 'user.department']);
-        if ($user->role && $user->role->userRole !== 'RDD') {
+
+        if ($user->role?->userRole !== 'RDD') {
             $query->where('userID', $user->userID);
         }
-        
+
         $proposals = $query->get();
-        
+
         // RDE Agenda data
         $rdeAgendaData = $this->getRdeAgendaData($proposals);
-        
+
         // DOST 6Ps data
         $dost6PsData = $this->getDost6PsData($proposals);
-        
+
         // SDG data
         $sdgData = $this->getSdgData($proposals);
-        
+
         // Overview stats
         $totalProposals = $proposals->count();
         $totalOngoing = $proposals->where('statusID', 4)->count();
         $totalCompleted = $proposals->where('statusID', 5)->count();
         $completionRate = $totalProposals > 0 ? round(($totalCompleted / $totalProposals) * 100) : 0;
-        
+
         return response()->json([
             'success' => true,
             'data' => [
@@ -604,7 +503,7 @@ public function statistics(Request $request): JsonResponse
                     'totalProposals' => $totalProposals,
                     'totalOngoing' => $totalOngoing,
                     'totalCompleted' => $totalCompleted,
-            'completionRate' => $completionRate
+                    'completionRate' => $completionRate
                 ],
                 'rdeAgenda' => $rdeAgendaData,
                 'dost6Ps' => $dost6PsData,
@@ -621,14 +520,10 @@ public function statistics(Request $request): JsonResponse
     {
         try {
             $user = Auth::user();
-            
-            // Load the role relationship if not already loaded
-            if (!$user->relationLoaded('role')) {
-                $user->load('role');
-            }
-            
+            $user->loadMissing('role');
+
             // Only RDD users can access this endpoint
-            if (!$user->role || $user->role->userRole !== 'RDD') {
+            if ($user->role?->userRole !== 'RDD') {
                 return response()->json([
                     'success' => false,
                     'message' => 'Unauthorized. Only RDD users can access this endpoint.'
@@ -637,13 +532,13 @@ public function statistics(Request $request): JsonResponse
 
             // Get proposals that have been endorsed by CM users with status 'approved'
             // First, get all CM user IDs
-            $cmUserIds = User::whereHas('role', function($q) {
+            $cmUserIds = User::whereHas('role', function ($q) {
                 $q->where('userRole', 'CM');
             })->pluck('userID');
 
             // Get proposals that have approved endorsements from CM users
             $proposals = Proposal::with(['status', 'files', 'user.department', 'user.role', 'endorsements.endorser.role'])
-                ->whereHas('endorsements', function($query) use ($cmUserIds) {
+                ->whereHas('endorsements', function ($query) use ($cmUserIds) {
                     $query->where('endorsementStatus', 'approved')
                         ->whereIn('endorserID', $cmUserIds);
                 })
@@ -654,7 +549,6 @@ public function statistics(Request $request): JsonResponse
                 'success' => true,
                 'data' => $proposals
             ]);
-
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
@@ -729,7 +623,7 @@ public function statistics(Request $request): JsonResponse
 
         return collect($officialData)
             ->merge($additionalData)
-            ->filter(fn ($item) => ($item['ongoing'] + $item['completed'] + $item['other']) > 0)
+            ->filter(fn($item) => ($item['ongoing'] + $item['completed'] + $item['other']) > 0)
             ->map(function ($item) {
                 $item['total'] = $item['ongoing'] + $item['completed'];
                 unset($item['rawTotal']);
@@ -777,7 +671,7 @@ public function statistics(Request $request): JsonResponse
             ->map(function ($count, $name) {
                 return ['name' => $name, 'value' => $count];
             })
-            ->filter(fn ($item) => $item['value'] > 0)
+            ->filter(fn($item) => $item['value'] > 0)
             ->values();
 
         foreach ($additionalCategories as $label => $count) {
