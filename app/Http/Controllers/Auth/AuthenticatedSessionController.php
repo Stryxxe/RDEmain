@@ -34,10 +34,10 @@ class AuthenticatedSessionController extends Controller
 
         // Load user relationships for redirect
         $user = Auth::user();
-        $user->load(['role', 'department']);
 
-        // Redirect based on user role
-        return redirect()->intended($this->getRoleBasedRedirect($user));
+        $redirectPath = $this->getRoleBasedRedirect($user);
+
+        return redirect()->intended($redirectPath);
     }
 
     /**
@@ -60,14 +60,14 @@ class AuthenticatedSessionController extends Controller
     private function getRoleBasedRedirect($user): string
     {
         $userRole = $user->role->userRole ?? null;
-        
+
         if (!$userRole) {
             return '/';
         }
 
         // Normalize role name to lowercase for route
         $rolePath = strtolower($userRole);
-        
+
         // Map role names to their route prefixes
         $roleMap = [
             'administrator' => 'admin',
@@ -80,7 +80,7 @@ class AuthenticatedSessionController extends Controller
         ];
 
         $routePrefix = $roleMap[strtolower($userRole)] ?? strtolower($userRole);
-        
+
         return "/{$routePrefix}";
     }
 }
