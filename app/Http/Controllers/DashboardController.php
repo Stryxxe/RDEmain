@@ -16,16 +16,14 @@ class DashboardController extends Controller
     public function index(): RedirectResponse
     {
         $user = Auth::user();
-        
+
         if (!$user) {
             return redirect()->route('login');
         }
 
-        $user->load(['role', 'department']);
-        
         // Get role-based redirect path
         $redirectPath = $this->getRoleBasedRedirect($user);
-        
+
         // Redirect to role-based dashboard
         return redirect($redirectPath);
     }
@@ -36,7 +34,7 @@ class DashboardController extends Controller
     private function getRoleBasedRedirect($user): string
     {
         $userRole = $user->role->userRole ?? null;
-        
+
         if (!$userRole) {
             return '/';
         }
@@ -54,8 +52,7 @@ class DashboardController extends Controller
         ];
 
         $routePrefix = $roleMap[$userRole] ?? strtolower($userRole);
-        
+
         return "/{$routePrefix}";
     }
 }
-
