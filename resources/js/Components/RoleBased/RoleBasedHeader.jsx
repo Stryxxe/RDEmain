@@ -244,7 +244,7 @@ const RoleBasedHeader = ({ role }) => {
                   <svg className="w-12 h-12 mx-auto mb-2 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 2a7 7 0 00-7 7v4.29l-1.71 1.7a1 1 0 00-.29.7V16a1 1 0 001 1h16a1 1 0 001-1v-.31a1 1 0 00-.29-.7L19 13.29V9a7 7 0 00-7-7zM10 21a2 2 0 104 0" />
                   </svg>
-                  <p>No notifications</p>
+                  <p>No Notifications</p>
                 </div>
               ) : (
                 <div className="divide-y divide-gray-100">
