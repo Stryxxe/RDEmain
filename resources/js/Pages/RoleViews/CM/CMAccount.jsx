@@ -434,7 +434,11 @@ const CMAccount = () => {
                             href="/logout"
                             method="post"
                             as="button"
-                            onBefore={() => localStorage.removeItem("dismissedNotifications")}
+                            onBefore={() =>
+                                localStorage.removeItem(
+                                    "dismissedNotifications"
+                                )
+                            }
                             className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors duration-200 shadow-sm"
                         >
                             <svg
@@ -451,7 +455,7 @@ const CMAccount = () => {
                                 />
                             </svg>
                             Delete Account
-                        </button>
+                        </Link>
                     </div>
                 </div>
             </div>
