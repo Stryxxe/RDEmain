@@ -6,6 +6,7 @@ import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 
 const Account = () => {
     const { user } = useAuth();
+    const [loading, setLoading] = useState(false);
     const [editing, setEditing] = useState(false);
     const [formData, setFormData] = useState({
         firstName: "",
