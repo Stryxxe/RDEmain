@@ -114,6 +114,8 @@ class ProposalController extends Controller
                 'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
                 'gadCertificate' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
                 'matrixOfCompliance' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+                'supportingDocuments' => 'nullable|array|max:10',
+                'supportingDocuments.*' => 'file|mimes:pdf,doc,docx|max:5120',
             ]);
         } catch (ValidationException $e) {
             // Log validation errors for debugging
@@ -229,6 +231,36 @@ class ProposalController extends Controller
                             'error' => $e->getMessage()
                         ]);
                         // Continue with other files even if one fails
+                    }
+                }
+            }
+
+            if ($request->hasFile('supportingDocuments')) {
+                foreach ($request->file('supportingDocuments') as $file) {
+                    if (!$file || !$file->isValid()) {
+                        Log::warning("Invalid supporting document skipped", [
+                            'proposalID' => $proposal->proposalID,
+                            'error' => $file?->getError(),
+                        ]);
+                        continue;
+                    }
+
+                    try {
+                        $filename = time() . '_' . $file->getClientOriginalName();
+                        $path = $file->storeAs('proposals/' . $proposal->proposalID, $filename, 'public');
+
+                        $files[] = File::create([
+                            'proposalID' => $proposal->proposalID,
+                            'fileName' => $filename,
+                            'filePath' => $path,
+                            'fileType' => 'supporting_document',
+                            'fileSize' => $file->getSize()
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Error uploading supporting document', [
+                            'proposalID' => $proposal->proposalID,
+                            'error' => $e->getMessage()
+                        ]);
                     }
                 }
             }

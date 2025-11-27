@@ -1,19 +1,25 @@
 import React, { useEffect } from "react";
-import { router } from "@inertiajs/react";
+import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
 import ResourceGrid from "../Components/UI/ResourceGrid";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 
 const Resources = () => {
     const { user } = useAuth();
+    const { props } = usePage();
+    const currentUser = user || props?.auth?.user;
 
     // Validate authentication on mount
     useEffect(() => {
-        if (!user) {
+        if (!currentUser) {
             router.visit("/login");
             return;
         }
-    }, [user]);
+
+        if (currentUser.role?.userRole !== "Proponent") {
+            router.visit("/dashboard");
+        }
+    }, [currentUser]);
     const resources = [
         {
             id: 1,

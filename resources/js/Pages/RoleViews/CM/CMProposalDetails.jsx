@@ -143,7 +143,8 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
       'concept_paper': 'Research Paper/Concept Paper',
       'seti_scorecard': 'SETI Scorecard',
       'gad_certificate': 'GAD Checklist and Certificate',
-      'matrix_compliance': 'Matrix of Compliance'
+      'matrix_compliance': 'Matrix of Compliance',
+      'supporting_document': 'Supporting Document'
     };
 
     // Create document list from actual uploaded files

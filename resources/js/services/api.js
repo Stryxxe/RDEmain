@@ -138,20 +138,23 @@ class ApiService {
         formData.append('gadCertificate', proposalData.gadCertificate);
       }
       
-      // Only append matrixOfCompliance if it's a valid file
-      // Don't append if it's null, undefined, or invalid
       if (isValidFile(proposalData.matrixOfCompliance)) {
         formData.append('matrixOfCompliance', proposalData.matrixOfCompliance);
-      } else {
-        // Explicitly log if matrixOfCompliance is being skipped
-        if (proposalData.matrixOfCompliance !== null && proposalData.matrixOfCompliance !== undefined) {
-          console.warn('matrixOfCompliance file is invalid and will not be sent:', {
-            type: typeof proposalData.matrixOfCompliance,
-            isFile: proposalData.matrixOfCompliance instanceof File,
-            size: proposalData.matrixOfCompliance?.size,
-            name: proposalData.matrixOfCompliance?.name
-          });
-        }
+      } else if (proposalData.matrixOfCompliance !== null && proposalData.matrixOfCompliance !== undefined) {
+        console.warn('matrixOfCompliance file is invalid and will not be sent:', {
+          type: typeof proposalData.matrixOfCompliance,
+          isFile: proposalData.matrixOfCompliance instanceof File,
+          size: proposalData.matrixOfCompliance?.size,
+          name: proposalData.matrixOfCompliance?.name
+        });
+      }
+
+      if (Array.isArray(proposalData.supportingDocuments)) {
+        proposalData.supportingDocuments.forEach((file) => {
+          if (isValidFile(file)) {
+            formData.append('supportingDocuments[]', file);
+          }
+        });
       }
       
       // Debug: Log what files are being sent (only in development)
@@ -174,7 +177,10 @@ class ApiService {
           reportFile: logFileInfo(proposalData.reportFile, 'reportFile'),
           setiScorecard: logFileInfo(proposalData.setiScorecard, 'setiScorecard'),
           gadCertificate: logFileInfo(proposalData.gadCertificate, 'gadCertificate'),
-          matrixOfCompliance: logFileInfo(proposalData.matrixOfCompliance, 'matrixOfCompliance')
+          matrixOfCompliance: logFileInfo(proposalData.matrixOfCompliance, 'matrixOfCompliance'),
+          supportingDocuments: Array.isArray(proposalData.supportingDocuments)
+            ? proposalData.supportingDocuments.map((file, index) => logFileInfo(file, `supportingDocuments[${index}]`))
+            : null
         });
       }
 
