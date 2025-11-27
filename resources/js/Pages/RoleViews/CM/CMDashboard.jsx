@@ -487,7 +487,7 @@ const CMDashboard = () => {
                                     {/* Actions */}
                                     <div className="flex items-center">
                                         <Link
-                                            to={`/cm/proposal/${proposal.proposalID}`}
+                                            href={`/cm/proposal/${proposal.proposalID}`}
                                         >
                                             <button className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1">
                                                 <BiShow className="text-sm" />

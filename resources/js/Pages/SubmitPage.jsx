@@ -3,9 +3,9 @@ import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
 import FormField from "../Components/FormField";
 import CheckboxGroup from "../Components/CheckboxGroup";
-import FileUpload from "../Components/FileUpload";
 import TextAreaField from "../Components/TextAreaField";
 import DragDropUpload from "../Components/DragDropUpload";
+import MultiFileUpload from "../Components/MultiFileUpload";
 import apiService from "../services/api";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 
@@ -51,9 +51,7 @@ const SubmitPage = () => {
         dostSPs: [],
         sustainableDevelopmentGoals: [],
         proposedBudget: "",
-        setiScorecard: null,
-        gadCertificate: null,
-        matrixOfCompliance: null,
+        supportingDocuments: [],
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
@@ -152,10 +150,10 @@ const SubmitPage = () => {
         }));
     };
 
-    const handleFileChange = (field, file) => {
+    const handleSupportingDocsChange = (files) => {
         setFormData((prev) => ({
             ...prev,
-            [field]: file,
+            supportingDocuments: files,
         }));
     };
 
@@ -312,9 +310,7 @@ const SubmitPage = () => {
                     dostSPs: [],
                     sustainableDevelopmentGoals: [],
                     proposedBudget: "",
-                    setiScorecard: null,
-                    gadCertificate: null,
-                    matrixOfCompliance: null,
+                    supportingDocuments: [],
                 });
 
                 // Redirect to tracker page after 2 seconds
@@ -560,44 +556,19 @@ const SubmitPage = () => {
                 </div>
 
                 <div className="mb-8">
-                    <h3 className="text-xl font-semibold text-gray-900 mb-6 pb-2">
-                        Supporting Documents
-                    </h3>
-
-                    <div className="space-y-6">
-                        <FileUpload
-                            label="Upload SETI Scorecard"
-                            onChange={(file) =>
-                                handleFileChange("setiScorecard", file)
-                            }
-                            accept=".pdf,.doc,.docx"
-                            selectedFile={formData.setiScorecard}
-                        />
-
-                        <FileUpload
-                            label="Upload GAD Certificate"
-                            onChange={(file) =>
-                                handleFileChange("gadCertificate", file)
-                            }
-                            accept=".pdf,.doc,.docx"
-                            selectedFile={formData.gadCertificate}
-                        />
-
-                        <FileUpload
-                            label="Upload Matrix of Compliance (If Applicable)"
-                            onChange={(file) =>
-                                handleFileChange("matrixOfCompliance", file)
-                            }
-                            accept=".pdf,.doc,.docx"
-                            selectedFile={formData.matrixOfCompliance}
-                        />
-                    </div>
+                    <MultiFileUpload
+                        files={formData.supportingDocuments}
+                        onChange={handleSupportingDocsChange}
+                        maxFiles={10}
+                        label="Supporting Documents"
+                        description="Attach SETI Scorecards, GAD Certificates, matrices, and any other approvals in one place. Accepted formats: PDF, DOC, DOCX."
+                    />
                 </div>
 
                 <div className="flex justify-end gap-4 pt-6 border-t border-gray-200">
                     <button
                         type="button"
-                        onClick={() => navigate("/proponent/projects")}
+                        onClick={() => router.visit("/proponent/tracker")}
                         className="px-6 py-3 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition-colors"
                         disabled={isSubmitting}
                     >

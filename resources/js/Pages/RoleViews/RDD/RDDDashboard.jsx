@@ -389,7 +389,7 @@ const RDDDashboard = () => {
 
                                 {/* Actions */}
                                 <div className="flex items-center">
-                                    <Link to={`/rdd/proposal/${research.id}`}>
+                                    <Link href={`/rdd/proposal/${research.id}`}>
                                         <button className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1">
                                             <BiShow className="text-sm" />
                                             View Details
