@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { ArrowLeft } from "lucide-react";
 import apiService from "../services/api";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../Components/Layouts/AppLayout";
 
 const TrackerDetail = ({ id: propId }) => {
     const { user } = useAuth();
@@ -112,6 +113,14 @@ const TrackerDetail = ({ id: propId }) => {
 
         const statusId = proposal.statusID;
 
+        // Check for actual endorsements from the database
+        const cmEndorsement = proposal.endorsements?.find(
+            (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
+        );
+        const rddEndorsement = proposal.endorsements?.find(
+            (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+        );
+
         // Define all possible timeline stages (matching other components)
         const allStages = [
             { id: 0, name: "Proposal Submitted", status: "pending" },
@@ -131,7 +140,13 @@ const TrackerDetail = ({ id: propId }) => {
         switch (statusId) {
             case 1: // Under Review - Proposal submitted, waiting for College Endorsement
                 allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "current"; // College Endorsement
+                // Check if CM has endorsed to determine College Endorsement status
+                if (cmEndorsement) {
+                    allStages[1].status = "completed"; // College Endorsement - completed
+                    allStages[2].status = "current"; // R&D Division - next stage
+                } else {
+                    allStages[1].status = "current"; // College Endorsement - current
+                }
                 break;
             case 2: // Approved - All stages up to Implementation completed, Implementation current
                 allStages[0].status = "completed"; // Proposal Submitted
@@ -175,7 +190,14 @@ const TrackerDetail = ({ id: propId }) => {
                 allStages[10].status = "completed"; // For Completion
                 break;
             default:
-                allStages[1].status = "current"; // College Endorsement
+                // Check if CM has endorsed to determine College Endorsement status
+                if (cmEndorsement) {
+                    allStages[0].status = "completed"; // Proposal Submitted
+                    allStages[1].status = "completed"; // College Endorsement - completed
+                    allStages[2].status = "current"; // R&D Division - next stage
+                } else {
+                    allStages[1].status = "current"; // College Endorsement
+                }
         }
 
         return allStages;
@@ -296,9 +318,11 @@ const TrackerDetail = ({ id: propId }) => {
         }
 
         // 3. R&D Division Review (use actual RDD endorsement date or review date)
-        if (statusId >= 2) {
-            const rddDate = rddEndorsements[0]?.endorsementDate
-                ? new Date(rddEndorsements[0].endorsementDate)
+        // Show as current if CM has endorsed but RDD hasn't yet (even if status is still 1)
+        const rddEndorsement = rddEndorsements[0];
+        if (statusId >= 2 || (cmEndorsement && !rddEndorsement)) {
+            const rddDate = rddEndorsement?.endorsementDate
+                ? new Date(rddEndorsement.endorsementDate)
                 : reviews[0]?.reviewedAt
                 ? new Date(reviews[0].reviewedAt)
                 : cmEndorsement?.endorsementDate
@@ -308,12 +332,17 @@ const TrackerDetail = ({ id: propId }) => {
                   )
                 : new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000);
 
+            // Determine if R&D Division should be current or completed
+            const isRDDCurrent = cmEndorsement && !rddEndorsement && statusId === 1;
+            
             timelineEntries.push({
                 date: rddDate,
                 status: "R&D Division",
-                action: "Technical assessment completed by R&D Division with positive evaluation.",
+                action: isRDDCurrent 
+                    ? "Currently under technical assessment by R&D Division."
+                    : "Technical assessment completed by R&D Division with positive evaluation.",
                 priority: "high",
-                type: statusId >= 3 ? "completed" : "current",
+                type: isRDDCurrent ? "current" : (statusId >= 3 ? "completed" : "current"),
             });
         }
 
@@ -1390,7 +1419,9 @@ const TrackerDetail = ({ id: propId }) => {
 };
 
 TrackerDetail.layout = (page) => (
-    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default TrackerDetail;

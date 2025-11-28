@@ -36,16 +36,17 @@ class EndorsementController extends Controller
         try {
             $user = Auth::user();
 
-            // Check if user has CM role
-            if (!$user->role || $user->role->userRole !== 'CM') {
+            // Check if user has CM or RDD role (or other authorized roles)
+            $authorizedRoles = ['CM', 'RDD', 'RDE'];
+            if (!$user->role || !in_array($user->role->userRole, $authorizedRoles)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Only CM users can endorse proposals'
+                    'message' => 'Only authorized users (CM, RDD, RDE) can endorse proposals'
                 ], 403);
             }
 
             // Get the proposal
-            $proposal = Proposal::with('user')->find($request->proposalID);
+            $proposal = Proposal::with(['user', 'endorsements.endorser.role'])->find($request->proposalID);
 
             if (!$proposal) {
                 return response()->json([
@@ -54,12 +55,49 @@ class EndorsementController extends Controller
                 ], 404);
             }
 
-            // Check if the proposal belongs to a user in the same department
-            if ($proposal->user->departmentID !== $user->departmentID) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You can only endorse proposals from your department'
-                ], 403);
+            // Department check only applies to CM users
+            // RDD and RDE can endorse proposals from any department
+            if ($user->role->userRole === 'CM') {
+                if ($proposal->user->departmentID !== $user->departmentID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'CM users can only endorse proposals from their department'
+                    ], 403);
+                }
+            }
+
+            // For RDD users, check if proposal has been endorsed by CM
+            if ($user->role->userRole === 'RDD') {
+                $hasCMEndorsement = $proposal->endorsements->contains(function ($endorsement) {
+                    return $endorsement->endorser && 
+                           $endorsement->endorser->role && 
+                           $endorsement->endorser->role->userRole === 'CM' &&
+                           $endorsement->endorsementStatus === 'approved';
+                });
+
+                if (!$hasCMEndorsement) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This proposal must be endorsed by CM before RDD can endorse it'
+                    ], 403);
+                }
+            }
+
+            // For RDE users (future), check if proposal has been endorsed by RDD
+            if ($user->role->userRole === 'RDE') {
+                $hasRDDEndorsement = $proposal->endorsements->contains(function ($endorsement) {
+                    return $endorsement->endorser && 
+                           $endorsement->endorser->role && 
+                           $endorsement->endorser->role->userRole === 'RDD' &&
+                           $endorsement->endorsementStatus === 'approved';
+                });
+
+                if (!$hasRDDEndorsement) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This proposal must be endorsed by RDD before RDE can endorse it'
+                    ], 403);
+                }
             }
 
             // Check if already endorsed
@@ -79,7 +117,7 @@ class EndorsementController extends Controller
                 'proposalID' => $request->proposalID,
                 'endorserID' => $user->userID,
                 'endorsementComments' => $request->endorsementComments,
-                'endorsementAt' => now(),
+                'endorsedAt' => now(),
                 'endorsementStatus' => $request->endorsementStatus
             ]);
 
@@ -183,7 +221,7 @@ class EndorsementController extends Controller
 
             $endorsements = Endorsement::with(['proposal.user', 'endorser'])
                 ->where('endorserID', $user->userID)
-                ->orderBy('endorsementDate', 'desc')
+                ->orderBy('endorsedAt', 'desc')
                 ->get();
 
             return response()->json([

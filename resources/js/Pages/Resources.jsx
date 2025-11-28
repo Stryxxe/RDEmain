@@ -3,6 +3,7 @@ import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
 import ResourceGrid from "../Components/UI/ResourceGrid";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../Components/Layouts/AppLayout";
 
 const Resources = () => {
     const { user } = useAuth();
@@ -115,7 +116,9 @@ const Resources = () => {
 };
 
 Resources.layout = (page) => (
-    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default Resources;

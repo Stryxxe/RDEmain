@@ -13,7 +13,9 @@ import {
 } from "../../../config/statusStyles";
 import AutoRefreshControls from "../../../Components/AutoRefreshControls";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
 import RefreshStatusIndicator from "../../../Components/RefreshStatusIndicator";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 // Use window.axios which has session-based auth configured, or configure this instance
 const axiosInstance = window.axios || axios;
@@ -260,16 +262,21 @@ const CMDashboard = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
+            <Breadcrumbs items={[
+                { label: 'Dashboard', href: null }
+            ]} />
             {/* Header Section */}
-            <div className="bg-white py-12">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                        Research Project Tracker
-                    </h1>
-                    <p className="text-lg text-gray-600 mb-6">
-                        Monitor and manage all research projects with
-                        comprehensive tracking and analytics
-                    </p>
+            <div className="bg-white pt-8 pb-12">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                            Research Project Tracker
+                        </h1>
+                        <p className="text-lg text-gray-600 mb-6">
+                            Monitor and manage all research projects with
+                            comprehensive tracking and analytics
+                        </p>
+                    </div>
 
                     {/* Manual Refresh Button */}
                     <div className="flex flex-wrap justify-center items-center gap-4">
@@ -506,7 +513,9 @@ const CMDashboard = () => {
 };
 
 CMDashboard.layout = (page) => (
-    <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default CMDashboard;

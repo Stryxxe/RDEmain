@@ -29,6 +29,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('/', fn() => Inertia::render('RoleViews/RDD/RDDDashboard'))->name('dashboard');
         Route::get('/statistics', fn() => Inertia::render('RoleViews/RDD/RDDStatistics'))->name('statistics');
         Route::get('/review-proposal', fn() => Inertia::render('RoleViews/RDD/RDDEndorsement'))->name('endorsement');
+        Route::get('/review-proposal/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDEndorsementDetail', ['id' => $id]))->name('endorsement.detail');
         Route::get('/progress-report', fn() => Inertia::render('RoleViews/RDD/RDDProgressReport'))->name('progress-report');
         Route::get('/progress-report/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDProgressReportDetail', ['id' => $id]))->name('progress-report.detail');
         Route::get('/submit-report', fn() => Inertia::render('RoleViews/RDD/RDDSubmitReport'))->name('submit-report');

@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
 
 // Document card component with improved design
 const DocumentCard = ({ document, onDownload, onViewPDF }) => (
@@ -481,7 +482,9 @@ const CMResources = () => {
 };
 
 CMResources.layout = (page) => (
-    <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default CMResources;

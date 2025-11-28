@@ -20,10 +20,10 @@ class DatabaseSeeder extends Seeder
             AssignUserDepartmentsSeeder::class,
             NotificationSeeder::class,
             MessageSeeder::class,
-            ProposalSeeder::class,
-            AdditionalProposalSeeder::class,
-            SarahJohnsonProposalSeeder::class,
-            ProposalFileSeeder::class,
+            // ProposalSeeder::class, // Commented out - dummy proposals removed
+            // AdditionalProposalSeeder::class, // Commented out - dummy proposals removed
+            // SarahJohnsonProposalSeeder::class, // Commented out - dummy proposals removed
+            // ProposalFileSeeder::class, // Commented out - dummy proposal files removed
         ]);
     }
 }

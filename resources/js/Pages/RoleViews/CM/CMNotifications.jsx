@@ -7,6 +7,7 @@ import AutoRefreshControls from "../../../Components/AutoRefreshControls";
 import RefreshStatusIndicator from "../../../Components/RefreshStatusIndicator";
 import axios from "axios";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
 
 // Use window.axios which has session-based auth configured, or configure this instance
 const axiosInstance = window.axios || axios;
@@ -451,7 +452,9 @@ const CMNotifications = () => {
 };
 
 CMNotifications.layout = (page) => (
-    <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default CMNotifications;

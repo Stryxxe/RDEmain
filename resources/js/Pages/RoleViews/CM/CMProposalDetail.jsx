@@ -5,6 +5,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 import axios from "axios";
 import PDFViewer from "../../../Components/PDFViewer";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
 
 // Use window.axios which has session-based auth configured, or configure this instance
 const axiosInstance = window.axios || axios;
@@ -283,8 +284,14 @@ const CMProposalDetail = () => {
         });
 
         // 2. Add completed stages in chronological order (excluding Proposal Submitted to avoid duplication)
+        // Also exclude College Endorsement if we have actual endorsement data to use instead
         completedStages
-            .filter((stage) => stage.name !== "Proposal Submitted")
+            .filter((stage) => {
+                if (stage.name === "Proposal Submitted") return false;
+                // Skip College Endorsement here if we have real endorsement data
+                if (stage.name === "College Endorsement" && isEndorsed && endorsementData) return false;
+                return true;
+            })
             .forEach((stage, index) => {
                 const stageDate = new Date(baseDate);
                 // Add realistic time progression: 1-2 weeks between stages
@@ -306,7 +313,7 @@ const CMProposalDetail = () => {
                 });
             });
 
-        // 3. Add endorsement entry if proposal has been endorsed
+        // 3. Add endorsement entry if proposal has been endorsed (with actual date and endorser)
         if (isEndorsed && endorsementData) {
             const endorsementDate = new Date(endorsementData.endorsementDate);
             timelineEntries.push({
@@ -316,7 +323,7 @@ const CMProposalDetail = () => {
                     endorsementData.endorser?.fullName || "Center Manager"
                 }.`,
                 priority: "high",
-                type: "endorsement",
+                type: "completed",
             });
         }
 
@@ -1078,7 +1085,9 @@ const CMProposalDetail = () => {
 };
 
 CMProposalDetail.layout = (page) => (
-    <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default CMProposalDetail;

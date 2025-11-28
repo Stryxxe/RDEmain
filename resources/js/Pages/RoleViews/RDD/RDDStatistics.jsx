@@ -573,10 +573,15 @@ const RDDStatistics = () => {
     );
 };
 
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+
 RDDStatistics.layout = (page) => (
-    <RoleBasedLayout roleName="Research & Development Division">
-        {page}
-    </RoleBasedLayout>
+    <AppLayout>
+        <RDDLayout>
+            {page}
+        </RDDLayout>
+    </AppLayout>
 );
 
 export default RDDStatistics;

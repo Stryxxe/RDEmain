@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { router } from "@inertiajs/react";
 import rddService from "../../../services/rddService";
-import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 const RDDEndorsement = () => {
     const [year, setYear] = useState("2025");
@@ -14,6 +16,17 @@ const RDDEndorsement = () => {
 
     useEffect(() => {
         fetchProposals();
+        
+        // Auto-refresh when window gains focus (e.g., after CM endorses and returns)
+        const handleFocus = () => {
+            fetchProposals();
+        };
+        
+        window.addEventListener('focus', handleFocus);
+        
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+        };
     }, []);
 
     const fetchProposals = async () => {
@@ -78,7 +91,7 @@ const RDDEndorsement = () => {
     };
 
     const handleViewClick = (proposal) => {
-        router.visit(`/rdd/proposal/${proposal.id}`);
+        router.visit(`/rdd/review-proposal/${proposal.id}`);
     };
 
     // Filter proposals based on search
@@ -226,8 +239,11 @@ const RDDEndorsement = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+            <Breadcrumbs items={[
+                { label: 'Endorsement', href: null }
+            ]} />
             {/* Header Section */}
-            <div className="max-w-7xl mx-auto px-6 py-12">
+            <div className="max-w-7xl mx-auto px-6 py-8">
                 <div className="text-center">
                     <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
                         Endorsement
@@ -243,13 +259,35 @@ const RDDEndorsement = () => {
                 {/* Main Table Section */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     {/* Header */}
-                    <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-teal-50">
-                        <h2 className="text-xl font-semibold text-gray-900">
-                            Research Proposals for Review
-                        </h2>
-                        <p className="text-sm text-gray-600 mt-1">
-                            {filteredProposals.length} records found
-                        </p>
+                    <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-teal-50 flex justify-between items-center">
+                        <div>
+                            <h2 className="text-xl font-semibold text-gray-900">
+                                Research Proposals for Review
+                            </h2>
+                            <p className="text-sm text-gray-600 mt-1">
+                                {filteredProposals.length} records found
+                            </p>
+                        </div>
+                        <button
+                            onClick={fetchProposals}
+                            disabled={loading}
+                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                        >
+                            <svg
+                                className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                                />
+                            </svg>
+                            Refresh
+                        </button>
                     </div>
 
                     {/* Filter Bar */}
@@ -435,9 +473,11 @@ const RDDEndorsement = () => {
 };
 
 RDDEndorsement.layout = (page) => (
-    <RoleBasedLayout roleName="Research & Development Division">
-        {page}
-    </RoleBasedLayout>
+    <AppLayout>
+        <RDDLayout>
+            {page}
+        </RDDLayout>
+    </AppLayout>
 );
 
 export default RDDEndorsement;

@@ -22,7 +22,7 @@ export default function Login({ status, canResetPassword }) {
         <>
             <Head title="Log in" />
             <div
-                className="min-h-screen flex items-center justify-center bg-cover bg-center"
+                className="fixed inset-0 min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
                 style={{ backgroundImage: `url(${bg})` }}
             >
                 <div className="absolute inset-0 bg-black opacity-50"></div>

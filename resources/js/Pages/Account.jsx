@@ -3,6 +3,8 @@ import { router, Link } from "@inertiajs/react";
 import { User, Mail, Building, Shield, Save, LogOut } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../Components/Layouts/AppLayout";
+import Breadcrumbs from "../Components/Breadcrumbs";
 
 const Account = () => {
     const { user } = useAuth();
@@ -107,8 +109,13 @@ const Account = () => {
 
     return (
         <div className="w-full -m-2 sm:-m-4 md:-m-6 lg:-m-8">
+            <div className="max-w-6xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 pt-6 pb-2">
+                <Breadcrumbs items={[
+                    { label: 'Account Settings', href: null }
+                ]} />
+            </div>
             {/* Header Section - Constrained Width with more top spacing */}
-            <div className="max-w-6xl mx-auto mb-8 px-2 sm:px-4 md:px-6 lg:px-8 pt-8">
+            <div className="max-w-6xl mx-auto mb-8 px-2 sm:px-4 md:px-6 lg:px-8 pt-4">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
                     Account Settings
                 </h1>
@@ -344,7 +351,9 @@ const Account = () => {
 };
 
 Account.layout = (page) => (
-    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default Account;

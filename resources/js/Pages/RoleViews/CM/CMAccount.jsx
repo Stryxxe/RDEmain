@@ -3,6 +3,8 @@ import { Link } from "@inertiajs/react";
 import { useAuth } from "../../../contexts/AuthContext";
 import api from "../../../services/api";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 const CMAccount = () => {
     const { user } = useAuth();
@@ -140,8 +142,13 @@ const CMAccount = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
+            <div className="max-w-4xl mx-auto px-6 pt-6 pb-2">
+                <Breadcrumbs items={[
+                    { label: 'Account', href: null }
+                ]} />
+            </div>
             <div className="p-6">
-                <div className="max-w-4xl mx-auto space-y-6">
+                <div className="max-w-4xl mx-auto space-y-6 mt-4">
                     {/* Page Header */}
                     <div className="mb-6">
                         <h1 className="text-3xl font-bold text-gray-900">
@@ -464,7 +471,9 @@ const CMAccount = () => {
 };
 
 CMAccount.layout = (page) => (
-    <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default CMAccount;

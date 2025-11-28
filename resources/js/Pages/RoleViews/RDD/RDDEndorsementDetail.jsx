@@ -3,19 +3,23 @@ import { router } from '@inertiajs/react';
 import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
 import { useAuth } from '../../../contexts/AuthContext';
-import CMEditProposal from './CMEditProposal';
+import RDDEditProposal from './RDDEditProposal';
 import { updateProposal } from '../../../services/proposalService';
+import RDDLayout from '../../../Components/Layouts/RDDLayout';
+import AppLayout from '../../../Components/Layouts/AppLayout';
 import Breadcrumbs from '../../../Components/Breadcrumbs';
 
-// Use window.axios which has session-based auth configured, or configure this instance
 const axiosInstance = window.axios || axios;
 if (!window.axios) {
   axiosInstance.defaults.withCredentials = true;
   axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
 }
 
-const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
+const RDDEndorsementDetail = ({ id: proposalId }) => {
   const { user } = useAuth();
+  const [proposal, setProposal] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [isEndorsing, setIsEndorsing] = useState(false);
@@ -25,60 +29,52 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
   const [endorsementData, setEndorsementData] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [showEditProposal, setShowEditProposal] = useState(false);
+  const [fullProposal, setFullProposal] = useState(null);
 
-  const [fullProposal, setFullProposal] = useState(proposal);
-
-  // Fetch full proposal with files if not already loaded
   useEffect(() => {
     const fetchFullProposal = async () => {
-      if (!proposal || !user) return;
-      
-      // If proposal already has files, use it as is
-      if (proposal.files && Array.isArray(proposal.files) && proposal.files.length > 0) {
-        setFullProposal(proposal);
-        return;
-      }
+      if (!proposalId || !user) return;
 
-      // Otherwise, fetch the full proposal with files
       try {
-        const response = await axiosInstance.get(`/proposals/${proposal.proposalID || proposal.id}`, {
+        setLoading(true);
+        const response = await axiosInstance.get(`/proposals/${proposalId}`, {
           headers: { 'Accept': 'application/json' },
           withCredentials: true
         });
-        
+
         if (response.data.success && response.data.data) {
           setFullProposal(response.data.data);
+          setProposal(response.data.data);
         }
       } catch (error) {
-        // If fetch fails, use the original proposal
         console.error('Error fetching full proposal:', error);
-        setFullProposal(proposal);
+        setError('Failed to load proposal');
+      } finally {
+        setLoading(false);
       }
     };
 
-    if (proposal && user) {
+    if (proposalId && user) {
       fetchFullProposal();
     }
-  }, [proposal, user]);
+  }, [proposalId, user, refreshKey]);
 
-  // Check if proposal has been endorsed by the current user
   useEffect(() => {
     const checkEndorsementStatus = async () => {
       if (!fullProposal || !user) return;
-      
+
       try {
         const response = await axiosInstance.get(`/endorsements/proposal/${fullProposal.proposalID || fullProposal.id}`, {
           headers: { 'Accept': 'application/json' },
           withCredentials: true
         });
-        
+
         if (response.data.success && response.data.data && response.data.data.length > 0) {
-          // Check if the current user has already endorsed this proposal
           const userEndorsement = response.data.data.find(
-            endorsement => endorsement.endorserID === user.userID || 
-                          endorsement.endorser?.userID === user.userID
+            endorsement => endorsement.endorserID === user.userID ||
+              endorsement.endorser?.userID === user.userID
           );
-          
+
           if (userEndorsement) {
             setIsEndorsed(true);
             setEndorsementData(userEndorsement);
@@ -91,7 +87,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           setEndorsementData(null);
         }
       } catch (error) {
-        // Only log error if it's not a 401 (unauthorized)
         if (error.response?.status !== 401) {
           console.error('Error checking endorsement status:', error);
         }
@@ -105,42 +100,35 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     }
   }, [fullProposal, refreshKey, user]);
 
-  // Force refresh function
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
   };
 
-  // Get the research paper PDF path from uploaded files
   const getResearchPaperPath = () => {
     if (fullProposal?.files && fullProposal.files.length > 0) {
-      // Look specifically for research paper/concept paper file
-      // Priority: concept_paper type > report type > filename contains 'concept' or 'research' or 'paper'
       const researchPaper = fullProposal.files.find(f => {
         const fileName = f.fileName?.toLowerCase() || '';
-        return f.fileType === 'concept_paper' || 
-               f.fileType === 'report' ||
-               fileName.includes('concept') ||
-               fileName.includes('research') ||
-               fileName.includes('paper');
+        return f.fileType === 'concept_paper' ||
+          f.fileType === 'report' ||
+          fileName.includes('concept') ||
+          fileName.includes('research') ||
+          fileName.includes('paper');
       });
-      
+
       if (researchPaper && researchPaper.filePath) {
         return `/storage/${researchPaper.filePath}`;
       }
     }
-    // Return null if no research paper found - don't show fallback
     return null;
   };
 
   const researchPaperPath = getResearchPaperPath();
 
-  // Get attached documents dynamically from uploaded files
   const getAttachedDocuments = () => {
     if (!fullProposal?.files || !Array.isArray(fullProposal.files) || fullProposal.files.length === 0) {
       return [];
     }
 
-    // Map file types to display names
     const fileTypeMap = {
       'report': 'Research Paper/Concept Paper',
       'concept_paper': 'Research Paper/Concept Paper',
@@ -150,14 +138,13 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
       'supporting_document': 'Supporting Document'
     };
 
-    // Create document list from actual uploaded files
     return fullProposal.files
-      .filter(file => file.filePath) // Only include files with valid paths
+      .filter(file => file.filePath)
       .map(file => {
         const fileType = file.fileType || '';
         const displayName = fileTypeMap[fileType] || file.fileName || 'Document';
         const pdfPath = `/storage/${file.filePath}`;
-        
+
         return {
           name: displayName,
           fileName: file.fileName,
@@ -172,7 +159,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
   const attachedDocuments = getAttachedDocuments();
 
   const handleEndorse = () => {
-    // Prevent opening modal if already endorsed
     if (isEndorsed) {
       alert('This proposal has already been endorsed by you.');
       return;
@@ -181,10 +167,8 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
   };
 
   const handleEndorsementSubmit = async () => {
-    // Prevent duplicate submissions
     if (isEndorsing) return;
-    
-    // Check if already endorsed before submitting
+
     if (isEndorsed) {
       alert('This proposal has already been endorsed by you.');
       setShowEndorsementModal(false);
@@ -193,7 +177,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
 
     try {
       setIsEndorsing(true);
-      
+
       const endorsementData = {
         proposalID: fullProposal.proposalID || fullProposal.id,
         endorsementComments: endorsementComments,
@@ -204,42 +188,33 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
         withCredentials: true
       });
-      
+
       const responseData = response.data;
-      
+
       if (responseData.success) {
         alert('Proposal endorsed successfully!');
         setIsEndorsed(true);
         setEndorsementData(responseData.data);
         setShowEndorsementModal(false);
         setEndorsementComments('');
-        // Refresh the endorsement status
         handleRefresh();
-        
-        // Notify parent component that this proposal has been endorsed
-        const proposalId = fullProposal.proposalID || fullProposal.id;
-        if (onEndorsed && proposalId) {
-          onEndorsed(proposalId);
-        }
-
-        // Redirect to CM dashboard's proposal details view for this proposal
-        if (proposalId) {
-          router.visit(`/cm/proposal/${proposalId}`, { replace: true });
+        // Redirect to RDD dashboard's proposal details for this proposal
+        const pid = fullProposal.proposalID || fullProposal.id;
+        if (pid) {
+          router.visit(`/rdd/proposal/${pid}`, { replace: true });
         }
       } else {
         alert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error endorsing proposal:', error);
-      
-      // Extract error message from response
+
       let errorMessage = 'Unknown error';
-      
+
       if (error.response) {
-        // Server responded with error status
         const status = error.response.status;
         const data = error.response.data;
-        
+
         if (status === 409) {
           errorMessage = data.message || 'This proposal has already been endorsed by you.';
         } else if (status === 403) {
@@ -249,7 +224,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         } else if (data && data.message) {
           errorMessage = data.message;
         } else if (data && data.errors) {
-          // Validation errors
           const errorMessages = Object.values(data.errors).flat();
           errorMessage = errorMessages.join(', ');
         } else {
@@ -260,10 +234,9 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
       } else {
         errorMessage = error.message || 'Unknown error occurred';
       }
-      
+
       alert('Error endorsing proposal: ' + errorMessage);
-      
-      // If it's a 409 conflict, refresh the endorsement status
+
       if (error.response?.status === 409) {
         handleRefresh();
       }
@@ -289,14 +262,12 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     setSelectedDocument(null);
   };
 
-  // Document Modal Component
   const DocumentModal = () => {
     if (!selectedDocument) return null;
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
         <div className="bg-white rounded-2xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden animate-fadeIn">
-          {/* Modal Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
             <div className="flex items-center space-x-3">
               <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
@@ -321,12 +292,11 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
             </button>
           </div>
 
-          {/* Modal Content - All documents show as PDFs */}
           <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)] bg-gray-50">
             <div className="h-full bg-white rounded-lg shadow-inner p-2">
               {selectedDocument.pdfPath ? (
-                <PDFViewer 
-                  pdfPath={selectedDocument.pdfPath} 
+                <PDFViewer
+                  pdfPath={selectedDocument.pdfPath}
                   title={selectedDocument.name || selectedDocument.fileName || 'Document'}
                 />
               ) : (
@@ -340,7 +310,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
             </div>
           </div>
 
-          {/* Modal Footer */}
           <div className="flex justify-end items-center space-x-3 p-6 border-t border-gray-200 bg-gradient-to-r from-white to-gray-50">
             <button
               onClick={handleCloseModal}
@@ -366,19 +335,17 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     );
   };
 
-  // Memoize the endorsement modal handlers to prevent re-creation
   const handleEndorsementCommentsChange = React.useCallback((e) => {
     setEndorsementComments(e.target.value);
   }, []);
 
-  // Format date to be easily understood
   const formatDate = (dateString) => {
     if (!dateString) return 'Not available';
-    
+
     try {
       const date = new Date(dateString);
       if (isNaN(date.getTime())) return 'Invalid date';
-      
+
       return date.toLocaleDateString('en-US', {
         year: 'numeric',
         month: 'long',
@@ -389,60 +356,27 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     }
   };
 
-  // Format date with time
-  const formatDateTime = (dateString) => {
-    if (!dateString) return 'Not available';
-    
-    try {
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return 'Invalid date';
-      
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (error) {
-      return 'Invalid date';
-    }
-  };
-
   const handleSaveProposal = async (formData) => {
     try {
-      // Show loading state
       setIsEndorsing(true);
-      
-      // Prepare data for API
+
       const updateData = {
         researchAgenda: formData.researchAgenda || [],
         dostSPs: formData.dostSPs || [],
         sustainableDevelopmentGoals: formData.sustainableDevelopmentGoals || [],
         proposedBudget: formData.proposedBudget || fullProposal?.proposedBudget || 0,
       };
-      
-      // Add file if present
+
       if (formData.updatedForm) {
         updateData.updatedForm = formData.updatedForm;
       }
-      
-      console.log('Saving proposal with data:', updateData);
-      
-      // Call API
+
       const response = await updateProposal(fullProposal.proposalID || fullProposal.id, updateData);
-      
+
       if (response.success) {
-        // Update local state with new data
         setFullProposal(response.data);
-        
-        // Show success message
         alert('Proposal updated successfully!');
-        
-        // Close edit view
         setShowEditProposal(false);
-        
-        // Refresh data
         handleRefresh();
       } else {
         throw new Error(response.message || 'Failed to update proposal');
@@ -456,10 +390,9 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     }
   };
 
-  // Show edit proposal page if edit is clicked
   if (showEditProposal) {
     return (
-      <CMEditProposal 
+      <RDDEditProposal
         proposal={fullProposal || proposal}
         onBack={() => setShowEditProposal(false)}
         onSave={handleSaveProposal}
@@ -467,36 +400,63 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading proposal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !fullProposal) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
+        <div className="text-center">
+          <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p className="text-gray-600 font-medium text-lg">{error || 'Proposal not found'}</p>
+          <button
+            onClick={() => router.visit('/rdd/review-proposal')}
+            className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Back to Endorsements
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
       <div className="max-w-7xl mx-auto px-6 pt-6">
         <Breadcrumbs items={[
-          { label: 'Dashboard', href: '/cm/dashboard' },
-          { label: 'Proposal Details', href: null }
+          { label: 'Endorsement', href: '/rdd/review-proposal' },
+          { label: 'Review Details', href: null }
         ]} />
       </div>
       <div className="max-w-7xl mx-auto p-6 space-y-8">
-        {/* Back Button */}
         <div className="flex items-center">
           <button
-            onClick={onBack}
+            onClick={() => router.visit('/rdd/review-proposal')}
             className="flex items-center text-red-600 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl transition-all duration-200 group"
           >
             <svg className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <span className="font-medium">Back to Proposals</span>
+            <span className="font-medium">Back to Endorsements</span>
           </button>
         </div>
 
-        {/* Research Information Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-          {/* Header with Title and ID */}
           <div className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-200 px-8 py-6">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
               <div className="flex-1">
                 <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
-                  {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                  {fullProposal?.researchTitle || fullProposal?.title}
                 </h1>
 
                 <div className="flex flex-wrap gap-4 text-gray-600">
@@ -505,19 +465,18 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span className="font-medium">ID:</span>
-                    <span className="ml-1">PRO-{(fullProposal?.proposalID || fullProposal?.id || proposal?.proposalID || proposal?.id).toString().padStart(6, '0')}</span>
+                    <span className="ml-1">PRO-{(fullProposal?.proposalID || fullProposal?.id).toString().padStart(6, '0')}</span>
                   </div>
                   <div className="flex items-center">
                     <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     <span className="font-medium">Author:</span>
-                    <span className="ml-1">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
+                    <span className="ml-1">{fullProposal?.user?.fullName || fullProposal?.author || 'Unknown'}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Status Badge */}
               {isEndorsed && endorsementData && (
                 <div className="bg-gradient-to-br from-emerald-500 to-green-600 text-white px-6 py-4 rounded-xl shadow-lg">
                   <div className="flex items-center space-x-2">
@@ -535,9 +494,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
 
           <div className="p-8">
-            {/* Key Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-              {/* Research Center */}
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start space-x-3">
                   <div className="w-10 h-10 rounded-lg bg-slate-600 flex items-center justify-center flex-shrink-0">
@@ -547,12 +504,11 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mb-1">Research Center</p>
-                    <p className="text-base font-semibold text-slate-900 truncate">{fullProposal?.researchCenter || proposal?.researchCenter || 'Not specified'}</p>
+                    <p className="text-base font-semibold text-slate-900 truncate">{fullProposal?.researchCenter || 'Not specified'}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Funding Status */}
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start space-x-3">
                   <div className="w-10 h-10 rounded-lg bg-amber-500 flex items-center justify-center flex-shrink-0">
@@ -562,13 +518,12 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-amber-700 uppercase tracking-wider mb-1">Funding Status</p>
-                    <p className="text-base font-semibold text-amber-900 truncate">{fullProposal?.status?.statusName || proposal?.status?.statusName || 'Pending Approval'}</p>
-                    <p className="text-sm text-amber-700 mt-1">₱{((fullProposal?.proposedBudget || proposal?.proposedBudget) || 0).toLocaleString()}</p>
+                    <p className="text-base font-semibold text-amber-900 truncate">{fullProposal?.status?.statusName || 'Pending Approval'}</p>
+                    <p className="text-sm text-amber-700 mt-1">₱{(fullProposal?.proposedBudget || 0).toLocaleString()}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Submission Date */}
               <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-5 hover:shadow-md transition-shadow">
                 <div className="flex items-start space-x-3">
                   <div className="w-10 h-10 rounded-lg bg-emerald-500 flex items-center justify-center flex-shrink-0">
@@ -578,15 +533,13 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider mb-1">Submission Date</p>
-                    <p className="text-base font-semibold text-emerald-900">{formatDate(fullProposal?.dateSubmitted || fullProposal?.uploadedAt || proposal?.dateSubmitted || fullProposal?.created_at || proposal?.created_at)}</p>
+                    <p className="text-base font-semibold text-emerald-900">{formatDate(fullProposal?.dateSubmitted || fullProposal?.uploadedAt || fullProposal?.created_at)}</p>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Research Classifications */}
             <div className="space-y-6">
-              {/* Research Agenda */}
               <div className="border-l-4 border-blue-500 pl-6 py-2">
                 <div className="flex items-center mb-3">
                   <svg className="w-5 h-5 text-blue-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -601,23 +554,12 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                         {agenda}
                       </span>
                     ))
-                  ) : proposal?.researchAgenda && Array.isArray(proposal.researchAgenda) && proposal.researchAgenda.length > 0 ? (
-                    proposal.researchAgenda.map((agenda, index) => (
-                      <span key={index} className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-md text-sm font-medium border border-blue-200">
-                        {agenda}
-                      </span>
-                    ))
                   ) : (
-                    <>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-md text-sm font-medium border border-blue-200">Environment and Natural Resources</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-md text-sm font-medium border border-blue-200">Engineering and Technology</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-md text-sm font-medium border border-blue-200">Social Sciences and Education</span>
-                    </>
+                    <span className="text-gray-500 text-sm">No research agenda specified</span>
                   )}
                 </div>
               </div>
 
-              {/* DOST Strategic Programs */}
               <div className="border-l-4 border-green-500 pl-6 py-2">
                 <div className="flex items-center mb-3">
                   <svg className="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -632,24 +574,12 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                         {dost}
                       </span>
                     ))
-                  ) : proposal?.dostSPs && Array.isArray(proposal.dostSPs) && proposal.dostSPs.length > 0 ? (
-                    proposal.dostSPs.map((dost, index) => (
-                      <span key={index} className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-md text-sm font-medium border border-green-200">
-                        {dost}
-                      </span>
-                    ))
                   ) : (
-                    <>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-md text-sm font-medium border border-green-200">Product</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-md text-sm font-medium border border-green-200">Patent</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-md text-sm font-medium border border-green-200">Publication</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-md text-sm font-medium border border-green-200">People Services</span>
-                    </>
+                    <span className="text-gray-500 text-sm">No DOST strategic programs specified</span>
                   )}
                 </div>
               </div>
 
-              {/* Sustainable Development Goals */}
               <div className="border-l-4 border-purple-500 pl-6 py-2">
                 <div className="flex items-center mb-3">
                   <svg className="w-5 h-5 text-purple-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -664,31 +594,17 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                         {sdg}
                       </span>
                     ))
-                  ) : proposal?.sustainableDevelopmentGoals && Array.isArray(proposal.sustainableDevelopmentGoals) && proposal.sustainableDevelopmentGoals.length > 0 ? (
-                    proposal.sustainableDevelopmentGoals.map((sdg, index) => (
-                      <span key={index} className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">
-                        {sdg}
-                      </span>
-                    ))
                   ) : (
-                    <>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">Clean Water and Sanitation</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">Decent Work and Economic Growth</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">Reduced Inequalities</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">Responsible Consumption and Production</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">Affordable and Clean Energy</span>
-                      <span className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200">Gender Equality</span>
-                    </>
+                    <span className="text-gray-500 text-sm">No SDGs specified</span>
                   )}
                 </div>
               </div>
             </div>
 
-            {/* Research Description & Objectives */}
-            {((fullProposal?.description || proposal?.description) || (fullProposal?.objectives || proposal?.objectives)) && (
+            {(fullProposal?.description || fullProposal?.objectives) && (
               <div className="mt-8 pt-8 border-t border-gray-200">
                 <div className="bg-slate-50 rounded-xl p-6 space-y-6">
-                  {(fullProposal?.description || proposal?.description) && (
+                  {fullProposal?.description && (
                     <div>
                       <h5 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -696,11 +612,11 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                         </svg>
                         Description
                       </h5>
-                      <p className="text-gray-700 leading-relaxed text-justify">{fullProposal?.description || proposal?.description}</p>
+                      <p className="text-gray-700 leading-relaxed text-justify">{fullProposal.description}</p>
                     </div>
                   )}
 
-                  {(fullProposal?.objectives || proposal?.objectives) && (
+                  {fullProposal?.objectives && (
                     <div>
                       <h5 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
                         <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -708,7 +624,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                         </svg>
                         Objectives
                       </h5>
-                      <p className="text-gray-700 leading-relaxed text-justify">{fullProposal?.objectives || proposal?.objectives}</p>
+                      <p className="text-gray-700 leading-relaxed text-justify">{fullProposal.objectives}</p>
                     </div>
                   )}
                 </div>
@@ -717,7 +633,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
         </div>
 
-        {/* Attached Documents Section */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
           <div className="flex items-center mb-6">
             <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
@@ -727,12 +642,12 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
             </div>
             <h3 className="text-2xl font-bold text-gray-900">Attached Documents</h3>
           </div>
-          
+
           {attachedDocuments.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {attachedDocuments.map((document, index) => (
-                <div 
-                  key={index} 
+                <div
+                  key={index}
                   className="flex items-center p-5 rounded-xl border transition-all duration-200 cursor-pointer group bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 shadow-sm hover:shadow-md"
                   onClick={() => handleDocumentClick(document)}
                 >
@@ -764,10 +679,9 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
             </div>
           )}
 
-          {/* Action Buttons */}
           <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-8">
             {!isEndorsed && (
-              <button 
+              <button
                 onClick={() => setShowEditProposal(true)}
                 className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
               >
@@ -778,7 +692,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
               </button>
             )}
             {!isEndorsed && (
-              <button 
+              <button
                 onClick={handleEndorse}
                 disabled={isEndorsed || isEndorsing}
                 className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
@@ -792,7 +706,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
         </div>
 
-        {/* Research Paper PDF Viewer */}
         {researchPaperPath ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="flex items-center mb-6">
@@ -803,16 +716,16 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
               </div>
               <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
             </div>
-            <PDFViewer 
-              pdfPath={researchPaperPath} 
+            <PDFViewer
+              pdfPath={researchPaperPath}
               title={fullProposal?.files?.find(f => {
                 const fileName = f.fileName?.toLowerCase() || '';
-                return f.fileType === 'concept_paper' || 
-                       f.fileType === 'report' ||
-                       fileName.includes('concept') ||
-                       fileName.includes('research') ||
-                       fileName.includes('paper');
-              })?.fileName || "Research Paper"} 
+                return f.fileType === 'concept_paper' ||
+                  f.fileType === 'report' ||
+                  fileName.includes('concept') ||
+                  fileName.includes('research') ||
+                  fileName.includes('paper');
+              })?.fileName || "Research Paper"}
             />
           </div>
         ) : (
@@ -835,14 +748,11 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
         )}
 
-      {/* Document Modal */}
-      {showDocumentModal && <DocumentModal />}
-      
-        {/* Endorsement Modal */}
+        {showDocumentModal && <DocumentModal />}
+
         {showEndorsementModal && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
             <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full animate-fadeIn">
-              {/* Modal Header */}
               <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-50">
                 <div className="flex items-center space-x-3">
                   <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
@@ -862,18 +772,17 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                 </button>
               </div>
 
-              {/* Modal Content */}
               <div className="p-8">
                 <div className="mb-8 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
                   <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight">
-                    {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                    {fullProposal?.researchTitle || fullProposal?.title}
                   </h3>
                   <div className="flex items-center text-gray-700">
                     <svg className="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     <span className="font-medium">By:</span>
-                    <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
+                    <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || 'Unknown'}</span>
                   </div>
                 </div>
 
@@ -938,4 +847,10 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
   );
 };
 
-export default CMProposalDetails;
+RDDEndorsementDetail.layout = (page) => (
+  <AppLayout>
+    <RDDLayout>{page}</RDDLayout>
+  </AppLayout>
+);
+
+export default RDDEndorsementDetail;

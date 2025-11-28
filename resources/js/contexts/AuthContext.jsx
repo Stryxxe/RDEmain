@@ -12,10 +12,12 @@ export const useAuth = () => {
     return context;
 };
 
-export const AuthProvider = ({ children, user: initialUser }) => {
-    // Use initialUser directly - it's passed from app.jsx and updated by Inertia
-    // We can't use usePage() here because AuthProvider is outside the Inertia component tree
-    const user = initialUser;
+// Inner component that can use usePage() hook
+const AuthProviderInner = ({ children }) => {
+    // Use usePage to get the latest user data from Inertia
+    // This ensures the user is always up-to-date after navigation
+    const { props } = usePage();
+    const user = props?.auth?.user || null;
 
     // Get role from user data
     const role = useMemo(() => {
@@ -31,4 +33,9 @@ export const AuthProvider = ({ children, user: initialUser }) => {
     return (
         <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
     );
+};
+
+// Outer provider that wraps the Inertia App
+export const AuthProvider = ({ children }) => {
+    return <AuthProviderInner>{children}</AuthProviderInner>;
 };

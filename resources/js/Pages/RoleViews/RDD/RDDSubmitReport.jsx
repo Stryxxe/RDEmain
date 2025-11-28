@@ -524,10 +524,15 @@ const RDDSubmitReport = () => {
     );
 };
 
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+
 RDDSubmitReport.layout = (page) => (
-    <RoleBasedLayout roleName="Research & Development Division">
-        {page}
-    </RoleBasedLayout>
+    <AppLayout>
+        <RDDLayout>
+            {page}
+        </RDDLayout>
+    </AppLayout>
 );
 
 export default RDDSubmitReport;

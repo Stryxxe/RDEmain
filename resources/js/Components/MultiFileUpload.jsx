@@ -47,21 +47,28 @@ const MultiFileUpload = ({
         const currentFiles = Array.isArray(files) ? [...files] : [];
         const incomingFiles = Array.from(fileList);
         const validFiles = [];
-        let message = "";
+        const errors = [];
 
         incomingFiles.forEach((file) => {
-            const error = validateFile(file);
-            if (error) {
-                message = error;
+            // Check if we've reached the limit
+            if (currentFiles.length + validFiles.length >= maxFiles) {
+                errors.push(`Maximum of ${maxFiles} files reached.`);
                 return;
             }
 
+            // Validate file type and size
+            const error = validateFile(file);
+            if (error) {
+                errors.push(error);
+                return;
+            }
+
+            // Check for duplicates
             if (
-                currentFiles.length + validFiles.length >= maxFiles ||
                 currentFiles.some((existing) => getFileKey(existing) === getFileKey(file)) ||
                 validFiles.some((existing) => getFileKey(existing) === getFileKey(file))
             ) {
-                message = `Duplicate file or maximum of ${maxFiles} files reached.`;
+                errors.push(`"${file.name}" is a duplicate.`);
                 return;
             }
 
@@ -70,10 +77,11 @@ const MultiFileUpload = ({
 
         if (validFiles.length) {
             onChange([...currentFiles, ...validFiles]);
-            message = "";
+            setFeedback("");
+        } else if (errors.length) {
+            // Show only the first error to avoid cluttering
+            setFeedback(errors[0]);
         }
-
-        setFeedback(message);
     };
 
     const handleDrop = (event) => {

@@ -162,10 +162,15 @@ const RDDProgressReportDetail = () => {
     );
 };
 
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+
 RDDProgressReportDetail.layout = (page) => (
-    <RoleBasedLayout roleName="Research & Development Division">
-        {page}
-    </RoleBasedLayout>
+    <AppLayout>
+        <RDDLayout>
+            {page}
+        </RDDLayout>
+    </AppLayout>
 );
 
 export default RDDProgressReportDetail;

@@ -20,6 +20,8 @@ import { useMessages } from "../contexts/MessageContext";
 import AutoRefreshControls from "../Components/AutoRefreshControls";
 import RefreshStatusIndicator from "../Components/RefreshStatusIndicator";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../Components/Layouts/AppLayout";
+import Breadcrumbs from "../Components/Breadcrumbs";
 
 const Tracker = () => {
     const { user } = useAuth();
@@ -296,16 +298,21 @@ const Tracker = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
+            <Breadcrumbs items={[
+                { label: 'Project Tracker', href: null }
+            ]} />
             {/* Header Section */}
-            <div className="bg-white py-12">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-                    <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                        Research Project Tracker
-                    </h1>
-                    <p className="text-lg text-gray-600 mb-6">
-                        Monitor and track all research projects with
-                        comprehensive tracking and analytics
-                    </p>
+            <div className="bg-white pt-6 pb-12">
+                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <div className="text-center">
+                        <h1 className="text-4xl font-bold text-gray-900 mb-4">
+                            Research Project Tracker
+                        </h1>
+                        <p className="text-lg text-gray-600 mb-6">
+                            Monitor and track all research projects with
+                            comprehensive tracking and analytics
+                        </p>
+                    </div>
 
                     {/* Manual Refresh Button */}
                     <div className="flex flex-wrap justify-center items-center gap-4">
@@ -536,7 +543,9 @@ const Tracker = () => {
 };
 
 Tracker.layout = (page) => (
-    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default Tracker;

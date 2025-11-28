@@ -8,6 +8,8 @@ import DragDropUpload from "../Components/DragDropUpload";
 import MultiFileUpload from "../Components/MultiFileUpload";
 import apiService from "../services/api";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../Components/Layouts/AppLayout";
+import Breadcrumbs from "../Components/Breadcrumbs";
 
 const SubmitPage = () => {
     const { user } = useAuth();
@@ -405,6 +407,11 @@ const SubmitPage = () => {
 
     return (
         <div className="max-w-4xl w-full">
+            <div className="mb-4">
+                <Breadcrumbs items={[
+                    { label: 'Submit Proposal', href: null }
+                ]} />
+            </div>
             <div className="text-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
                     Submit Proposal
@@ -591,7 +598,9 @@ const SubmitPage = () => {
 };
 
 SubmitPage.layout = (page) => (
-    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default SubmitPage;

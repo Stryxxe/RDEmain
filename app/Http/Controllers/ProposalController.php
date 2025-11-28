@@ -31,7 +31,12 @@ class ProposalController extends Controller
 
         match ($user->role?->userRole) {
             'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID)),
+            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID))
+                         ->whereDoesntHave('endorsements', function ($q) use ($user) {
+                             // Exclude proposals already endorsed by this CM user
+                             $q->where('endorserID', $user->userID)
+                               ->where('endorsementStatus', 'approved');
+                         }),
             default => $query->where('userID', $user->userID),
         };
 
@@ -356,10 +361,24 @@ class ProposalController extends Controller
     public function update(Request $request, int $id): JsonResponse
     {
         $user = Auth::user();
+        $user->loadMissing('role');
 
-        $proposal = Proposal::where('proposalID', $id)
-            ->where('userID', $user->userID)
-            ->firstOrFail();
+        // Find the proposal
+        $proposal = Proposal::where('proposalID', $id)->with('user')->firstOrFail();
+
+        // Authorization: Allow proposal owner, CM (for their department), and RDD (for all)
+        $canEdit = match ($user->role?->userRole) {
+            'RDD' => true, // RDD can edit all proposals
+            'CM' => $proposal->user?->departmentID === $user->departmentID, // CM can edit proposals from their department
+            default => $proposal->userID === $user->userID, // Others can only edit their own
+        };
+
+        if (!$canEdit) {
+            return response()->json([
+                'success' => false,
+                'message' => 'You do not have permission to edit this proposal'
+            ], 403);
+        }
 
         $validated = $request->validate([
             'researchTitle' => 'sometimes|string|max:255',
@@ -370,19 +389,41 @@ class ProposalController extends Controller
             'dostSPs' => 'sometimes|array',
             'sustainableDevelopmentGoals' => 'sometimes|array',
             'proposedBudget' => 'sometimes|numeric|min:0',
-            'budgetBreakdown' => 'sometimes|array'
+            'budgetBreakdown' => 'sometimes|array',
+            'updatedForm' => 'nullable|file|mimes:pdf,doc,docx|max:5120'
         ]);
 
         try {
-            $updateData = $request->only([
-                'researchTitle',
-                'description',
-                'objectives',
-                'researchCenter'
-            ]);
+            $updateData = [];
+            
+            // Only include fields that were sent
+            if ($request->has('researchTitle')) $updateData['researchTitle'] = $request->researchTitle;
+            if ($request->has('description')) $updateData['description'] = $request->description;
+            if ($request->has('objectives')) $updateData['objectives'] = $request->objectives;
+            if ($request->has('researchCenter')) $updateData['researchCenter'] = $request->researchCenter;
+            if ($request->has('researchAgenda')) $updateData['researchAgenda'] = $request->researchAgenda;
+            if ($request->has('dostSPs')) $updateData['dostSPs'] = $request->dostSPs;
+            if ($request->has('sustainableDevelopmentGoals')) $updateData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
+            if ($request->has('proposedBudget')) $updateData['proposedBudget'] = $request->proposedBudget;
 
-            $proposedBudget = $request->has('proposedBudget')
-                ? (float) $request->proposedBudget
+            // Handle file upload if provided
+            if ($request->hasFile('updatedForm')) {
+                $file = $request->file('updatedForm');
+                $fileName = 'updated_form_' . time() . '.' . $file->getClientOriginalExtension();
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                // Create file record
+                File::create([
+                    'proposalID' => $proposal->proposalID,
+                    'fileName' => $fileName,
+                    'filePath' => $filePath,
+                    'fileType' => 'updated_form',
+                    'fileSize' => $file->getSize(),
+                ]);
+            }
+
+            $proposedBudget = isset($updateData['proposedBudget'])
+                ? (float) $updateData['proposedBudget']
                 : (float) $proposal->proposedBudget;
 
             if ($request->has('budgetBreakdown')) {
@@ -394,25 +435,8 @@ class ProposalController extends Controller
                 $updateData['budgetBreakdown'] = $this->generateDefaultBudgetBreakdown($proposedBudget);
             }
 
-            if ($request->hasAny(['researchAgenda', 'dostSPs', 'sustainableDevelopmentGoals', 'proposedBudget', 'budgetBreakdown'])) {
-                $matrixData = $proposal->matrixOfCompliance ?: [];
-
-                if ($request->has('researchAgenda')) $matrixData['researchAgenda'] = $request->researchAgenda;
-                if ($request->has('dostSPs')) $matrixData['dostSPs'] = $request->dostSPs;
-                if ($request->has('sustainableDevelopmentGoals')) $matrixData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
-                if ($request->has('proposedBudget')) $matrixData['proposedBudget'] = $request->proposedBudget;
-                if (array_key_exists('budgetBreakdown', $updateData)) {
-                    $matrixData['budgetBreakdown'] = $updateData['budgetBreakdown'];
-                }
-                if ($request->has('researchCenter')) $matrixData['researchCenter'] = $request->researchCenter;
-                if ($request->has('description')) $matrixData['description'] = $request->description;
-                if ($request->has('objectives')) $matrixData['objectives'] = $request->objectives;
-
-                $updateData['matrixOfCompliance'] = json_encode($matrixData);
-            }
-
             $proposal->update($updateData);
-            $proposal->load(['status', 'files']);
+            $proposal->load(['status', 'files', 'user.department']);
 
             return response()->json([
                 'success' => true,
@@ -420,6 +444,13 @@ class ProposalController extends Controller
                 'data' => $proposal
             ]);
         } catch (\Exception $e) {
+            Log::error('Proposal update failed', [
+                'proposal_id' => $id,
+                'user_id' => $user->userID,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to update proposal',
@@ -568,11 +599,21 @@ class ProposalController extends Controller
                 $q->where('userRole', 'CM');
             })->pluck('userID');
 
+            // Get RDD user IDs
+            $rddUserIds = User::whereHas('role', function ($q) {
+                $q->where('userRole', 'RDD');
+            })->pluck('userID');
+
             // Get proposals that have approved endorsements from CM users
+            // but NOT yet endorsed by RDD users
             $proposals = Proposal::with(['status', 'files', 'user.department', 'user.role', 'endorsements.endorser.role'])
                 ->whereHas('endorsements', function ($query) use ($cmUserIds) {
                     $query->where('endorsementStatus', 'approved')
                         ->whereIn('endorserID', $cmUserIds);
+                })
+                ->whereDoesntHave('endorsements', function ($query) use ($rddUserIds) {
+                    $query->where('endorsementStatus', 'approved')
+                        ->whereIn('endorserID', $rddUserIds);
                 })
                 ->orderBy('proposalID', 'desc')
                 ->get();

@@ -11,7 +11,7 @@ import {
 } from 'react-icons/bi';
 
 const RDDLayout = ({ children }) => {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const { url } = usePage();
 
   const menuItems = [
@@ -27,13 +27,12 @@ const RDDLayout = ({ children }) => {
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <div className="fixed inset-x-0 top-0 z-30">
-        <RoleBasedHeader role={user?.role?.userRole} />
+        <RoleBasedHeader role={role} />
       </div>
 
-      <div className="flex pt-20">
-        {/* Sidebar */}
-        <div className="bg-red-900 text-white w-64 flex-shrink-0 flex flex-col h-screen sticky top-20">
-          <nav className="flex flex-col h-full mt-5">
+      {/* Sidebar */}
+      <aside className="fixed left-0 top-24 bottom-0 w-64 bg-red-900 text-white z-20 overflow-y-auto">
+        <nav className="flex flex-col py-4">
             {menuItems.map((item) => {
               const IconComponent = item.icon;
               // Special handling for root path (/rdd) - only match exact path or /rdd/
@@ -61,14 +60,13 @@ const RDDLayout = ({ children }) => {
                 </Link>
               );
             })}
-          </nav>
-        </div>
+        </nav>
+      </aside>
 
-        {/* Main Content */}
-        <main className="flex-1 bg-gray-50 p-5 overflow-y-auto">
-          {children}
-        </main>
-      </div>
+      {/* Main Content */}
+      <main className="ml-64 pt-24 bg-gray-50 p-5 min-h-screen">
+        {children}
+      </main>
     </div>
   );
 };

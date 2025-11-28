@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { BiSearch, BiShow } from "react-icons/bi";
-import { Link } from "@inertiajs/react";
+import { Link, router } from "@inertiajs/react";
 import { DollarSign } from "lucide-react";
 import StatsCard from "../../../Components/UI/StatsCard";
 import {
@@ -8,7 +8,9 @@ import {
     getProgressBarClass,
 } from "../../../config/statusStyles";
 import rddService from "../../../services/rddService";
-import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 const RDDDashboard = () => {
     const [searchTerm, setSearchTerm] = useState("");
@@ -18,6 +20,8 @@ const RDDDashboard = () => {
     const [statsData, setStatsData] = useState([]);
     const [researchData, setResearchData] = useState([]);
     const [totalFunding, setTotalFunding] = useState(0);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [itemsPerPage] = useState(10);
 
     useEffect(() => {
         fetchDashboardData();
@@ -183,6 +187,17 @@ const RDDDashboard = () => {
             research.college.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    // Pagination calculations
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = filteredResearch.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(filteredResearch.length / itemsPerPage);
+
+    const handlePageChange = (pageNumber) => {
+        setCurrentPage(pageNumber);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
     const getStatusClass = (statusName) => getStatusBadgeClass(statusName);
     const getProgressColor = (statusName) => getProgressBarClass(statusName);
 
@@ -226,7 +241,10 @@ const RDDDashboard = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-            <div className="max-w-7xl mx-auto px-6 py-12">
+            <Breadcrumbs items={[
+                { label: 'R&D Initiative Status', href: null }
+            ]} />
+            <div className="max-w-7xl mx-auto px-6 py-8">
                 <div className="text-center">
                     <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
                         R&D Initiative Status
@@ -318,7 +336,7 @@ const RDDDashboard = () => {
 
                     {/* Table Body */}
                     <div className="divide-y divide-gray-100">
-                        {filteredResearch.map((research, index) => (
+                        {currentItems.map((research, index) => (
                             <div
                                 key={index}
                                 className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
@@ -389,16 +407,75 @@ const RDDDashboard = () => {
 
                                 {/* Actions */}
                                 <div className="flex items-center">
-                                    <Link href={`/rdd/proposal/${research.id}`}>
-                                        <button className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1">
-                                            <BiShow className="text-sm" />
-                                            View Details
-                                        </button>
-                                    </Link>
+                                    <button 
+                                        onClick={() => router.visit(`/rdd/proposal/${research.id}`)}
+                                        className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"
+                                    >
+                                        <BiShow className="text-sm" />
+                                        View Details
+                                    </button>
                                 </div>
                             </div>
                         ))}
                     </div>
+
+                    {/* Pagination */}
+                    {totalPages > 1 && (
+                        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
+                            <div className="text-sm text-gray-600">
+                                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredResearch.length)} of {filteredResearch.length} results
+                            </div>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={() => handlePageChange(currentPage - 1)}
+                                    disabled={currentPage === 1}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Previous
+                                </button>
+                                
+                                <div className="flex gap-1">
+                                    {[...Array(totalPages)].map((_, index) => {
+                                        const pageNumber = index + 1;
+                                        // Show first, last, current, and pages around current
+                                        if (
+                                            pageNumber === 1 ||
+                                            pageNumber === totalPages ||
+                                            (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
+                                        ) {
+                                            return (
+                                                <button
+                                                    key={pageNumber}
+                                                    onClick={() => handlePageChange(pageNumber)}
+                                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                                        currentPage === pageNumber
+                                                            ? 'bg-red-600 text-white'
+                                                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                                >
+                                                    {pageNumber}
+                                                </button>
+                                            );
+                                        } else if (
+                                            pageNumber === currentPage - 2 ||
+                                            pageNumber === currentPage + 2
+                                        ) {
+                                            return <span key={pageNumber} className="px-2 py-2 text-gray-500">...</span>;
+                                        }
+                                        return null;
+                                    })}
+                                </div>
+
+                                <button
+                                    onClick={() => handlePageChange(currentPage + 1)}
+                                    disabled={currentPage === totalPages}
+                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
@@ -407,9 +484,11 @@ const RDDDashboard = () => {
 
 // Set the persistent layout
 RDDDashboard.layout = (page) => (
-    <RoleBasedLayout roleName="Research & Development Division">
-        {page}
-    </RoleBasedLayout>
+    <AppLayout>
+        <RDDLayout>
+            {page}
+        </RDDLayout>
+    </AppLayout>
 );
 
 export default RDDDashboard;

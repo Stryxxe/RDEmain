@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import axios from "axios";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
 
 // Use window.axios which has session-based auth configured, or configure this instance
 const axiosInstance = window.axios || axios;
@@ -423,7 +424,9 @@ const CMSubmitReport = () => {
 };
 
 CMSubmitReport.layout = (page) => (
-    <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    <AppLayout>
+        <RoleBasedLayout roleName="Center Manager">{page}</RoleBasedLayout>
+    </AppLayout>
 );
 
 export default CMSubmitReport;
