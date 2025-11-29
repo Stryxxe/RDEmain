@@ -1,61 +1,62 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
-import { useAuth } from "../../../contexts/AuthContext";
-import { useAdmin } from "../../../contexts/AdminContext";
 import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiEye } from "react-icons/fi";
 import { format } from "date-fns";
 import UserForm from "../../../Components/Admin/UserFormFixed";
 import UserDetails from "../../../Components/Admin/UserDetails";
-import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AdminLayout from "../../../Components/Layouts/AdminLayout";
 
 const UserManagement = () => {
-    const { user } = useAuth();
-    const { props } = usePage();
-    const {
-        paginatedUsers,
-        totalPages,
-        pagination,
-        filters,
-        setFilters,
-        setPagination,
-        deleteUser,
-        resetFilters,
-        filteredUsers,
-    } = useAdmin();
+    const { auth } = usePage().props;
+    const currentUser = auth?.user;
+    
+    // State management for users
+    const [users, setUsers] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [pagination, setPagination] = useState({ page: 1, perPage: 10 });
+    const [filters, setFilters] = useState({ search: '', role: '', department: '', status: '' });
+    const [totalPages, setTotalPages] = useState(1);
 
-    // Get user from Inertia props (more reliable than context on initial load)
-    const currentUser = user || props?.auth?.user;
-
-    // Validate authentication and role
+    // Fetch users from API
     useEffect(() => {
-        // Prevent redirect loop - check if we're already on login page
-        if (
-            window.location.pathname === "/login" ||
-            window.location.pathname === "/"
-        ) {
-            return;
-        }
-
-        // Wait a bit for user to be available (in case of initial page load)
-        const checkAuth = setTimeout(() => {
-            if (!currentUser) {
-                router.visit("/login");
-                return;
+        const fetchUsers = async () => {
+            try {
+                setLoading(true);
+                const queryParams = new URLSearchParams({
+                    page: pagination.page,
+                    perPage: pagination.perPage,
+                    search: filters.search,
+                    role: filters.role,
+                    department: filters.department,
+                    status: filters.status,
+                });
+                
+                const response = await fetch(`/api/admin/users?${queryParams}`, {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    setUsers(data.users || []);
+                    setTotalPages(Math.ceil((data.total || data.users?.length || 0) / pagination.perPage));
+                } else {
+                    console.error('Failed to fetch users');
+                    setUsers([]);
+                }
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                setUsers([]);
+            } finally {
+                setLoading(false);
             }
+        };
 
-            // Check if user is an Admin or Administrator
-            const isAdmin =
-                currentUser.role?.userRole === "Admin" ||
-                currentUser.role?.userRole === "Administrator";
-
-            if (!isAdmin) {
-                router.visit("/dashboard");
-                return;
-            }
-        }, 100);
-
-        return () => clearTimeout(checkAuth);
-    }, [currentUser]);
+        fetchUsers();
+    }, [pagination.page, pagination.perPage, filters]);
 
     const [showUserForm, setShowUserForm] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
@@ -64,22 +65,27 @@ const UserManagement = () => {
     const [selectedUsers, setSelectedUsers] = useState([]);
 
     const handleSearch = (e) => {
-        setFilters({ search: e.target.value });
-        setPagination({ page: 1 });
+        setFilters(prev => ({ ...prev, search: e.target.value }));
+        setPagination(prev => ({ ...prev, page: 1 }));
     };
 
     const handleRoleFilter = (role) => {
-        setFilters({ role });
-        setPagination({ page: 1 });
+        setFilters(prev => ({ ...prev, role }));
+        setPagination(prev => ({ ...prev, page: 1 }));
     };
 
     const handleStatusFilter = (status) => {
-        setFilters({ status });
-        setPagination({ page: 1 });
+        setFilters(prev => ({ ...prev, status }));
+        setPagination(prev => ({ ...prev, page: 1 }));
     };
 
     const handlePageChange = (page) => {
-        setPagination({ page });
+        setPagination(prev => ({ ...prev, page }));
+    };
+    
+    const resetFilters = () => {
+        setFilters({ search: '', role: '', department: '', status: '' });
+        setPagination({ page: 1, perPage: 10 });
     };
 
     const handleEditUser = (user) => {
@@ -92,16 +98,31 @@ const UserManagement = () => {
         setShowUserDetails(true);
     };
 
-    const handleDeleteUser = (userId) => {
+    const handleDeleteUser = async (userId) => {
         if (
             window.confirm(
                 "Are you sure you want to delete this user? This action cannot be undone."
             )
         ) {
             try {
-                deleteUser(userId);
-                alert("User deleted successfully!");
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    alert("User deleted successfully!");
+                    // Refresh users list
+                    setUsers(prev => prev.filter(u => u.id !== userId && u.userID !== userId));
+                } else {
+                    alert("Error deleting user. Please try again.");
+                }
             } catch (error) {
+                console.error('Error deleting user:', error);
                 alert("Error deleting user. Please try again.");
             }
         }
@@ -115,11 +136,16 @@ const UserManagement = () => {
         );
     };
 
+    // Calculate paginated users
+    const paginatedUsers = users;
+    
+    const filteredUsers = users;
+
     const handleSelectAll = () => {
         if (selectedUsers.length === paginatedUsers.length) {
             setSelectedUsers([]);
         } else {
-            setSelectedUsers(paginatedUsers.map((user) => user.id));
+            setSelectedUsers(paginatedUsers.map((user) => user.id || user.userID));
         }
     };
 
@@ -179,15 +205,16 @@ const UserManagement = () => {
     };
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
-                        User Management
-                    </h1>
-                    <p className="mt-1 text-sm text-gray-600">
-                        Manage all users across the research management system
-                    </p>
+        <AdminLayout>
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            User Management
+                        </h1>
+                        <p className="mt-1 text-sm text-gray-600">
+                            Manage all users across the research management system
+                        </p>
                 </div>
                 <div className="flex space-x-2">
                     {selectedUsers.length > 0 && (
@@ -477,12 +504,9 @@ const UserManagement = () => {
                     }}
                 />
             )}
-        </div>
+            </div>
+        </AdminLayout>
     );
 };
-
-UserManagement.layout = (page) => (
-    <RoleBasedLayout roleName="Administrator">{page}</RoleBasedLayout>
-);
 
 export default UserManagement;

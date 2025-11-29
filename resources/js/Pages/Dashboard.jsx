@@ -14,6 +14,7 @@ export default function Dashboard() {
         }
 
         const userRole = user.role?.userRole;
+        const currentPath = window.location.pathname;
 
         // Normalize role into a known config key
         let roleKey = null;
@@ -37,6 +38,15 @@ export default function Dashboard() {
             return;
         }
 
+        // Construct the full path with the normalized role prefix
+        const rolePath = `/${roleKey.toLowerCase()}`;
+        
+        // Check if we're already on the correct role path - if so, don't redirect
+        if (currentPath === rolePath || currentPath === `${rolePath}/`) {
+            console.log(`Already on correct path: ${currentPath}`);
+            return;
+        }
+
         // Get the first route from the role configuration as the default route
         const defaultRoute = config.routes.find((route) => route.path === '') || config.routes[0];
 
@@ -46,8 +56,6 @@ export default function Dashboard() {
             return;
         }
 
-        // Construct the full path with the normalized role prefix
-        const rolePath = `/${roleKey.toLowerCase()}`;
         const fullPath = defaultRoute.path === '' ? rolePath : `${rolePath}/${defaultRoute.path}`;
 
         router.visit(fullPath);

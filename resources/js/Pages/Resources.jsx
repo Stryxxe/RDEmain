@@ -1,14 +1,23 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
 import ResourceGrid from "../Components/UI/ResourceGrid";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../Components/Layouts/AppLayout";
+import axios from "axios";
 
 const Resources = () => {
     const { user } = useAuth();
     const { props } = usePage();
     const currentUser = user || props?.auth?.user;
+    const [templates, setTemplates] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    const axiosInstance = window.axios || axios;
+    if (!window.axios) {
+        axiosInstance.defaults.withCredentials = true;
+        axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+    }
 
     // Validate authentication on mount
     useEffect(() => {
@@ -21,74 +30,49 @@ const Resources = () => {
             router.visit("/dashboard");
         }
     }, [currentUser]);
-    const resources = [
-        {
-            id: 1,
-            title: "Research Proposal Guidelines",
-            description:
-                "Complete guidelines for submitting research proposals",
-            type: "PDF",
-            fileSize: "2.3 MB",
-            fileName: "research-proposal-guidelines.pdf",
-            downloadUrl: "#",
-        },
-        {
-            id: 2,
-            title: "Budget Template",
-            description: "Excel template for proposal budget planning",
-            type: "XLSX",
-            fileSize: "156 KB",
-            fileName: "budget-template.xlsx",
-            downloadUrl: "#",
-        },
-        {
-            id: 3,
-            title: "Ethics Review Form",
-            description: "Required form for research involving human subjects",
-            type: "PDF",
-            fileSize: "1.8 MB",
-            fileName: "ethics-review-form.pdf",
-            downloadUrl: "#",
-        },
-        {
-            id: 4,
-            title: "Research Center Directory",
-            description:
-                "List of available research centers and their specializations",
-            type: "PDF",
-            fileSize: "945 KB",
-            fileName: "research-center-directory.pdf",
-            downloadUrl: "#",
-        },
-        {
-            id: 5,
-            title: "DOST SPs Reference",
-            description: "Detailed information about DOST Strategic Programs",
-            type: "PDF",
-            fileSize: "3.1 MB",
-            fileName: "dost-sps-reference.pdf",
-            downloadUrl: "#",
-        },
-        {
-            id: 6,
-            title: "SDG Mapping Guide",
-            description:
-                "Guide for mapping research to Sustainable Development Goals",
-            type: "PDF",
-            fileSize: "1.2 MB",
-            fileName: "sdg-mapping-guide.pdf",
-            downloadUrl: "#",
-        },
-    ];
+
+    // Fetch templates from admin
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            try {
+                setLoading(true);
+                const res = await axiosInstance.get("/admin/templates/proponent", {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+                const list = res?.data?.data || res?.data || [];
+                setTemplates(Array.isArray(list) ? list : []);
+            } catch (e) {
+                console.error("Failed to load templates", e);
+                setTemplates([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchTemplates();
+    }, []);
+
+    // Map templates to resource format
+    const resources = templates.map((template) => ({
+        id: template.id || template.templateID,
+        title: template.name || template.fileName || "Untitled",
+        description: template.description || "Document template",
+        type: (template.type || template.fileType || "FILE").toUpperCase(),
+        fileSize: template.size || template.fileSize || "—",
+        fileName: template.name || template.fileName,
+        downloadUrl: template.url || template.filePath || "#",
+    }));
 
     const handleDownload = (resource) => {
-        console.log("Downloading:", resource.title);
-        // Implement download logic
+        if (resource.downloadUrl && resource.downloadUrl !== "#") {
+            window.open(resource.downloadUrl, "_blank");
+        }
     };
 
     const handleView = (resource) => {
-        console.log("Viewing:", resource.title);
-        // Implement view logic
+        if (resource.downloadUrl && resource.downloadUrl !== "#") {
+            window.open(resource.downloadUrl, "_blank");
+        }
     };
 
     return (
@@ -104,12 +88,19 @@ const Resources = () => {
                     </p>
                 </div>
 
-                <ResourceGrid
-                    resources={resources}
-                    onDownload={handleDownload}
-                    onView={handleView}
-                    emptyMessage="No resources available at this time"
-                />
+                {loading ? (
+                    <div className="text-center py-12">
+                        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-red-600 border-r-transparent"></div>
+                        <p className="mt-4 text-gray-600">Loading templates...</p>
+                    </div>
+                ) : (
+                    <ResourceGrid
+                        resources={resources}
+                        onDownload={handleDownload}
+                        onView={handleView}
+                        emptyMessage="No resources available at this time"
+                    />
+                )}
             </div>
         </div>
     );

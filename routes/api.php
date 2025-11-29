@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProposalController;
@@ -44,9 +45,172 @@ Route::put('/user', function (Request $request) {
     return $user;
 })->middleware('auth:web');
 
+// Change password
+Route::post('/user/change-password', function (Request $request) {
+    $request->validate([
+        'current_password' => 'required|string',
+        'new_password' => 'required|string|min:8|confirmed',
+    ]);
+
+    $user = $request->user();
+
+    // Verify current password
+    if (!Hash::check($request->current_password, $user->password)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Current password is incorrect'
+        ], 400);
+    }
+
+    // Update password
+    $user->update([
+        'password' => Hash::make($request->new_password)
+    ]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Password changed successfully'
+    ]);
+})->middleware('auth:web');
+
+// Upload avatar
+Route::post('/user/avatar', function (Request $request) {
+    $request->validate([
+        'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:3072',
+    ]);
+
+    $user = $request->user();
+
+    // Delete old avatar if exists
+    if ($user->avatar && \Storage::disk('public')->exists($user->avatar)) {
+        \Storage::disk('public')->delete($user->avatar);
+    }
+
+    // Store new avatar
+    $path = $request->file('avatar')->store('avatars', 'public');
+
+    // Update user avatar
+    $user->update(['avatar' => $path]);
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Avatar updated successfully',
+        'avatar' => asset('storage/' . $path)
+    ]);
+})->middleware('auth:web');
+
 // Proposal routes - Use session-based auth for Inertia
 // Explicitly use 'web' guard to ensure session authentication works
 Route::middleware(['auth:web'])->group(function () {
+    // System Settings - simple JSON-backed storage
+    Route::get('/admin/settings', function (Request $request) {
+        $path = storage_path('app/settings.json');
+        if (!\File::exists($path)) {
+            $default = [
+                'systemName' => 'Research Management System',
+                'systemVersion' => '1.0.0',
+                'sessionTimeout' => 30,
+                'logRetention' => 90,
+                'backupFrequency' => 'daily',
+                'allowDepartmentCreation' => true,
+                'requireDepartmentAssignment' => true,
+            ];
+            \File::put($path, json_encode($default, JSON_PRETTY_PRINT));
+        }
+        $json = json_decode(\File::get($path), true);
+        return response()->json($json);
+    });
+
+    Route::put('/admin/settings', function (Request $request) {
+        try {
+            $validated = $request->validate([
+                'systemName' => 'required|string|max:255',
+                'systemVersion' => 'required|string|max:50',
+                'sessionTimeout' => 'required|integer|min:5|max:480',
+                'logRetention' => 'required|integer|min:7|max:365',
+                'backupFrequency' => 'required|in:hourly,daily,weekly,monthly',
+                'allowDepartmentCreation' => 'required',
+                'requireDepartmentAssignment' => 'required',
+            ]);
+            
+            // Ensure boolean conversion
+            $validated['allowDepartmentCreation'] = (bool) $validated['allowDepartmentCreation'];
+            $validated['requireDepartmentAssignment'] = (bool) $validated['requireDepartmentAssignment'];
+
+            $path = storage_path('app/settings.json');
+            \File::put($path, json_encode($validated, JSON_PRETTY_PRINT));
+            return response()->json(['success' => true, 'settings' => $validated]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Settings validation failed', ['errors' => $e->errors(), 'input' => $request->all()]);
+            throw $e;
+        }
+    });
+
+    // Session Settings (backend for "Security" container)
+    Route::get('/admin/session-settings', function (Request $request) {
+        $path = storage_path('app/settings.json');
+        $data = [];
+        if (\File::exists($path)) {
+            $data = json_decode(\File::get($path), true) ?: [];
+        }
+        return response()->json([
+            'sessionTimeout' => $data['sessionTimeout'] ?? 30,
+            'logRetention' => $data['logRetention'] ?? 90,
+        ]);
+    });
+
+    Route::put('/admin/session-settings', function (Request $request) {
+        $validated = $request->validate([
+            'sessionTimeout' => 'required|integer|min:5|max:480',
+            'logRetention' => 'required|integer|min:7|max:365',
+        ]);
+
+        $path = storage_path('app/settings.json');
+        $data = [];
+        if (\File::exists($path)) {
+            $data = json_decode(\File::get($path), true) ?: [];
+        }
+        $data['sessionTimeout'] = $validated['sessionTimeout'];
+        $data['logRetention'] = $validated['logRetention'];
+        \File::put($path, json_encode($data, JSON_PRETTY_PRINT));
+
+        return response()->json(['success' => true, 'session' => $validated]);
+    });
+
+    // File Storage Settings (backend for "File Storage" container)
+    Route::get('/admin/storage-settings', function (Request $request) {
+        $path = storage_path('app/settings.json');
+        $data = [];
+        if (\File::exists($path)) {
+            $data = json_decode(\File::get($path), true) ?: [];
+        }
+        $storage = $data['fileStorage'] ?? [
+            'maxFileSize' => 20,
+            'allowedTypes' => ['pdf','docx','xlsx','csv','png','jpg'],
+        ];
+        return response()->json($storage);
+    });
+
+    Route::put('/admin/storage-settings', function (Request $request) {
+        $validated = $request->validate([
+            'maxFileSize' => 'required|integer|min:1|max:200',
+            'allowedTypes' => 'nullable|array',
+            'allowedTypes.*' => 'string|in:pdf,doc,docx,xls,xlsx,csv,png,jpg,jpeg,gif',
+        ]);
+
+        $path = storage_path('app/settings.json');
+        $data = [];
+        if (\File::exists($path)) {
+            $data = json_decode(\File::get($path), true) ?: [];
+        }
+        $data['fileStorage'] = [
+            'maxFileSize' => (int)$validated['maxFileSize'],
+            'allowedTypes' => $validated['allowedTypes'] ?? ['pdf','docx','xlsx','csv','png','jpg'],
+        ];
+        \File::put($path, json_encode($data, JSON_PRETTY_PRINT));
+
+        return response()->json(['success' => true, 'storage' => $data['fileStorage']]);
+    });
     Route::get('/proposals/statistics', [ProposalController::class, 'statistics']);
     Route::get('/proposals/rdd-analytics', [ProposalController::class, 'rddAnalytics']);
     Route::get('/proposals/cm-endorsed', [ProposalController::class, 'getCmEndorsedProposals']);
@@ -96,4 +260,300 @@ Route::middleware(['auth:web'])->group(function () {
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
     Route::get('/admin/departments', [AdminUserController::class, 'getDepartments']);
+    
+    // Template management - Proponent templates
+    Route::get('/admin/templates/proponent', function (Request $request) {
+        $templates = [];
+        $path = storage_path('app/public/templates/proponent');
+        
+        if (file_exists($path)) {
+            // Load metadata
+            $metadataPath = storage_path('app/public/templates/proponent/.metadata.json');
+            $metadata = [];
+            if (file_exists($metadataPath)) {
+                $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+            }
+            
+            $files = \File::files($path);
+            foreach ($files as $file) {
+                $filename = $file->getFilename();
+                // Skip metadata file
+                if ($filename === '.metadata.json') continue;
+                
+                // Use custom name from metadata if available, otherwise use filename
+                $customName = $metadata[$filename]['customName'] ?? pathinfo($filename, PATHINFO_FILENAME);
+                
+                $templates[] = [
+                    'id' => md5($filename),
+                    'name' => $customName,
+                    'fileName' => $filename,
+                    'filePath' => '/storage/templates/proponent/' . $filename,
+                    'url' => asset('storage/templates/proponent/' . $filename),
+                    'type' => $file->getExtension(),
+                    'size' => round($file->getSize() / 1024, 2) . ' KB',
+                    'created_at' => date('Y-m-d H:i:s', $file->getMTime()),
+                ];
+            }
+        }
+        
+        return response()->json($templates);
+    });
+    
+    Route::post('/admin/templates/proponent', function (Request $request) {
+        // Debug: Log what we received
+        \Log::info('Proponent template upload attempt', [
+            'has_file' => $request->hasFile('file'),
+            'all_files' => $request->allFiles(),
+            'all_input' => $request->all(),
+        ]);
+        
+        try {
+            $validated = $request->validate([
+                'file' => 'required|file|max:20480', // 20MB
+                'name' => 'nullable|string|max:255',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('Proponent template validation failed', ['errors' => $e->errors()]);
+            $errorMessage = 'Validation failed';
+            if (isset($e->errors()['file']) && str_contains(json_encode($e->errors()['file']), 'failed to upload')) {
+                $errorMessage = 'File upload failed. Please ensure your file is under 20MB. Current PHP upload_max_filesize: ' . ini_get('upload_max_filesize');
+            }
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage,
+                'errors' => $e->errors()
+            ], 422);
+        }
+        
+        try {
+            $file = $request->file('file');
+            if (!$file || !$file->isValid()) {
+                throw new \Exception('Invalid file upload');
+            }
+            
+            $templateName = $request->name ?: pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $filePath = $file->storeAs('templates/proponent', $fileName, 'public');
+            
+            // Store metadata (custom name) in a JSON file
+            $metadataPath = storage_path('app/public/templates/proponent/.metadata.json');
+            $metadata = [];
+            if (file_exists($metadataPath)) {
+                $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+            }
+            $metadata[$fileName] = [
+                'customName' => $templateName,
+                'originalName' => $file->getClientOriginalName(),
+                'uploadedAt' => now()->toDateTimeString(),
+            ];
+            file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
+            
+            // For now, return success - will be saved to database later
+            return response()->json([
+                'success' => true,
+                'message' => 'Proponent template uploaded successfully',
+                'data' => [
+                    'id' => md5($fileName),
+                    'name' => $templateName,
+                    'fileName' => $fileName,
+                    'filePath' => '/storage/' . $filePath,
+                    'url' => asset('storage/' . $filePath),
+                    'type' => $file->getClientOriginalExtension(),
+                    'size' => round($file->getSize() / 1024, 2) . ' KB',
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload template: ' . $e->getMessage()
+            ], 500);
+        }
+    });
+    
+    Route::delete('/admin/templates/proponent/{id}', function (Request $request, $id) {
+        try {
+            $path = storage_path('app/public/templates/proponent');
+            if (file_exists($path)) {
+                $files = \File::files($path);
+                foreach ($files as $file) {
+                    $filename = $file->getFilename();
+                    if ($filename === '.metadata.json') continue;
+                    
+                    if (md5($filename) === $id) {
+                        \Storage::disk('public')->delete('templates/proponent/' . $filename);
+                        
+                        // Remove from metadata
+                        $metadataPath = storage_path('app/public/templates/proponent/.metadata.json');
+                        if (file_exists($metadataPath)) {
+                            $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+                            unset($metadata[$filename]);
+                            file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
+                        }
+                        
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'Proponent template deleted successfully'
+                        ]);
+                    }
+                }
+            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete template: ' . $e->getMessage()
+            ], 500);
+        }
+    });
+    
+    // Template management - General templates
+    Route::get('/admin/templates/general', function (Request $request) {
+        $templates = [];
+        $path = storage_path('app/public/templates/general');
+        
+        if (file_exists($path)) {
+            // Load metadata
+            $metadataPath = storage_path('app/public/templates/general/.metadata.json');
+            $metadata = [];
+            if (file_exists($metadataPath)) {
+                $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+            }
+            
+            $files = \File::files($path);
+            foreach ($files as $file) {
+                $filename = $file->getFilename();
+                // Skip metadata file
+                if ($filename === '.metadata.json') continue;
+                
+                // Use custom name from metadata if available, otherwise use filename
+                $customName = $metadata[$filename]['customName'] ?? pathinfo($filename, PATHINFO_FILENAME);
+                
+                $templates[] = [
+                    'id' => md5($filename),
+                    'name' => $customName,
+                    'fileName' => $filename,
+                    'filePath' => '/storage/templates/general/' . $filename,
+                    'url' => asset('storage/templates/general/' . $filename),
+                    'type' => $file->getExtension(),
+                    'size' => round($file->getSize() / 1024, 2) . ' KB',
+                    'created_at' => date('Y-m-d H:i:s', $file->getMTime()),
+                ];
+            }
+        }
+        
+        return response()->json($templates);
+    });
+    
+    Route::post('/admin/templates/general', function (Request $request) {
+        // Debug: Log what we received
+        \Log::info('General template upload attempt', [
+            'has_file' => $request->hasFile('file'),
+            'all_files' => $request->allFiles(),
+            'all_input' => $request->all(),
+        ]);
+        
+        try {
+            $validated = $request->validate([
+                'file' => 'required|file|max:20480', // 20MB
+                'name' => 'nullable|string|max:255',
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            \Log::error('General template validation failed', ['errors' => $e->errors()]);
+            $errorMessage = 'Validation failed';
+            if (isset($e->errors()['file']) && str_contains(json_encode($e->errors()['file']), 'failed to upload')) {
+                $errorMessage = 'File upload failed. Please ensure your file is under 20MB. Current PHP upload_max_filesize: ' . ini_get('upload_max_filesize');
+            }
+            return response()->json([
+                'success' => false,
+                'message' => $errorMessage,
+                'errors' => $e->errors()
+            ], 422);
+        }
+        
+        try {
+            $file = $request->file('file');
+            if (!$file || !$file->isValid()) {
+                throw new \Exception('Invalid file upload');
+            }
+            
+            $templateName = $request->name ?: pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $filePath = $file->storeAs('templates/general', $fileName, 'public');
+            
+            // Store metadata (custom name) in a JSON file
+            $metadataPath = storage_path('app/public/templates/general/.metadata.json');
+            $metadata = [];
+            if (file_exists($metadataPath)) {
+                $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+            }
+            $metadata[$fileName] = [
+                'customName' => $templateName,
+                'originalName' => $file->getClientOriginalName(),
+                'uploadedAt' => now()->toDateTimeString(),
+            ];
+            file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
+            
+            // For now, return success - will be saved to database later
+            return response()->json([
+                'success' => true,
+                'message' => 'General template uploaded successfully',
+                'data' => [
+                    'id' => md5($fileName),
+                    'name' => $templateName,
+                    'fileName' => $fileName,
+                    'filePath' => '/storage/' . $filePath,
+                    'url' => asset('storage/' . $filePath),
+                    'type' => $file->getClientOriginalExtension(),
+                    'size' => round($file->getSize() / 1024, 2) . ' KB',
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to upload template: ' . $e->getMessage()
+            ], 500);
+        }
+    });
+    
+    Route::delete('/admin/templates/general/{id}', function (Request $request, $id) {
+        try {
+            $path = storage_path('app/public/templates/general');
+            if (file_exists($path)) {
+                $files = \File::files($path);
+                foreach ($files as $file) {
+                    $filename = $file->getFilename();
+                    if ($filename === '.metadata.json') continue;
+                    
+                    if (md5($filename) === $id) {
+                        \Storage::disk('public')->delete('templates/general/' . $filename);
+                        
+                        // Remove from metadata
+                        $metadataPath = storage_path('app/public/templates/general/.metadata.json');
+                        if (file_exists($metadataPath)) {
+                            $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+                            unset($metadata[$filename]);
+                            file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
+                        }
+                        
+                        return response()->json([
+                            'success' => true,
+                            'message' => 'General template deleted successfully'
+                        ]);
+                    }
+                }
+            }
+            return response()->json([
+                'success' => false,
+                'message' => 'Template not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete template: ' . $e->getMessage()
+            ], 500);
+        }
+    });
 });

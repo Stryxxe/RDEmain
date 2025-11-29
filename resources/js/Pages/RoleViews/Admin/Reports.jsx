@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
-import { useAuth } from "../../../contexts/AuthContext";
-import { useAdmin } from "../../../contexts/AdminContext";
 import {
     FiDownload,
     FiTrendingUp,
@@ -9,46 +7,37 @@ import {
     FiBarChart,
     FiTarget,
 } from "react-icons/fi";
-import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AdminLayout from "../../../Components/Layouts/AdminLayout";
 
 const Reports = () => {
-    const { user } = useAuth();
-    const { props } = usePage();
-    const { users } = useAdmin();
+    const { auth } = usePage().props;
+    const currentUser = auth?.user;
+    const [users, setUsers] = useState([]);
 
-    // Get user from Inertia props (more reliable than context on initial load)
-    const currentUser = user || props?.auth?.user;
-
-    // Validate authentication and role
+    // Fetch users for reports
     useEffect(() => {
-        // Prevent redirect loop - check if we're already on login page
-        if (
-            window.location.pathname === "/login" ||
-            window.location.pathname === "/"
-        ) {
-            return;
-        }
-
-        // Wait a bit for user to be available (in case of initial page load)
-        const checkAuth = setTimeout(() => {
-            if (!currentUser) {
-                router.visit("/login");
-                return;
+        const fetchUsers = async () => {
+            try {
+                const response = await fetch('/api/admin/users', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    setUsers(data.users || []);
+                }
+            } catch (error) {
+                console.error('Error fetching users:', error);
             }
+        };
 
-            // Check if user is an Admin or Administrator
-            const isAdmin =
-                currentUser.role?.userRole === "Admin" ||
-                currentUser.role?.userRole === "Administrator";
+        fetchUsers();
+    }, []);
 
-            if (!isAdmin) {
-                router.visit("/dashboard");
-                return;
-            }
-        }, 100);
-
-        return () => clearTimeout(checkAuth);
-    }, [currentUser]);
     const [selectedReport, setSelectedReport] = useState("user-summary");
     const [dateRange, setDateRange] = useState("30");
     const [loading, setLoading] = useState(false);
@@ -92,15 +81,16 @@ const Reports = () => {
     })();
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <div>
-                    <h1 className="text-2xl font-bold text-gray-900">
-                        Reports
-                    </h1>
-                    <p className="mt-1 text-sm text-gray-600">
-                        Generate and download system reports
-                    </p>
+        <AdminLayout>
+            <div className="space-y-6">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-2xl font-bold text-gray-900">
+                            Reports
+                        </h1>
+                        <p className="mt-1 text-sm text-gray-600">
+                            Generate and download system reports
+                        </p>
                 </div>
                 <div className="flex space-x-3">
                     <button
@@ -361,11 +351,8 @@ const Reports = () => {
                 </div>
             </div>
         </div>
+        </AdminLayout>
     );
 };
-
-Reports.layout = (page) => (
-    <RoleBasedLayout roleName="Administrator">{page}</RoleBasedLayout>
-);
 
 export default Reports;

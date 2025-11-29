@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAdmin } from '../../contexts/AdminContext';
 import { FiX, FiUser, FiMail, FiPhone, FiHome } from 'react-icons/fi';
 import axios from 'axios';
 
@@ -11,7 +10,6 @@ if (!window.axios) {
 }
 
 const UserFormFixed = ({ user, onClose }) => {
-  const { addUser, updateUser } = useAdmin();
   const [departments, setDepartments] = useState([]);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [formData, setFormData] = useState({
@@ -94,10 +92,19 @@ const UserFormFixed = ({ user, onClose }) => {
     if (!validateForm()) return;
     try {
       if (user) {
-        await updateUser(user.id, formData);
+        // Update existing user via API
+        await axiosInstance.put(`/admin/users/${user.id || user.userID}`, formData, {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true,
+        });
         alert('User updated successfully!');
       } else {
-        const result = await addUser(formData);
+        // Create new user via API
+        const response = await axiosInstance.post('/admin/users', formData, {
+          headers: { 'Accept': 'application/json' },
+          withCredentials: true,
+        });
+        const result = response?.data;
         if (result?.temporaryPassword) {
           alert(`User added successfully! Temporary password: ${result.temporaryPassword}`);
         } else {
@@ -138,16 +145,16 @@ const UserFormFixed = ({ user, onClose }) => {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">First Name *</label>
                     <div className="relative">
-                      <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} className={`admin-input pl-10 ${errors.firstName ? 'border-red-500' : ''}`} placeholder="Enter first name" />
+                      <FiUser className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
+                      <input type="text" name="firstName" value={formData.firstName} onChange={handleChange} className={`admin-input pl-10 placeholder-gray-400 ${errors.firstName ? 'border-red-500' : ''}`} placeholder="Enter first name" />
                     </div>
                     {errors.firstName && <p className="mt-1 text-sm text-red-600">{errors.firstName}</p>}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Last Name *</label>
                     <div className="relative">
-                      <FiUser className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                      <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} className={`admin-input pl-10 ${errors.lastName ? 'border-red-500' : ''}`} placeholder="Enter last name" />
+                      <FiUser className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
+                      <input type="text" name="lastName" value={formData.lastName} onChange={handleChange} className={`admin-input pl-10 placeholder-gray-400 ${errors.lastName ? 'border-red-500' : ''}`} placeholder="Enter last name" />
                     </div>
                     {errors.lastName && <p className="mt-1 text-sm text-red-600">{errors.lastName}</p>}
                   </div>
@@ -155,23 +162,23 @@ const UserFormFixed = ({ user, onClose }) => {
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Email *</label>
                   <div className="relative">
-                    <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input type="email" name="email" value={formData.email} onChange={handleChange} className={`admin-input pl-10 ${errors.email ? 'border-red-500' : ''}`} placeholder="Enter email address" />
+                    <FiMail className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
+                    <input type="email" name="email" value={formData.email} onChange={handleChange} className={`admin-input pl-10 placeholder-gray-400 ${errors.email ? 'border-red-500' : ''}`} placeholder="Enter email address" />
                   </div>
                   {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Phone *</label>
                   <div className="relative">
-                    <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`admin-input pl-10 ${errors.phone ? 'border-red-500' : ''}`} placeholder="Enter phone number" />
+                    <FiPhone className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" aria-hidden="true" />
+                    <input type="tel" name="phone" value={formData.phone} onChange={handleChange} className={`admin-input pl-10 placeholder-gray-400 ${errors.phone ? 'border-red-500' : ''}`} placeholder="Enter phone number" />
                   </div>
                   {errors.phone && <p className="mt-1 text-sm text-red-600">{errors.phone}</p>}
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Department *</label>
                   <div className="relative">
-                    <FiHome className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4 z-10" />
+                    <FiHome className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 z-10" aria-hidden="true" />
                     {loadingDepartments ? (
                       <div className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''} bg-gray-50`}>
                         <span className="text-gray-500 text-sm">Loading departments...</span>
@@ -183,7 +190,7 @@ const UserFormFixed = ({ user, onClose }) => {
                         onChange={handleChange} 
                         className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''}`}
                       >
-                        <option value="">-- Select a department --</option>
+                        <option value="">Select a department</option>
                         {departments.map((dept) => (
                           <option key={dept.departmentID} value={dept.name || dept.departmentName}>
                             {dept.name || dept.departmentName}
@@ -196,7 +203,7 @@ const UserFormFixed = ({ user, onClose }) => {
                         name="department" 
                         value={formData.department} 
                         onChange={handleChange} 
-                        className={`admin-input pl-10 ${errors.department ? 'border-red-500' : ''}`} 
+                        className={`admin-input pl-10 placeholder-gray-400 ${errors.department ? 'border-red-500' : ''}`} 
                         placeholder="Enter department" 
                       />
                     )}

@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
-import { router, usePage } from '@inertiajs/react';
-import { useAuth } from '../../../contexts/AuthContext';
-import { useAdmin } from '../../../contexts/AdminContext';
+import React, { useEffect, useState } from 'react';
+import { usePage } from '@inertiajs/react';
 import { FiUsers, FiUserCheck, FiUserX, FiClock, FiFileText, FiSettings } from 'react-icons/fi';
+import AdminLayout from '../../../Components/Layouts/AdminLayout';
 
 const StatCard = ({ title, value, change, icon: Icon, color = 'blue' }) => {
   const colorClasses = {
@@ -95,39 +94,41 @@ const UserRoleChart = ({ users }) => {
 };
 
 const AdminDashboard = () => {
-  const { user } = useAuth();
-  const { props } = usePage();
-  const { users, loading } = useAdmin();
-  
-  // Get user from Inertia props (more reliable than context on initial load)
-  const currentUser = user || props?.auth?.user;
+  const { auth } = usePage().props;
+  const currentUser = auth?.user;
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Validate authentication and role
+  // Fetch users from API
   useEffect(() => {
-    // Prevent redirect loop - check if we're already on login page
-    if (window.location.pathname === '/login' || window.location.pathname === '/') {
-      return;
-    }
-
-    // Wait a bit for user to be available (in case of initial page load)
-    const checkAuth = setTimeout(() => {
-      if (!currentUser) {
-        router.visit('/login');
-        return;
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const response = await fetch('/api/admin/users', {
+          headers: {
+            'Accept': 'application/json',
+            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+          },
+          credentials: 'include'
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          setUsers(data.users || data || []);
+        } else {
+          console.error('Failed to fetch users');
+          setUsers([]);
+        }
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        setUsers([]);
+      } finally {
+        setLoading(false);
       }
-      
-      // Check if user is an Admin or Administrator
-      const isAdmin = currentUser.role?.userRole === 'Admin' || 
-                     currentUser.role?.userRole === 'Administrator';
-      
-      if (!isAdmin) {
-        router.visit('/dashboard');
-        return;
-      }
-    }, 100);
+    };
 
-    return () => clearTimeout(checkAuth);
-  }, [currentUser]);
+    fetchUsers();
+  }, []);
 
   if (loading) {
     return (
@@ -155,12 +156,17 @@ const AdminDashboard = () => {
   ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-gray-600">Welcome to the Research Management System Admin Panel</p>
-      </div>
+    <AdminLayout>
+      <div className="space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="mt-1 text-sm text-gray-600">
+            Welcome to the Research Management System Admin Panel
+          </p>
+        </div>
 
+        {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Users" value={totalUsers} change={null} icon={FiUsers} color="blue" />
         <StatCard title="Active Users" value={`${activeUsers} (${activePct}%)`} change={activePct} icon={FiUserCheck} color="green" />
@@ -172,31 +178,8 @@ const AdminDashboard = () => {
         <UserRoleChart users={users} />
         <RecentActivity activities={recentActivities} />
       </div>
-
-      <div className="admin-card">
-        <h3 className="text-lg font-medium text-gray-900 mb-4">Quick Actions</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors">
-            <div className="text-center">
-              <FiUsers className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700">Add New User</p>
-            </div>
-          </button>
-          <button className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors">
-            <div className="text-center">
-              <FiFileText className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700">Generate Report</p>
-            </div>
-          </button>
-          <button className="flex items-center justify-center p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-primary-500 hover:bg-primary-50 transition-colors">
-            <div className="text-center">
-              <FiSettings className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-              <p className="text-sm font-medium text-gray-700">System Settings</p>
-            </div>
-          </button>
-        </div>
       </div>
-    </div>
+    </AdminLayout>
   );
 };
 

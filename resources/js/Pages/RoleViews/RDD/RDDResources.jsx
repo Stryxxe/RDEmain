@@ -7,8 +7,8 @@ import {
     BiCalendar,
     BiUser,
 } from "react-icons/bi";
-import rddService from "../../../services/rddService";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import axios from "axios";
 
 const RDDResources = () => {
     const [searchTerm, setSearchTerm] = useState("");
@@ -18,6 +18,12 @@ const RDDResources = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const axiosInstance = window.axios || axios;
+    if (!window.axios) {
+        axiosInstance.defaults.withCredentials = true;
+        axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+    }
+
     useEffect(() => {
         fetchResources();
     }, []);
@@ -26,12 +32,25 @@ const RDDResources = () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await rddService.getResources();
-            if (response.success) {
-                setResources(response.data);
-            } else {
-                setError("Failed to fetch resources");
-            }
+            const response = await axiosInstance.get("/admin/templates/general", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            const templates = response?.data?.data || response?.data || [];
+            // Map templates to RDD resource format
+            const mapped = templates.map((template) => ({
+                id: template.id || template.templateID,
+                title: template.name || template.fileName || "Untitled",
+                description: template.description || "Document template",
+                type: (template.type || template.fileType || "FILE").toUpperCase(),
+                fileSize: template.size || template.fileSize || "—",
+                category: "Templates",
+                tags: ["Template", template.type || "Document"],
+                uploadedBy: "Admin",
+                uploadDate: template.createdAt || template.created_at || new Date().toISOString(),
+                downloadUrl: template.url || template.filePath || "#",
+            }));
+            setResources(mapped);
         } catch (err) {
             console.error("Error fetching resources:", err);
             setError("Error loading resources");

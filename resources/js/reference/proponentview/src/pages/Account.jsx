@@ -211,16 +211,6 @@ const Account = () => {
                 Change
               </button>
             </div>
-            
-            <div className="flex justify-between items-center py-3 border-b border-gray-100">
-              <div>
-                <h3 className="text-sm font-medium text-gray-900">Two-Factor Authentication</h3>
-                <p className="text-sm text-gray-500">Add an extra layer of security to your account</p>
-              </div>
-              <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                Enable
-              </button>
-            </div>
           </div>
         </div>
       </div>

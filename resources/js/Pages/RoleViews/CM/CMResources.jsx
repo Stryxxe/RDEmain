@@ -1,6 +1,11 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
+
+const axiosInstance = window.axios.create({
+    baseURL: "/api",
+    withCredentials: true,
+});
 
 // Document card component with improved design
 const DocumentCard = ({ document, onDownload, onViewPDF }) => (
@@ -88,58 +93,35 @@ const CMResources = () => {
     const [showPDFModal, setShowPDFModal] = useState(false);
     const [selectedDocument, setSelectedDocument] = useState(null);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [documents, setDocuments] = useState([]);
+    const [loading, setLoading] = useState(true);
 
-    // Sample documents data
-    const documents = [
-        {
-            id: 1,
-            title: "Monitoring Minutes - Q1 2024",
-            description:
-                "Comprehensive quarterly monitoring report covering key performance indicators and milestone achievements for the first quarter of 2024.",
-            fileName: "Monitoring-Minutes-Q1-2024.pdf",
-            fileSize: "2.5 MB",
-        },
-        {
-            id: 2,
-            title: "Monitoring Minutes - Q2 2024",
-            description:
-                "Second quarter monitoring documentation with detailed analysis and recommendations for ongoing projects and initiatives.",
-            fileName: "Monitoring-Minutes-Q2-2024.pdf",
-            fileSize: "3.1 MB",
-        },
-        {
-            id: 3,
-            title: "Research Monitoring Evaluation Form",
-            description:
-                "Standardized evaluation framework for research project monitoring and assessment procedures used across all departments.",
-            fileName: "Research-Monitoring-Evaluation-Form.pdf",
-            fileSize: "4.2 MB",
-        },
-        {
-            id: 4,
-            title: "Advanced Research Evaluation Template",
-            description:
-                "Enhanced evaluation template with advanced metrics and comprehensive assessment criteria for complex research projects.",
-            fileName: "Advanced-Research-Evaluation-Template.pdf",
-            fileSize: "5.8 MB",
-        },
-        {
-            id: 5,
-            title: "Annual Compliance Report 2024",
-            description:
-                "Complete annual report documenting compliance status and regulatory adherence across all organizational units and processes.",
-            fileName: "Annual-Compliance-Report-2024.pdf",
-            fileSize: "7.3 MB",
-        },
-        {
-            id: 6,
-            title: "Research Guidelines & Standards",
-            description:
-                "Comprehensive guidelines for research methodology, data collection, and reporting standards for academic research.",
-            fileName: "Research-Guidelines-Standards.pdf",
-            fileSize: "3.8 MB",
-        },
-    ];
+    // Fetch templates from admin
+    useEffect(() => {
+        const fetchTemplates = async () => {
+            try {
+                setLoading(true);
+                const response = await axiosInstance.get("/admin/templates/general");
+                // Map templates to document format
+                const mapped = response.data.map((template) => ({
+                    id: template.id,
+                    title: template.name,
+                    description: template.description || `Template document: ${template.name}`,
+                    fileName: template.file_name || template.name,
+                    fileSize: template.file_size || "Unknown",
+                    downloadUrl: template.url || template.download_url,
+                }));
+                setDocuments(mapped);
+            } catch (error) {
+                console.error("Failed to fetch templates:", error);
+                setDocuments([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchTemplates();
+    }, []);
 
     // Event handlers with useCallback for performance
     const handleDownload = useCallback((document) => {
@@ -152,25 +134,12 @@ const CMResources = () => {
         setShowPDFModal(true);
     }, []);
 
-    const confirmDownload = async () => {
-        if (!selectedDocument) return;
+    const confirmDownload = () => {
+        if (!selectedDocument || !selectedDocument.downloadUrl) return;
 
-        setIsDownloading(true);
-        try {
-            // Simulate download process
-            await new Promise((resolve) => setTimeout(resolve, 1500));
-
-            // In a real app, this would trigger the actual download
-            console.log(`Downloading ${selectedDocument.fileName}...`);
-
-            // Show success message (you might want to replace this with a toast notification)
-            alert(`${selectedDocument.fileName} downloaded successfully!`);
-        } catch {
-            alert("Download failed. Please try again.");
-        } finally {
-            setIsDownloading(false);
-            closeModal();
-        }
+        // Open download URL in new tab
+        window.open(selectedDocument.downloadUrl, "_blank");
+        closeModal();
     };
 
     const closeModal = useCallback(() => {
@@ -247,8 +216,15 @@ const CMResources = () => {
                     </div>
                 </div>
 
+                {/* Loading state */}
+                {loading && (
+                    <div className="flex justify-center items-center py-12">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+                    </div>
+                )}
+
                 {/* Results count */}
-                {searchTerm && (
+                {!loading && searchTerm && (
                     <div className="mb-8 text-center">
                         <p className="text-gray-600 bg-white rounded-full px-4 py-2 inline-block shadow-sm border">
                             <span className="font-medium text-red-600">
@@ -270,17 +246,18 @@ const CMResources = () => {
                 )}
 
                 {/* Document Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    {filteredDocuments.length > 0 ? (
-                        filteredDocuments.map((document) => (
-                            <DocumentCard
-                                key={document.id}
-                                document={document}
-                                onDownload={handleDownload}
-                                onViewPDF={handleViewPDF}
-                            />
-                        ))
-                    ) : (
+                {!loading && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        {filteredDocuments.length > 0 ? (
+                            filteredDocuments.map((document) => (
+                                <DocumentCard
+                                    key={document.id}
+                                    document={document}
+                                    onDownload={handleDownload}
+                                    onViewPDF={handleViewPDF}
+                                />
+                            ))
+                        ) : (
                         <div className="col-span-full text-center py-16">
                             <div className="max-w-md mx-auto">
                                 <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -317,7 +294,8 @@ const CMResources = () => {
                             </div>
                         </div>
                     )}
-                </div>
+                    </div>
+                )}
 
                 {/* Download Confirmation Modal */}
                 {showDownloadModal && (

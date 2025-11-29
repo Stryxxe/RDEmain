@@ -72,7 +72,7 @@ Route::middleware('auth:web')->group(function () {
     // Admin Routes
     // ============================================================================
     Route::prefix('admin')->name('admin.')->group(function () {
-        Route::get('/', fn() => Inertia::render('Dashboard'))->name('dashboard');
+        Route::get('/', fn() => Inertia::render('RoleViews/Dashboards/AdminDashboard'))->name('dashboard');
         Route::get('/user-management', fn() => Inertia::render('RoleViews/Admin/UserManagement'))->name('user-management');
         Route::get('/system-settings', fn() => Inertia::render('RoleViews/Admin/SystemSettings'))->name('system-settings');
         Route::get('/reports', fn() => Inertia::render('RoleViews/Admin/Reports'))->name('reports');

@@ -5,6 +5,7 @@ import { useAuth } from "../contexts/AuthContext";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../Components/Layouts/AppLayout";
 import Breadcrumbs from "../Components/Breadcrumbs";
+import AvatarUpload from "../Components/AvatarUpload";
 
 const Account = () => {
     const { user } = useAuth();
@@ -20,6 +21,16 @@ const Account = () => {
     });
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState("");
+    
+    // Password change state
+    const [changingPassword, setChangingPassword] = useState(false);
+    const [passwordData, setPasswordData] = useState({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+    });
+    const [passwordError, setPasswordError] = useState("");
+    const [passwordSuccess, setPasswordSuccess] = useState("");
 
     // Validate authentication on mount
     useEffect(() => {
@@ -65,6 +76,52 @@ const Account = () => {
             ...prev,
             [field]: value,
         }));
+    };
+
+    const handlePasswordChange = async () => {
+        setPasswordError("");
+        setPasswordSuccess("");
+
+        // Validation
+        if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+            setPasswordError("All fields are required");
+            return;
+        }
+
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setPasswordError("New passwords do not match");
+            return;
+        }
+
+        if (passwordData.newPassword.length < 8) {
+            setPasswordError("New password must be at least 8 characters");
+            return;
+        }
+
+        try {
+            const response = await window.axios.post("/api/user/change-password", {
+                current_password: passwordData.currentPassword,
+                new_password: passwordData.newPassword,
+                new_password_confirmation: passwordData.confirmPassword,
+            });
+
+            if (response.data.success) {
+                setPasswordSuccess("Password changed successfully!");
+                setPasswordData({
+                    currentPassword: "",
+                    newPassword: "",
+                    confirmPassword: "",
+                });
+                setTimeout(() => {
+                    setChangingPassword(false);
+                    setPasswordSuccess("");
+                }, 2000);
+            }
+        } catch (error) {
+            setPasswordError(
+                error.response?.data?.message || "Failed to change password. Please try again."
+            );
+        }
     };
 
     const handleSave = async () => {
@@ -141,7 +198,26 @@ const Account = () => {
 
             {/* Content Section - Centered with consistent width */}
             <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
-                <div className="max-w-7xl mx-auto">
+                <div className="max-w-7xl mx-auto space-y-6">
+                    {/* Avatar Section */}
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 w-full">
+                        <div className="flex flex-col items-center space-y-4">
+                            <AvatarUpload
+                                currentAvatar={user?.avatar}
+                                firstName={formData.firstName}
+                                lastName={formData.lastName}
+                                onSuccess={(avatar) => setMessage("Avatar updated successfully!")}
+                                onError={(error) => setMessage(error)}
+                            />
+                            <div className="text-center">
+                                <h3 className="text-xl font-semibold text-gray-900">
+                                    {formData.firstName} {formData.lastName}
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">{formData.email}</p>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Profile Information */}
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 w-full">
                         <div className="flex justify-between items-center mb-6">
@@ -280,37 +356,119 @@ const Account = () => {
                             Security Settings
                         </h2>
 
-                        <div className="space-y-4">
-                            <div className="flex justify-between items-center py-3 border-b border-gray-100">
-                                <div>
-                                    <h3 className="text-base font-medium text-gray-900">
-                                        Change Password
-                                    </h3>
-                                    <p className="text-base text-gray-500">
-                                        Update your password to keep your
-                                        account secure
-                                    </p>
+                        {!changingPassword ? (
+                            <div className="space-y-4">
+                                <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                                    <div>
+                                        <h3 className="text-base font-medium text-gray-900">
+                                            Change Password
+                                        </h3>
+                                        <p className="text-base text-gray-500">
+                                            Update your password to keep your
+                                            account secure
+                                        </p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setChangingPassword(true)}
+                                        className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                                    >
+                                        Change
+                                    </button>
                                 </div>
-                                <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                                    Change
-                                </button>
                             </div>
+                        ) : (
+                            <div className="space-y-6">
+                                {passwordError && (
+                                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                                        <p className="text-sm text-red-600">{passwordError}</p>
+                                    </div>
+                                )}
+                                
+                                {passwordSuccess && (
+                                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                                        <p className="text-sm text-green-600">{passwordSuccess}</p>
+                                    </div>
+                                )}
 
-                            <div className="flex justify-between items-center py-3 border-b border-gray-100">
                                 <div>
-                                    <h3 className="text-base font-medium text-gray-900">
-                                        Two-Factor Authentication
-                                    </h3>
-                                    <p className="text-base text-gray-500">
-                                        Add an extra layer of security to your
-                                        account
-                                    </p>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Current Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.currentPassword}
+                                        onChange={(e) =>
+                                            setPasswordData({
+                                                ...passwordData,
+                                                currentPassword: e.target.value,
+                                            })
+                                        }
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        placeholder="Enter current password"
+                                    />
                                 </div>
-                                <button className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">
-                                    Enable
-                                </button>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        New Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.newPassword}
+                                        onChange={(e) =>
+                                            setPasswordData({
+                                                ...passwordData,
+                                                newPassword: e.target.value,
+                                            })
+                                        }
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        placeholder="Enter new password (min. 8 characters)"
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        Confirm New Password
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={passwordData.confirmPassword}
+                                        onChange={(e) =>
+                                            setPasswordData({
+                                                ...passwordData,
+                                                confirmPassword: e.target.value,
+                                            })
+                                        }
+                                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                        placeholder="Confirm new password"
+                                    />
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button
+                                        onClick={handlePasswordChange}
+                                        className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                                    >
+                                        Update Password
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setChangingPassword(false);
+                                            setPasswordData({
+                                                currentPassword: "",
+                                                newPassword: "",
+                                                confirmPassword: "",
+                                            });
+                                            setPasswordError("");
+                                            setPasswordSuccess("");
+                                        }}
+                                        className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
-                        </div>
+                        )}
                     </div>
 
                     {/* Logout Section */}

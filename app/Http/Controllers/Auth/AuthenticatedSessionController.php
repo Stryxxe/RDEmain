@@ -70,6 +70,7 @@ class AuthenticatedSessionController extends Controller
 
         // Map role names to their route prefixes
         $roleMap = [
+            'admin' => 'admin',
             'administrator' => 'admin',
             'rdd' => 'rdd',
             'cm' => 'cm',
