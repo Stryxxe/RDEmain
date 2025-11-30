@@ -8,7 +8,8 @@ const FileUpload = ({
   required = false, 
   hint = '', 
   accept = '.pdf,.doc,.docx',
-  selectedFile = null
+  selectedFile = null,
+  maxSizeMB = 5
 }) => {
   const [file, setFile] = useState(selectedFile);
   const fileInputRef = useRef(null);
@@ -36,10 +37,10 @@ const FileUpload = ({
         return;
       }
       
-      // Validate file size (5MB max)
-      const maxSize = 5 * 1024 * 1024; // 5MB
+      // Validate file size (dynamic max from settings)
+      const maxSize = maxSizeMB * 1024 * 1024;
       if (selectedFile.size > maxSize) {
-        alert(`File size exceeds 5MB limit. Please select a smaller file.`);
+        alert(`File size exceeds ${maxSizeMB}MB limit. Please select a smaller file.`);
         e.target.value = ''; // Reset input
         return;
       }

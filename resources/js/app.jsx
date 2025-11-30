@@ -7,6 +7,7 @@ import { createInertiaApp, router } from "@inertiajs/react";
 import { resolvePageComponent } from "laravel-vite-plugin/inertia-helpers";
 import AppLayout from "./Components/Layouts/AppLayout";
 import ScrollToTop from "./Components/ScrollToTop";
+import { AuthProvider } from "./contexts/AuthContext";
 
 // Update CSRF token meta tag after each Inertia navigation
 // This ensures the token is always fresh after login/logout
@@ -36,10 +37,10 @@ createInertiaApp({
         const root = createRoot(el);
 
         root.render(
-            <>
+            <AuthProvider>
                 <ScrollToTop />
                 <App {...props} />
-            </>
+            </AuthProvider>
         );
     },
     progress: {

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
-import { useMessages } from "../contexts/MessageContext";
-import { useAuth } from "../contexts/AuthContext";
+// Removed context dependencies to avoid hook errors in Inertia layouts
 import {
     MessageCircle,
     Send,
@@ -15,6 +14,9 @@ import AutoRefreshControls from "../Components/AutoRefreshControls";
 import RefreshStatusIndicator from "../Components/RefreshStatusIndicator";
 import axios from "axios";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
+import { AuthProvider } from "../contexts/AuthContext";
+import { MessageProvider, useMessages } from "../contexts/MessageContext";
+import { NotificationProvider } from "../contexts/NotificationContext";
 
 // Use window.axios which has session-based auth configured, or configure this instance
 const axiosInstance = window.axios || axios;
@@ -24,7 +26,7 @@ if (!window.axios) {
 }
 
 const Messages = () => {
-    const { url } = usePage();
+    const { url, props } = usePage();
     const searchParams = new URLSearchParams(url.split("?")[1] || "");
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedConversation, setSelectedConversation] = useState(null);
@@ -41,7 +43,7 @@ const Messages = () => {
     });
     const [startingConversation, setStartingConversation] = useState(false);
 
-    const { user } = useAuth();
+    const user = props?.auth?.user;
     const {
         conversations,
         currentConversation,
@@ -929,11 +931,14 @@ const Messages = () => {
     );
 };
 
-Messages.layout = (page) => {
-    const { props } = usePage();
-    const user = props?.auth?.user;
-    const roleName = user?.role?.userRole || "User";
-    return <RoleBasedLayout roleName={roleName}>{page}</RoleBasedLayout>;
-};
+Messages.layout = (page) => (
+    <AuthProvider>
+        <MessageProvider>
+            <NotificationProvider>
+                <RoleBasedLayout>{page}</RoleBasedLayout>
+            </NotificationProvider>
+        </MessageProvider>
+    </AuthProvider>
+);
 
 export default Messages;

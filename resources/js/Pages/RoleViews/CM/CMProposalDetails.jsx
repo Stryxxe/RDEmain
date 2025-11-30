@@ -208,24 +208,23 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
       const responseData = response.data;
       
       if (responseData.success) {
-        alert('Proposal endorsed successfully!');
+        const proposalTitle = fullProposal.researchTitle || fullProposal.title || 'Untitled';
+        const proponentName = fullProposal.user?.fullName || fullProposal.user?.firstName + ' ' + fullProposal.user?.lastName || 'Unknown';
+        const proposalId = fullProposal.proposalID || fullProposal.id;
+        
+        alert(`Successfully endorsed proposal "${proposalTitle}" by ${proponentName}!`);
         setIsEndorsed(true);
         setEndorsementData(responseData.data);
         setShowEndorsementModal(false);
         setEndorsementComments('');
-        // Refresh the endorsement status
-        handleRefresh();
         
         // Notify parent component that this proposal has been endorsed
-        const proposalId = fullProposal.proposalID || fullProposal.id;
         if (onEndorsed && proposalId) {
           onEndorsed(proposalId);
         }
 
-        // Redirect to CM dashboard's proposal details view for this proposal
-        if (proposalId) {
-          router.visit(`/cm/proposal/${proposalId}`, { replace: true });
-        }
+        // Navigate back to review proposal list page
+        router.visit('/cm/review-proposal', { replace: true });
       } else {
         alert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }

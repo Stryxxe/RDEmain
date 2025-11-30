@@ -46,6 +46,14 @@ const SystemSettings = () => {
     const [deptForm, setDeptForm] = useState({ id: null, name: "" });
     const [deptErrors, setDeptErrors] = useState("");
     
+    // Research Centers
+    const [researchCenters, setResearchCenters] = useState([]);
+    const [centerPage, setCenterPage] = useState(1);
+    const CENTER_PER_PAGE = 5;
+    const [centerLoading, setCenterLoading] = useState(false);
+    const [centerForm, setCenterForm] = useState({ id: null, name: "", departmentID: "" });
+    const [centerErrors, setCenterErrors] = useState("");
+    
     // Document Templates - Separate for Proponent and General
     const [proponentTemplates, setProponentTemplates] = useState([]);
     const [generalTemplates, setGeneralTemplates] = useState([]);
@@ -72,6 +80,7 @@ const SystemSettings = () => {
         try {
             const sessionTimeoutNum = parseInt(settings.sessionTimeout, 10);
             const logRetentionNum = parseInt(settings.logRetention, 10);
+            const maxFileSizeNum = parseInt(settings.maxFileSize, 10);
             
             // Validation check
             if (isNaN(sessionTimeoutNum) || sessionTimeoutNum < 5) {
@@ -84,12 +93,23 @@ const SystemSettings = () => {
                 setLoading(false);
                 return;
             }
+            if (isNaN(maxFileSizeNum) || maxFileSizeNum < 1) {
+                alert('Max file size must be at least 1 MB');
+                setLoading(false);
+                return;
+            }
+            if (maxFileSizeNum > 20) {
+                alert('Max file size cannot exceed 20 MB');
+                setLoading(false);
+                return;
+            }
             
             const payload = {
                 systemName: settings.systemName,
                 systemVersion: settings.systemVersion,
                 sessionTimeout: sessionTimeoutNum,
                 logRetention: logRetentionNum,
+                maxFileSize: maxFileSizeNum,
                 backupFrequency: settings.backupFrequency,
                 allowDepartmentCreation: !!settings.allowDepartmentCreation,
                 requireDepartmentAssignment: !!settings.requireDepartmentAssignment,
@@ -162,6 +182,7 @@ const SystemSettings = () => {
                     systemName: s.systemName ?? prev.systemName,
                     systemVersion: s.systemVersion ?? prev.systemVersion,
                     sessionTimeout: String(s.sessionTimeout ?? prev.sessionTimeout),
+                    maxFileSize: String(s.maxFileSize ?? prev.maxFileSize),
                     logRetention: String(s.logRetention ?? prev.logRetention),
                     backupFrequency: s.backupFrequency ?? prev.backupFrequency,
                     allowDepartmentCreation: Boolean(s.allowDepartmentCreation ?? prev.allowDepartmentCreation),
@@ -173,6 +194,7 @@ const SystemSettings = () => {
         })();
 
         fetchDepartments();
+        fetchResearchCenters();
         fetchTemplates();
     }, []);
 
@@ -227,9 +249,94 @@ const SystemSettings = () => {
             await fetchDepartments();
         } catch (e) {
             console.error("Delete department failed", e?.response?.data || e?.message || e);
-            alert("Unable to delete department");
+            const errorMessage = e?.response?.data?.message || "Unable to delete department";
+            alert(errorMessage);
         } finally {
             setDeptLoading(false);
+        }
+    };
+
+    // Research Centers CRUD handlers
+    const fetchResearchCenters = async () => {
+        try {
+            setCenterLoading(true);
+            const res = await axiosInstance.get("/admin/research-centers", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            const list = res?.data?.data || res?.data || [];
+            setResearchCenters(Array.isArray(list) ? list : []);
+            setCenterPage(1);
+        } catch (e) {
+            console.error("Failed to load research centers", e);
+            setResearchCenters([]);
+        } finally {
+            setCenterLoading(false);
+        }
+    };
+
+    const resetCenterForm = () => {
+        setCenterForm({ id: null, name: "", departmentID: "" });
+        setCenterErrors("");
+    };
+
+    const submitResearchCenter = async () => {
+        if (!centerForm.name.trim()) {
+            setCenterErrors("Research Center name is required");
+            return;
+        }
+        try {
+            setCenterLoading(true);
+            const payload = {
+                name: centerForm.name,
+                departmentID: centerForm.departmentID || null
+            };
+            if (centerForm.id) {
+                await axiosInstance.put(`/admin/research-centers/${centerForm.id}`, payload, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+            } else {
+                await axiosInstance.post(`/admin/research-centers`, payload, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+            }
+            await fetchResearchCenters();
+            resetCenterForm();
+        } catch (e) {
+            console.error("Save research center failed", e?.response?.data || e?.message || e);
+            setCenterErrors("Unable to save research center");
+        } finally {
+            setCenterLoading(false);
+        }
+    };
+
+    const editResearchCenter = (center) => {
+        setCenterForm({
+            id: center.centerID || center.id,
+            name: center.name || center.centerName || "",
+            departmentID: center.departmentID || ""
+        });
+        setCenterErrors("");
+    };
+
+    const deleteResearchCenter = async (center) => {
+        const id = center.centerID || center.id;
+        if (!id) return;
+        if (!window.confirm(`Delete research center "${center.name || center.centerName}"?`)) return;
+        try {
+            setCenterLoading(true);
+            await axiosInstance.delete(`/admin/research-centers/${id}`, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            await fetchResearchCenters();
+        } catch (e) {
+            console.error("Delete research center failed", e?.response?.data || e?.message || e);
+            alert("Unable to delete research center");
+        } finally {
+            setCenterLoading(false);
         }
     };
 
@@ -512,12 +619,16 @@ const SystemSettings = () => {
                                 onChange={handleChange}
                                 className="admin-input"
                                 min="1"
-                                max="200"
+                                max="20"
                             />
+                            <p className="text-xs text-gray-500 mt-1">Maximum allowed: 20 MB</p>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Allowed File Types</label>
                             <div className="admin-input text-sm text-gray-600">PDF, DOCX, XLSX, CSV, PNG, JPG</div>
+                        </div>
+                        <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 border border-blue-200">
+                            <strong>System-wide Setting:</strong> This max file size applies to all file uploads across the system including proposal submissions, progress reports, and template uploads.
                         </div>
                         <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
                             File storage is configured via `config/filesystems.php`.
@@ -795,48 +906,112 @@ const SystemSettings = () => {
                         )}
                     </div>
                 </div>
-            </div>
 
-            <div className="admin-card">
-                <h3 className="text-lg font-medium text-gray-900 mb-4">
-                    System Status
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="text-center">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <div className="w-6 h-6 bg-green-500 rounded-full"></div>
+                {/* Research Centers */}
+                <div className="admin-card lg:col-span-2">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <FiFolder className="w-5 h-5 mr-2" />
+                        Research Centers
+                    </h3>
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
+                                <select
+                                    value={centerForm.departmentID}
+                                    onChange={(e) => setCenterForm((p) => ({ ...p, departmentID: e.target.value }))}
+                                    className="admin-input"
+                                >
+                                    <option value="">Select Department</option>
+                                    {departments.map((dept) => (
+                                        <option key={dept.departmentID || dept.id} value={dept.departmentID || dept.id}>
+                                            {dept.name || dept.departmentName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Research Center Name</label>
+                                <input
+                                    type="text"
+                                    value={centerForm.name}
+                                    onChange={(e) => setCenterForm((p) => ({ ...p, name: e.target.value }))}
+                                    className={`admin-input ${centerErrors ? 'border-red-500' : ''}`}
+                                    placeholder="Enter research center name"
+                                />
+                                {centerErrors && <p className="mt-1 text-sm text-red-600">{centerErrors}</p>}
+                            </div>
+                            <div className="flex items-end">
+                                <button onClick={submitResearchCenter} className="admin-button-primary w-full" disabled={centerLoading}>
+                                    {centerForm.id ? 'Update Center' : 'Add Center'}
+                                </button>
+                            </div>
                         </div>
-                        <p className="text-sm font-medium text-gray-900">
-                            Database
-                        </p>
-                        <p className="text-xs text-green-600">Online</p>
-                    </div>
-                    <div className="text-center">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <div className="w-6 h-6 bg-green-500 rounded-full"></div>
+
+                        <div className="overflow-x-auto">
+                            <table className="admin-table">
+                                <thead>
+                                    <tr>
+                                        <th className="text-left">Name</th>
+                                        <th className="text-left">Department</th>
+                                        <th className="w-52 text-left">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {researchCenters.length === 0 && (
+                                        <tr>
+                                            <td colSpan="3" className="text-center text-sm text-gray-500 py-6">No research centers found</td>
+                                        </tr>
+                                    )}
+                                    {researchCenters
+                                        .slice((centerPage - 1) * CENTER_PER_PAGE, centerPage * CENTER_PER_PAGE)
+                                        .map((center) => (
+                                        <tr key={center.centerID || center.id} className="hover:bg-gray-50">
+                                            <td className="text-base text-gray-900 py-4">{center.name || center.centerName}</td>
+                                            <td className="text-sm text-gray-600 py-4">{center.departmentName || '—'}</td>
+                                            <td className="py-4">
+                                                <div className="flex items-center gap-3">
+                                                    <button onClick={() => editResearchCenter(center)} className="admin-button-secondary px-4 py-2">Edit</button>
+                                                    <button onClick={() => deleteResearchCenter(center)} className="admin-button-danger px-4 py-2">Delete</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                        <p className="text-sm font-medium text-gray-900">
-                            API Server
-                        </p>
-                        <p className="text-xs text-green-600">Online</p>
-                    </div>
-                    <div className="text-center">
-                        <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <div className="w-6 h-6 bg-green-500 rounded-full"></div>
-                        </div>
-                        <p className="text-sm font-medium text-gray-900">
-                            File Storage
-                        </p>
-                        <p className="text-xs text-green-600">Online</p>
-                    </div>
-                    <div className="text-center">
-                        <div className="w-12 h-12 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-2">
-                            <div className="w-6 h-6 bg-yellow-500 rounded-full"></div>
-                        </div>
-                        <p className="text-sm font-medium text-gray-900">
-                            Email Service
-                        </p>
-                        <p className="text-xs text-yellow-600">Warning</p>
+                        {researchCenters.length > CENTER_PER_PAGE && (
+                            <div className="flex items-center justify-between mt-4">
+                                <div className="text-sm text-gray-700">
+                                    Showing {(centerPage - 1) * CENTER_PER_PAGE + 1}–{Math.min(centerPage * CENTER_PER_PAGE, researchCenters.length)} of {researchCenters.length}
+                                </div>
+                                <div className="flex space-x-2">
+                                    <button
+                                        onClick={() => setCenterPage((p) => Math.max(1, p - 1))}
+                                        disabled={centerPage === 1}
+                                        className="px-4 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                    >
+                                        Previous
+                                    </button>
+                                    {Array.from({ length: Math.ceil(researchCenters.length / CENTER_PER_PAGE) }, (_, i) => i + 1).map((p) => (
+                                        <button
+                                            key={p}
+                                            onClick={() => setCenterPage(p)}
+                                            className={`px-4 py-2 text-sm border rounded-md ${p === centerPage ? 'bg-red-600 text-white border-red-600' : 'border-gray-300 hover:bg-gray-50'}`}
+                                        >
+                                            {p}
+                                        </button>
+                                    ))}
+                                    <button
+                                        onClick={() => setCenterPage((p) => Math.min(Math.ceil(researchCenters.length / CENTER_PER_PAGE), p + 1))}
+                                        disabled={centerPage === Math.ceil(researchCenters.length / CENTER_PER_PAGE)}
+                                        className="px-4 py-2 text-sm border border-gray-300 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

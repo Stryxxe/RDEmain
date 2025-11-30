@@ -1,153 +1,157 @@
 import React, { useState, useEffect } from "react";
-import {
-    BiUser,
-    BiEnvelope,
-    BiPhone,
-    BiMapPin,
-    BiEdit,
-    BiSave,
-    BiX,
-} from "react-icons/bi";
-import rddService from "../../../services/rddService";
+import { router, Link } from "@inertiajs/react";
+import { User, Mail, Building, Shield, Save, LogOut } from "lucide-react";
+import { useAuth } from "../../../contexts/AuthContext";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
+import AvatarUpload from "../../../Components/AvatarUpload";
 
 const RDDAccount = () => {
-    const [isEditing, setIsEditing] = useState(false);
-    const [userData, setUserData] = useState({
+    const { user } = useAuth();
+    const [loading, setLoading] = useState(false);
+    const [editing, setEditing] = useState(false);
+    const [formData, setFormData] = useState({
         firstName: "",
         lastName: "",
         email: "",
-        phone: "",
-        position: "",
         department: "",
-        office: "",
-        campus: "",
-        address: "",
-        bio: "",
-        expertise: [],
-        education: [],
+        role: "",
+        researchCenter: "",
     });
-    const [editData, setEditData] = useState({ ...userData });
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [message, setMessage] = useState("");
+    const [changingPassword, setChangingPassword] = useState(false);
+    const [passwordData, setPasswordData] = useState({
+        currentPassword: "",
+        newPassword: "",
+        confirmPassword: "",
+    });
+    const [passwordError, setPasswordError] = useState("");
+    const [passwordSuccess, setPasswordSuccess] = useState("");
+
+    // Validate authentication on mount
+    useEffect(() => {
+        if (!user) {
+            router.visit("/login");
+            return;
+        }
+    }, [user]);
 
     useEffect(() => {
-        fetchUserProfile();
-    }, []);
+        if (user) {
+            const departmentName =
+                user.department?.name ||
+                user.department?.departmentName ||
+                user.department ||
+                "";
 
-    const fetchUserProfile = async () => {
-        try {
-            setLoading(true);
-            setError(null);
-            const response = await rddService.getUserProfile();
-            if (response.success) {
-                const user = response.data;
-                // Handle department name - check both 'name' and 'departmentName'
-                const departmentName =
-                    user.department?.name ||
-                    user.department?.departmentName ||
-                    user.department ||
-                    "Research and Development Division";
+            const roleNameMap = {
+                Admin: "Administrator",
+                CM: "Central Manager",
+                RDD: "Research & Development Division",
+                RDE: "Research, Development & Extension",
+                OP: "Office of the President",
+                OSUORU: "Office of Student Affairs & University Relations Unit",
+                Proponent: "Proponent",
+            };
+            const fullRoleName = roleNameMap[user.role?.userRole] || user.role?.userRole || "";
 
-                const transformedUserData = {
-                    firstName: user.firstName || "",
-                    lastName: user.lastName || "",
-                    email: user.email || "",
-                    phone: user.phone || "",
-                    position: user.position || "Research Director",
-                    department: departmentName,
-                    office: user.office || "RDD Building, Room 201",
-                    campus: user.campus || "Main Campus",
-                    address:
-                        user.address ||
-                        "University of Southeastern Philippines, Davao City",
-                    bio:
-                        user.bio ||
-                        "Experienced research director with over 15 years in academic research management. Specialized in research policy development and project oversight.",
-                    expertise: user.expertise || [
-                        "Research Management",
-                        "Policy Development",
-                        "Project Oversight",
-                        "Academic Administration",
-                    ],
-                    education: user.education || [
-                        {
-                            degree: "Ph.D. in Research Management",
-                            institution: "University of the Philippines",
-                            year: "2010",
-                        },
-                        {
-                            degree: "M.S. in Public Administration",
-                            institution: "Ateneo de Manila University",
-                            year: "2005",
-                        },
-                    ],
-                };
-                setUserData(transformedUserData);
-                setEditData(transformedUserData);
-            } else {
-                setError("Failed to fetch user profile");
-            }
-        } catch (err) {
-            console.error("Error fetching user profile:", err);
-            setError("Error loading user profile");
-        } finally {
-            setLoading(false);
-        }
-    };
+            // Backend sends as snake_case (research_center), also check camelCase for consistency
+            const researchCenterName =
+                user.research_center?.name ||
+                user.researchCenter?.name ||
+                user.research_center?.centerName ||
+                user.researchCenter?.centerName ||
+                "";
 
-    const handleEdit = () => {
-        setIsEditing(true);
-        setEditData({ ...userData });
-    };
-
-    const handleSave = async () => {
-        try {
-            await rddService.updateUserProfile({
-                firstName: editData.firstName,
-                lastName: editData.lastName,
-                email: editData.email,
+            setFormData({
+                firstName: user.firstName || "",
+                lastName: user.lastName || "",
+                email: user.email || "",
+                department: departmentName,
+                role: fullRoleName,
+                researchCenter: researchCenterName,
             });
-            setUserData({ ...editData });
-            setIsEditing(false);
-            console.log("User data updated:", editData);
-        } catch (err) {
-            console.error("Error updating profile:", err);
-            setError("Failed to update profile");
         }
-    };
+    }, [user]);
 
-    const handleCancel = () => {
-        setEditData({ ...userData });
-        setIsEditing(false);
-    };
+    // Auto-dismiss success message after 3 seconds
+    useEffect(() => {
+        if (message && message.includes("successfully")) {
+            const timer = setTimeout(() => {
+                setMessage("");
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [message]);
 
     const handleInputChange = (field, value) => {
-        setEditData((prev) => ({
+        setFormData((prev) => ({
             ...prev,
             [field]: value,
         }));
     };
 
-    const handleArrayInputChange = (field, index, value) => {
-        setEditData((prev) => ({
-            ...prev,
-            [field]: prev[field].map((item, i) => (i === index ? value : item)),
-        }));
+    const handleSave = async () => {
+        try {
+            setSaving(true);
+            setMessage("");
+            const response = await window.axios.put(
+                "/user",
+                {
+                    firstName: formData.firstName,
+                    lastName: formData.lastName,
+                    email: formData.email,
+                },
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+            if (response.data) {
+                setMessage("Profile updated successfully!");
+                setEditing(false);
+            }
+        } catch (error) {
+            setMessage("Failed to update profile. Please try again.");
+        } finally {
+            setSaving(false);
+        }
     };
 
-    const addArrayItem = (field) => {
-        setEditData((prev) => ({
-            ...prev,
-            [field]: [...prev[field], ""],
-        }));
-    };
+    const handlePasswordChange = async () => {
+        setPasswordError("");
+        setPasswordSuccess("");
 
-    const removeArrayItem = (field, index) => {
-        setEditData((prev) => ({
-            ...prev,
-            [field]: prev[field].filter((_, i) => i !== index),
-        }));
+        if (!passwordData.currentPassword || !passwordData.newPassword || !passwordData.confirmPassword) {
+            setPasswordError("All fields are required");
+            return;
+        }
+        if (passwordData.newPassword !== passwordData.confirmPassword) {
+            setPasswordError("New passwords do not match");
+            return;
+        }
+        if (passwordData.newPassword.length < 8) {
+            setPasswordError("New password must be at least 8 characters");
+            return;
+        }
+
+        try {
+            const response = await window.axios.post("/user/change-password", {
+                current_password: passwordData.currentPassword,
+                new_password: passwordData.newPassword,
+                new_password_confirmation: passwordData.confirmPassword,
+            });
+            if (response.data?.success) {
+                setPasswordSuccess("Password changed successfully!");
+                setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+                setTimeout(() => { setChangingPassword(false); setPasswordSuccess(""); }, 2000);
+            }
+        } catch (error) {
+            setPasswordError(error.response?.data?.message || "Failed to change password. Please try again.");
+        }
     };
 
     if (loading) {
@@ -165,471 +169,159 @@ const RDDAccount = () => {
         );
     }
 
-    if (error) {
-        return (
-            <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-                <div className="max-w-7xl mx-auto px-6 py-12">
-                    <div className="flex items-center justify-center h-64">
-                        <div className="text-center">
-                            <div className="text-red-600 text-6xl mb-4">⚠️</div>
-                            <p className="text-gray-600 mb-4">{error}</p>
-                            <button
-                                onClick={fetchUserProfile}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                Retry
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+    // Removed undefined error block
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-            <div className="max-w-7xl mx-auto px-6 py-12">
-                <div className="text-center">
-                    <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
-                        Account Settings
-                    </h1>
-                    <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
-                        Manage your account information and preferences
-                    </p>
-                </div>
+        <div className="w-full -m-2 sm:-m-4 md:-m-6 lg:-m-8">
+            <div className="max-w-6xl mx-auto px-2 sm:px-4 md:px-6 lg:px-8 pt-6 pb-2">
+                <Breadcrumbs items={[{ label: "Account Settings", href: null }]} />
+            </div>
+            <div className="max-w-6xl mx-auto mb-8 px-2 sm:px-4 md:px-6 lg:px-8 pt-4">
+                <h1 className="text-3xl font-bold text-gray-900 mb-2">Account Settings</h1>
+                <p className="text-gray-600">Manage your account information and preferences</p>
             </div>
 
-            <div className="max-w-4xl mx-auto p-6">
-                <div className="bg-white rounded-lg shadow-lg p-8">
-                    {/* Header */}
-                    <div className="flex justify-between items-center mb-8">
-                        <div className="flex items-center">
-                            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mr-4">
-                                <BiUser className="text-2xl text-red-600" />
-                            </div>
-                            <div>
-                                <h2 className="text-2xl font-bold text-gray-900">
-                                    {userData.firstName} {userData.lastName}
-                                </h2>
-                                <p className="text-gray-600">
-                                    {userData.position}
-                                </p>
-                            </div>
-                        </div>
+            {message && (
+                <div className="max-w-6xl mx-auto mb-6 px-2 sm:px-4 md:px-6 lg:px-8">
+                    <div className={`p-4 rounded-lg ${message.includes("successfully") ? "bg-green-50 border border-green-200 text-green-800" : "bg-red-50 border border-red-200 text-red-800"}`}>{message}</div>
+                </div>
+            )}
 
-                        {!isEditing ? (
-                            <button
-                                onClick={handleEdit}
-                                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-                            >
-                                <BiEdit className="text-sm" />
-                                Edit Profile
-                            </button>
-                        ) : (
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={handleSave}
-                                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-                                >
-                                    <BiSave className="text-sm" />
-                                    Save
-                                </button>
-                                <button
-                                    onClick={handleCancel}
-                                    className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200"
-                                >
-                                    <BiX className="text-sm" />
-                                    Cancel
-                                </button>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Personal Information */}
-                    <div className="mb-8">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                            Personal Information
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    First Name
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editData.firstName}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "firstName",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <p className="text-gray-900">
-                                        {userData.firstName}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Last Name
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editData.lastName}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "lastName",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <p className="text-gray-900">
-                                        {userData.lastName}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Email
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="email"
-                                        value={editData.email}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "email",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <div className="flex items-center text-gray-900">
-                                        <BiEnvelope className="mr-2" />
-                                        {userData.email}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Phone
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="tel"
-                                        value={editData.phone}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "phone",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <div className="flex items-center text-gray-900">
-                                        <BiPhone className="mr-2" />
-                                        {userData.phone}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Professional Information */}
-                    <div className="mb-8">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                            Professional Information
-                        </h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Position
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editData.position}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "position",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <p className="text-gray-900">
-                                        {userData.position}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Department
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editData.department}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "department",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <p className="text-gray-900">
-                                        {userData.department}
-                                    </p>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Office
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editData.office}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "office",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <div className="flex items-center text-gray-900">
-                                        <BiMapPin className="mr-2" />
-                                        {userData.office}
-                                    </div>
-                                )}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Campus
-                                </label>
-                                {isEditing ? (
-                                    <input
-                                        type="text"
-                                        value={editData.campus}
-                                        onChange={(e) =>
-                                            handleInputChange(
-                                                "campus",
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                    />
-                                ) : (
-                                    <p className="text-gray-900">
-                                        {userData.campus}
-                                    </p>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Bio */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Bio
-                        </label>
-                        {isEditing ? (
-                            <textarea
-                                value={editData.bio}
-                                onChange={(e) =>
-                                    handleInputChange("bio", e.target.value)
-                                }
-                                rows={4}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+            <div className="w-full px-2 sm:px-4 md:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto space-y-6">
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 w-full">
+                        <div className="flex flex-col items-center space-y-4">
+                            <AvatarUpload
+                                currentAvatar={user?.avatar}
+                                firstName={formData.firstName}
+                                lastName={formData.lastName}
+                                onSuccess={() => setMessage("Avatar updated successfully!")}
+                                onError={(error) => setMessage(error)}
                             />
-                        ) : (
-                            <p className="text-gray-900">{userData.bio}</p>
-                        )}
+                            <div className="text-center">
+                                <h3 className="text-xl font-semibold text-gray-900">{formData.firstName} {formData.lastName}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{formData.email}</p>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Expertise */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Areas of Expertise
-                        </label>
-                        {isEditing ? (
-                            <div className="space-y-2">
-                                {editData.expertise.map((item, index) => (
-                                    <div key={index} className="flex gap-2">
-                                        <input
-                                            type="text"
-                                            value={item}
-                                            onChange={(e) =>
-                                                handleArrayInputChange(
-                                                    "expertise",
-                                                    index,
-                                                    e.target.value
-                                                )
-                                            }
-                                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                removeArrayItem(
-                                                    "expertise",
-                                                    index
-                                                )
-                                            }
-                                            className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                        >
-                                            <BiX />
-                                        </button>
-                                    </div>
-                                ))}
-                                <button
-                                    type="button"
-                                    onClick={() => addArrayItem("expertise")}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                                >
-                                    Add Expertise
-                                </button>
+                    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 w-full">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-semibold text-gray-900">Profile Information</h2>
+                            <button onClick={() => setEditing(!editing)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">{editing ? "Cancel" : "Edit Profile"}</button>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2"><User className="inline w-4 h-4 mr-2" />First Name</label>
+                                {editing ? (
+                                    <input type="text" value={formData.firstName} onChange={(e) => handleInputChange("firstName", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" />
+                                ) : (
+                                    <p className="text-gray-900 py-2 text-base">{formData.firstName || "Not specified"}</p>
+                                )}
                             </div>
-                        ) : (
-                            <div className="flex flex-wrap gap-2">
-                                {userData.expertise.map((item, index) => (
-                                    <span
-                                        key={index}
-                                        className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm"
-                                    >
-                                        {item}
-                                    </span>
-                                ))}
+
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2">Last Name</label>
+                                {editing ? (
+                                    <input type="text" value={formData.lastName} onChange={(e) => handleInputChange("lastName", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" />
+                                ) : (
+                                    <p className="text-gray-900 py-2 text-base">{formData.lastName || "Not specified"}</p>
+                                )}
                             </div>
-                        )}
+
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2"><Mail className="inline w-4 h-4 mr-2" />Email</label>
+                                {editing ? (
+                                    <input type="email" value={formData.email} onChange={(e) => handleInputChange("email", e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" />
+                                ) : (
+                                    <p className="text-gray-900 py-2 text-base">{formData.email || "Not specified"}</p>
+                                )}
+                            </div>
+
+                            
+
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2"><Building className="inline w-4 h-4 mr-2" />Department</label>
+                                <p className="text-gray-900 py-2 text-base">{formData.department || "Not specified"}</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2"><Shield className="inline w-4 h-4 mr-2" />Role</label>
+                                <p className="text-gray-900 py-2 text-base">{formData.role || "Not specified"}</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-base font-medium text-gray-700 mb-2"><Building className="inline w-4 h-4 mr-2" />Research Center</label>
+                                <p className="text-gray-900 py-2 text-base">{formData.researchCenter || "Not specified"}</p>
+                            </div>
+                        </div>
                     </div>
 
-                    {/* Education */}
-                    <div className="mb-8">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Education
-                        </label>
-                        {isEditing ? (
+                    {/* Removed undefined Professional Information block */}
+
+                    {/* Removed undefined Bio block */}
+
+                    {/* Removed undefined Expertise block */}
+
+                    {/* Removed undefined Education block */}
+
+                    {/* Security Settings */}
+                    <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8 w-full">
+                        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Security Settings</h2>
+                        {!changingPassword ? (
                             <div className="space-y-4">
-                                {editData.education.map((item, index) => (
-                                    <div
-                                        key={index}
-                                        className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border border-gray-200 rounded-lg"
-                                    >
-                                        <input
-                                            type="text"
-                                            placeholder="Degree"
-                                            value={item.degree}
-                                            onChange={(e) =>
-                                                handleArrayInputChange(
-                                                    "education",
-                                                    index,
-                                                    {
-                                                        ...item,
-                                                        degree: e.target.value,
-                                                    }
-                                                )
-                                            }
-                                            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                        <input
-                                            type="text"
-                                            placeholder="Institution"
-                                            value={item.institution}
-                                            onChange={(e) =>
-                                                handleArrayInputChange(
-                                                    "education",
-                                                    index,
-                                                    {
-                                                        ...item,
-                                                        institution:
-                                                            e.target.value,
-                                                    }
-                                                )
-                                            }
-                                            className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                        />
-                                        <div className="flex gap-2">
-                                            <input
-                                                type="text"
-                                                placeholder="Year"
-                                                value={item.year}
-                                                onChange={(e) =>
-                                                    handleArrayInputChange(
-                                                        "education",
-                                                        index,
-                                                        {
-                                                            ...item,
-                                                            year: e.target
-                                                                .value,
-                                                        }
-                                                    )
-                                                }
-                                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                                            />
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    removeArrayItem(
-                                                        "education",
-                                                        index
-                                                    )
-                                                }
-                                                className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-                                            >
-                                                <BiX />
-                                            </button>
-                                        </div>
+                                <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                                    <div>
+                                        <h3 className="text-base font-medium text-gray-900">Change Password</h3>
+                                        <p className="text-base text-gray-500">Update your password to keep your account secure</p>
                                     </div>
-                                ))}
-                                <button
-                                    type="button"
-                                    onClick={() => addArrayItem("education")}
-                                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                                >
-                                    Add Education
-                                </button>
+                                    <button onClick={() => setChangingPassword(true)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors">Change</button>
+                                </div>
                             </div>
                         ) : (
-                            <div className="space-y-3">
-                                {userData.education.map((item, index) => (
-                                    <div
-                                        key={index}
-                                        className="p-4 bg-gray-50 rounded-lg"
-                                    >
-                                        <h4 className="font-semibold text-gray-900">
-                                            {item.degree}
-                                        </h4>
-                                        <p className="text-gray-600">
-                                            {item.institution}
-                                        </p>
-                                        <p className="text-sm text-gray-500">
-                                            {item.year}
-                                        </p>
-                                    </div>
-                                ))}
+                            <div className="space-y-6">
+                                {passwordError && (
+                                    <div className="p-4 bg-red-50 border border-red-200 rounded-lg"><p className="text-sm text-red-600">{passwordError}</p></div>
+                                )}
+                                {passwordSuccess && (
+                                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg"><p className="text-sm text-green-600">{passwordSuccess}</p></div>
+                                )}
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+                                    <input type="password" value={passwordData.currentPassword} onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" placeholder="Enter current password" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+                                    <input type="password" value={passwordData.newPassword} onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" placeholder="Enter new password (min. 8 characters)" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+                                    <input type="password" value={passwordData.confirmPassword} onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500" placeholder="Confirm new password" />
+                                </div>
+
+                                <div className="flex gap-3 pt-4">
+                                    <button onClick={handlePasswordChange} className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium">Update Password</button>
+                                    <button onClick={() => { setChangingPassword(false); setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" }); setPasswordError(""); setPasswordSuccess(""); }} className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium">Cancel</button>
+                                </div>
                             </div>
                         )}
+                    </div>
+
+                    {/* Account Actions */}
+                    <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-8 w-full">
+                        <h2 className="text-2xl font-semibold text-gray-900 mb-4">Account Actions</h2>
+                        <div className="flex justify-between items-center py-3 border-b border-gray-100">
+                            <div>
+                                <h3 className="text-base font-medium text-gray-900">Sign Out</h3>
+                                <p className="text-base text-gray-500">Sign out of your account on this device</p>
+                            </div>
+                            <Link href="/logout" method="post" as="button" onBefore={() => localStorage.removeItem("dismissedNotifications")} className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+                                <LogOut className="w-4 h-4" />
+                                Logout
+                            </Link>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -637,8 +329,7 @@ const RDDAccount = () => {
     );
 };
 
-import AppLayout from "../../../Components/Layouts/AppLayout";
-import RDDLayout from "../../../Components/Layouts/RDDLayout";
+// Duplicate imports removed; already imported at top
 
 RDDAccount.layout = (page) => (
     <AppLayout>

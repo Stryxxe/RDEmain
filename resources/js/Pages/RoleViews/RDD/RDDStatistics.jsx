@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import { BarChart3, TrendingUp, Users, Target } from "lucide-react";
 import rddService from "../../../services/rddService";
-import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 const RDDStatistics = () => {
     const [hoveredItem, setHoveredItem] = useState(null);
@@ -49,19 +51,81 @@ const RDDStatistics = () => {
 
     const { overview, rdeAgenda, dost6Ps, sdg } = analyticsData;
 
-    const hasRdeAgendaData = rdeAgenda.length > 0;
-    const hasDostData = dost6Ps.length > 0;
-    const hasSdgData = sdg.length > 0;
+    // Complete RDE Agenda list
+    const allRdeAgenda = [
+        "Agriculture, Aquatic, and Natural Resources",
+        "Business and Trade",
+        "Social Sciences and Education",
+        "Engineering and Technology",
+        "Environment and Natural Resources",
+        "Health and Wellness",
+        "Peace and Security"
+    ];
 
-    const maxRdeAgendaTotal = hasRdeAgendaData
-        ? Math.max(...rdeAgenda.map((item) => item.total))
-        : 0;
-    const maxDostValue = hasDostData
-        ? Math.max(...dost6Ps.map((item) => item.value))
-        : 0;
-    const maxSdgValue = hasSdgData
-        ? Math.max(...sdg.map((item) => item.value))
-        : 0;
+    // Complete DOST 6Ps list
+    const allDost6Ps = [
+        "Publications",
+        "Patent",
+        "Product",
+        "People Services",
+        "Places and Partner",
+        "Policies"
+    ];
+
+    // Merge API data with complete lists to show all items
+    const rdeAgendaToShow = allRdeAgenda.map(name => {
+        const apiItem = rdeAgenda.find(item => item.name === name);
+        return apiItem || { name, ongoing: 0, completed: 0, total: 0 };
+    });
+
+    const dost6PsToShow = allDost6Ps.map(name => {
+        const apiItem = dost6Ps.find(item => item.name === name);
+        return apiItem || { name, value: 0 };
+    });
+
+    // SDG metadata with colors for display
+    const sdgMetadata = [
+        { name: "1", fullName: "No Poverty", color: "#E5243B" },
+        { name: "2", fullName: "Zero Hunger", color: "#DDA63A" },
+        { name: "3", fullName: "Good Health and Well-being", color: "#4C9F38" },
+        { name: "4", fullName: "Quality Education", color: "#C5192D" },
+        { name: "5", fullName: "Gender Equality", color: "#FF3A21" },
+        { name: "6", fullName: "Clean Water and Sanitation", color: "#26BDE2" },
+        { name: "7", fullName: "Affordable and Clean Energy", color: "#FCC30B" },
+        { name: "8", fullName: "Decent Work and Economic Growth", color: "#A21942" },
+        { name: "9", fullName: "Industry, Innovation and Infrastructure", color: "#FD6925" },
+        { name: "10", fullName: "Reduced Inequalities", color: "#DD1367" },
+        { name: "11", fullName: "Sustainable Cities and Communities", color: "#FD9D24" },
+        { name: "12", fullName: "Responsible Consumption and Production", color: "#BF8B2E" },
+        { name: "13", fullName: "Climate Action", color: "#3F7E44" },
+        { name: "14", fullName: "Life Below Water", color: "#0A97D9" },
+        { name: "15", fullName: "Life on Land", color: "#56C02B" },
+        { name: "16", fullName: "Peace, Justice and Strong Institutions", color: "#00689D" },
+        { name: "17", fullName: "Partnerships for the Goals", color: "#19486A" },
+    ];
+    
+    // Map API SDG data to include metadata
+    const sdgToShow = sdgMetadata.map(meta => {
+        const apiItem = sdg.find(item => 
+            item.name === meta.name || 
+            item.name === meta.fullName ||
+            item.name === `SDG ${meta.name}`
+        );
+        return { 
+            ...meta, 
+            value: apiItem ? apiItem.value : 0 
+        };
+    });
+
+    const maxRdeAgendaTotal = rdeAgendaToShow.length > 0 
+        ? Math.max(...rdeAgendaToShow.map((item) => item.total), 1)
+        : 1;
+    const maxDostValue = dost6PsToShow.length > 0
+        ? Math.max(...dost6PsToShow.map((item) => item.value), 1)
+        : 1;
+    const maxSdgValue = sdgToShow.length > 0
+        ? Math.max(...sdgToShow.map((item) => item.value), 1)
+        : 1;
 
     if (loading) {
         return (
@@ -104,8 +168,12 @@ const RDDStatistics = () => {
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 p-6">
             <div className="max-w-7xl mx-auto">
-                {/* Page Header */}
-                <div className="max-w-7xl mx-auto px-6 py-12">
+                {/* Breadcrumbs */}
+                <div className="px-6 pt-6">
+                    <Breadcrumbs items={[{ label: "Statistics", href: null }]} />
+                </div>
+                {/* Page Header (aligned with reference implementation) */}
+                <div className="max-w-7xl mx-auto px-6 py-8">
                     <div className="text-center">
                         <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
                             Research Analytics Dashboard
@@ -178,9 +246,8 @@ const RDDStatistics = () => {
                             </h2>
                         </div>
 
-                        {hasRdeAgendaData ? (
-                            <div className="space-y-4">
-                                {rdeAgenda.map((item, index) => (
+                        <div className="space-y-4">
+                                {rdeAgendaToShow.map((item, index) => (
                                     <div key={index} className="group">
                                         <div className="flex items-center space-x-6 p-4 rounded-xl hover:bg-white/50 transition-all duration-200">
                                             <div className="w-72 text-sm font-medium text-gray-700">
@@ -242,23 +309,24 @@ const RDDStatistics = () => {
                                                     </div>
                                                 </div>
 
-                                                <div className="w-16 text-right">
+                                                <div className="w-24 text-right">
                                                     <span className="text-lg font-bold text-gray-900 bg-red-800 bg-clip-text text-transparent">
                                                         {item.total}
                                                     </span>
+                                                    <div className="mt-1 space-y-1">
+                                                        <span className="inline-block px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-xs font-medium">
+                                                            {item.ongoing} ongoing
+                                                        </span>
+                                                        <span className="inline-block px-2 py-0.5 rounded-full bg-green-50 text-green-700 text-xs font-medium">
+                                                            {item.completed} completed
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        ) : (
-                            <div className="h-40 flex items-center justify-center bg-gray-50/70 rounded-xl border border-dashed border-gray-200">
-                                <p className="text-sm text-gray-500">
-                                    No research agenda data available yet.
-                                </p>
-                            </div>
-                        )}
+                        </div>
 
                         {/* Enhanced Hover Tooltip */}
                         {hoveredItem && (
@@ -341,9 +409,8 @@ const RDDStatistics = () => {
                             </h2>
                         </div>
 
-                        {hasDostData ? (
-                            <div className="flex items-end justify-between space-x-4 h-96 px-4">
-                                {dost6Ps.map((item, index) => (
+                        <div className="flex items-end justify-between space-x-4 h-96 px-4">
+                                {dost6PsToShow.map((item, index) => (
                                     <div
                                         key={index}
                                         className="flex flex-col items-center space-y-4 flex-1 group"
@@ -381,6 +448,9 @@ const RDDStatistics = () => {
                                                 <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
                                                 <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/30"></div>
                                             </div>
+                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-semibold text-amber-700">
+                                                {item.value}
+                                            </div>
                                         </div>
 
                                         <div className="text-center">
@@ -390,17 +460,10 @@ const RDDStatistics = () => {
                                         </div>
                                     </div>
                                 ))}
-                            </div>
-                        ) : (
-                            <div className="h-40 flex items-center justify-center bg-gray-50/70 rounded-xl border border-dashed border-gray-200">
-                                <p className="text-sm text-gray-500">
-                                    No DOST 6Ps data available yet.
-                                </p>
-                            </div>
-                        )}
+                        </div>
 
                         {/* DOST 6Ps Hover Tooltip */}
-                        {hoveredBar && hasDostData && (
+                        {hoveredBar && (
                             <div
                                 className="absolute bg-white/95 backdrop-blur-sm border border-white/40 rounded-2xl shadow-2xl p-5 text-sm z-50 pointer-events-none"
                                 style={{
@@ -440,9 +503,8 @@ const RDDStatistics = () => {
                             </h2>
                         </div>
 
-                        {hasSdgData ? (
-                            <div className="flex items-end justify-between space-x-1 h-80 px-2">
-                                {sdg.map((item, index) => (
+                        <div className="flex items-end justify-between space-x-1 h-80 px-2">
+                            {sdgToShow.map((item, index) => (
                                     <div
                                         key={index}
                                         className="flex flex-col items-center space-y-2 flex-1 group cursor-pointer"
@@ -475,6 +537,9 @@ const RDDStatistics = () => {
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-white/30"></div>
                                                 <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-200"></div>
                                             </div>
+                                            <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-semibold" style={{color: item.color}}>
+                                                {item.value}
+                                            </div>
                                         </div>
 
                                         <div className="w-8 h-8 flex items-center justify-center">
@@ -487,17 +552,10 @@ const RDDStatistics = () => {
                                     </div>
                                 ))}
                             </div>
-                        ) : (
-                            <div className="h-40 flex items-center justify-center bg-gray-50/70 rounded-xl border border-dashed border-gray-200">
-                                <p className="text-sm text-gray-500">
-                                    No Sustainable Development Goal data
-                                    available yet.
-                                </p>
-                            </div>
-                        )}
+                        
 
                         {/* SDG Hover Tooltip */}
-                        {hoveredSdg && hasSdgData && (
+                        {hoveredSdg && (
                             <div
                                 className="absolute bg-white/95 backdrop-blur-sm border border-white/40 rounded-2xl shadow-2xl p-5 text-sm z-50 pointer-events-none"
                                 style={{
@@ -537,9 +595,8 @@ const RDDStatistics = () => {
                             Sustainable Development Goals (SDG)
                         </div>
 
-                        {hasSdgData ? (
-                            <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
-                                {sdg.map((item) => (
+                        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-sm">
+                            {sdgToShow.map((item) => (
                                     <div
                                         key={item.name}
                                         className="flex items-center space-x-3 p-3 bg-gray-50/50 rounded-xl hover:bg-white/70 transition-all duration-200"
@@ -547,6 +604,10 @@ const RDDStatistics = () => {
                                         <img
                                             src={`/sdg-goal-${item.name}.jpg`}
                                             alt={`SDG ${item.name}`}
+                                            onError={(e) => { 
+                                                e.currentTarget.onerror = null; // Prevent infinite loop
+                                                e.currentTarget.style.display = 'none'; // Hide broken image
+                                            }}
                                             className="w-6 h-6 object-cover rounded-lg shadow-sm flex-shrink-0"
                                         />
                                         <div className="flex flex-col">
@@ -556,16 +617,13 @@ const RDDStatistics = () => {
                                             <span className="text-xs text-gray-600 leading-tight">
                                                 {item.fullName}
                                             </span>
+                                            <span className="mt-1 inline-block px-2 py-0.5 rounded-full text-[10px] bg-gray-100 text-gray-700 w-max">
+                                                {item.value} projects
+                                            </span>
                                         </div>
                                     </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="mt-8 flex items-center justify-center p-6 bg-gray-50/70 rounded-xl text-sm text-gray-500">
-                                Sustainable Development Goal distributions will
-                                appear once proposals include SDG selections.
-                            </div>
-                        )}
+                            ))}
+                        </div>
                     </div>
                 </div>
             </div>
@@ -573,8 +631,7 @@ const RDDStatistics = () => {
     );
 };
 
-import AppLayout from "../../../Components/Layouts/AppLayout";
-import RDDLayout from "../../../Components/Layouts/RDDLayout";
+// Moved layout imports to top to prevent duplicate import errors
 
 RDDStatistics.layout = (page) => (
     <AppLayout>

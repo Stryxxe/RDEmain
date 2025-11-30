@@ -177,14 +177,32 @@ class OptimizedNotificationController extends Controller
      */
     private function clearUserCaches($user): void
     {
-        $patterns = [
-            "notif_*_{$user->userID}_*"
+        // Clear specific cache keys for this user
+        $cacheKeys = [
+            "notif_index_{$user->userID}_",
+            "notif_unread_{$user->userID}",
         ];
         
-        foreach ($patterns as $pattern) {
-            $keys = Cache::getRedis()->keys($pattern);
-            if (!empty($keys)) {
-                Cache::getRedis()->del($keys);
+        foreach ($cacheKeys as $key) {
+            Cache::forget($key);
+        }
+        
+        // If using Redis, we can clear pattern-based keys
+        $driver = config('cache.default');
+        if ($driver === 'redis' && method_exists(Cache::getStore(), 'getRedis')) {
+            try {
+                $redis = Cache::getRedis();
+                $pattern = "notif_*_{$user->userID}_*";
+                $keys = $redis->keys($pattern);
+                if (!empty($keys)) {
+                    $redis->del($keys);
+                }
+            } catch (\Exception $e) {
+                // Silently fail if Redis operations fail
+                \Log::warning('Failed to clear Redis cache patterns', [
+                    'userId' => $user->userID,
+                    'error' => $e->getMessage()
+                ]);
             }
         }
     }

@@ -14,6 +14,17 @@ const axiosInstance = window.axios || axios;
 if (!window.axios) {
     axiosInstance.defaults.withCredentials = true;
     axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+    axiosInstance.defaults.headers = {
+        ...(axiosInstance.defaults.headers || {}),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+    // Add CSRF token from meta tag for all requests to avoid 419
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaToken) {
+        axiosInstance.defaults.headers['X-CSRF-TOKEN'] = metaToken;
+    }
 }
 
 const RDDProposalDetail = ({ id: proposalId }) => {
@@ -33,62 +44,17 @@ const RDDProposalDetail = ({ id: proposalId }) => {
 
     useEffect(() => {
         if (user) {
-            fetchProposal();
+            fetchProposalAndEndorsements();
         }
-    }, [id, user]);
-
-    // Check endorsement status when proposal is loaded
-    useEffect(() => {
-        const checkEndorsementStatus = async () => {
-            if (!proposal || !user) return;
-
-            try {
-                const response = await axiosInstance.get(
-                    `/endorsements/proposal/${proposal.proposalID}`,
-                    {
-                        headers: { Accept: "application/json" },
-                        withCredentials: true,
-                    }
-                );
-
-                if (response.data.success && Array.isArray(response.data.data)) {
-                    const endorsements = response.data.data;
-                    const cmEndorsement = endorsements.find(
-                        (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
-                    );
-                    const rddEndorsement = endorsements.find(
-                        (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
-                    );
-
-                    setHasCmEndorsement(Boolean(cmEndorsement));
-                    setHasRddEndorsement(Boolean(rddEndorsement));
-                    // Keep CM endorsement data for status history display
-                    setEndorsementData(cmEndorsement || null);
-                } else {
-                    setHasCmEndorsement(false);
-                    setHasRddEndorsement(false);
-                    setEndorsementData(null);
-                }
-            } catch (error) {
-                // Only log error if it's not a 401 (unauthorized) - 401 is expected if not authenticated
-                if (error.response?.status !== 401) {
-                    console.error("Error checking endorsement status:", error);
-                }
-                setHasCmEndorsement(false);
-                setHasRddEndorsement(false);
-                setEndorsementData(null);
-            }
-        };
-
-        checkEndorsementStatus();
-    }, [proposal, refreshKey, user]);
+    }, [id, user, refreshKey]);
 
     // Force refresh function
     const handleRefresh = () => {
         setRefreshKey((prev) => prev + 1);
     };
 
-    const fetchProposal = async () => {
+    // Fetch proposal and endorsements in parallel to reduce loading time
+    const fetchProposalAndEndorsements = async () => {
         if (!user) {
             setError("Please log in to view proposal details");
             setLoading(false);
@@ -98,24 +64,52 @@ const RDDProposalDetail = ({ id: proposalId }) => {
         try {
             setLoading(true);
             console.log("Fetching proposal with ID:", id);
-            const response = await axiosInstance.get(`/proposals/${id}`, {
-                headers: { Accept: "application/json" },
-                withCredentials: true,
-            });
-            console.log("API Response:", response.data);
-            if (response.data.success) {
-                setProposal(response.data.data);
-                console.log(
-                    "Proposal loaded successfully:",
-                    response.data.data
-                );
+            
+            // Fetch both proposal and endorsements in parallel
+            const [proposalResponse, endorsementResponse] = await Promise.allSettled([
+                axiosInstance.get(`/proposals/${id}`, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }),
+                axiosInstance.get(`/endorsements/proposal/${id}`, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                })
+            ]);
+
+            // Handle proposal response
+            if (proposalResponse.status === 'fulfilled' && proposalResponse.value.data.success) {
+                setProposal(proposalResponse.value.data.data);
+                console.log("Proposal loaded successfully:", proposalResponse.value.data.data);
             } else {
-                console.error("API returned error:", response.data.message);
+                console.error("API returned error:", proposalResponse.value?.data?.message || proposalResponse.reason);
                 setError("Proposal not found");
             }
+
+            // Handle endorsement response
+            if (endorsementResponse.status === 'fulfilled' && 
+                endorsementResponse.value.data.success && 
+                Array.isArray(endorsementResponse.value.data.data)) {
+                
+                const endorsements = endorsementResponse.value.data.data;
+                const cmEndorsement = endorsements.find(
+                    (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
+                );
+                const rddEndorsement = endorsements.find(
+                    (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+                );
+
+                setHasCmEndorsement(Boolean(cmEndorsement));
+                setHasRddEndorsement(Boolean(rddEndorsement));
+                setEndorsementData(cmEndorsement || null);
+            } else {
+                // If endorsement fetch fails, just set defaults (non-critical)
+                setHasCmEndorsement(false);
+                setHasRddEndorsement(false);
+                setEndorsementData(null);
+            }
         } catch (error) {
-            console.error("Error fetching proposal:", error);
-            console.error("Error details:", error.response?.data);
+            console.error("Error fetching data:", error);
             if (error.response?.status === 401) {
                 setError("Unauthorized. Please log in again.");
             } else {

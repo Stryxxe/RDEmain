@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
-import { useNotifications } from "../contexts/NotificationContext";
-import { useAuth } from "../contexts/AuthContext";
+import axios from "axios";
 import {
     Bell,
     Check,
@@ -14,26 +13,86 @@ import {
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 
 const Notification = () => {
-    const { user } = useAuth();
+    const { props } = usePage();
+    const user = props?.auth?.user;
     const [filter, setFilter] = useState("all");
     const [currentPage, setCurrentPage] = useState(1);
     const notificationsPerPage = 6;
-    const {
-        notifications,
-        loading,
-        unreadCount,
-        markAsRead: markAsReadContext,
-        markAllAsRead: markAllAsReadContext,
-        removeNotification: removeNotificationContext,
-        refreshNotifications,
-    } = useNotifications();
+    const [notifications, setNotifications] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [unreadCount, setUnreadCount] = useState(0);
 
-    // Validate authentication on mount
+    // Fetch notifications
+    const fetchNotifications = async () => {
+        try {
+            setLoading(true);
+            const axiosInstance = window.axios || axios;
+            const response = await axiosInstance.get('/notifications', {
+                headers: { Accept: 'application/json' },
+                withCredentials: true,
+            });
+            const data = response.data?.data || response.data || [];
+            setNotifications(data);
+            setUnreadCount(data.filter(n => !n.read).length);
+        } catch (error) {
+            console.error('Failed to fetch notifications:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const markAsReadContext = async (notificationId) => {
+        try {
+            const axiosInstance = window.axios || axios;
+            await axiosInstance.put(`/notifications/${notificationId}/read`, {}, {
+                headers: { Accept: 'application/json' },
+                withCredentials: true,
+            });
+            setNotifications(prev => prev.map(n => 
+                n.id === notificationId ? { ...n, read: true } : n
+            ));
+            setUnreadCount(prev => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
+    };
+
+    const markAllAsReadContext = async () => {
+        try {
+            const axiosInstance = window.axios || axios;
+            await axiosInstance.put('/notifications/mark-all-read', {}, {
+                headers: { Accept: 'application/json' },
+                withCredentials: true,
+            });
+            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+            setUnreadCount(0);
+        } catch (error) {
+            console.error('Failed to mark all as read:', error);
+        }
+    };
+
+    const removeNotificationContext = async (notificationId) => {
+        try {
+            const axiosInstance = window.axios || axios;
+            await axiosInstance.delete(`/notifications/${notificationId}`, {
+                headers: { Accept: 'application/json' },
+                withCredentials: true,
+            });
+            setNotifications(prev => prev.filter(n => n.id !== notificationId));
+        } catch (error) {
+            console.error('Failed to remove notification:', error);
+        }
+    };
+
+    const refreshNotifications = fetchNotifications;
+
+    // Validate authentication and fetch notifications on mount
     useEffect(() => {
         if (!user) {
             router.visit("/login");
             return;
         }
+        fetchNotifications();
     }, [user]);
 
     const formatTime = (timestamp) => {
@@ -270,12 +329,9 @@ const Notification = () => {
     // Use unreadCount from context instead of calculating locally
 
     return (
-        <div
-            className="max-w-6xl mx-auto relative"
-            style={{ minHeight: "1050px", paddingBottom: "30px" }}
-        >
+        <div className="max-w-6xl mx-auto p-6 flex flex-col" style={{ minHeight: "calc(100vh - 120px)" }}>
             {/* Fixed Header Section */}
-            <div className="mb-4" style={{ position: "relative", zIndex: 10 }}>
+            <div className="mb-4">
                 <div className="flex justify-between items-center">
                     <div>
                         <div className="flex items-center gap-3 mb-1">
@@ -311,7 +367,7 @@ const Notification = () => {
             </div>
 
             {/* Fixed Filter Section */}
-            <div className="mb-3" style={{ position: "relative", zIndex: 10 }}>
+            <div className="mb-3">
                 <div className="flex items-center gap-4">
                     <div className="flex bg-gray-100 rounded-lg p-1">
                         {[
@@ -361,7 +417,7 @@ const Notification = () => {
             </div>
 
             {/* Fixed Type Filter Section */}
-            <div className="mb-3" style={{ position: "relative", zIndex: 10 }}>
+            <div className="mb-4">
                 <div className="flex items-center gap-4">
                     <Filter className="w-6 h-6 text-gray-500" />
                     <div className="flex gap-2">
@@ -391,24 +447,7 @@ const Notification = () => {
             </div>
 
             {/* Notifications Container - Absolutely Positioned Fixed Size */}
-            <div
-                className="bg-white rounded-lg shadow-sm border border-gray-200"
-                style={{
-                    position: "absolute",
-                    top: "220px", // Position below the fixed header and filters (reduced gap)
-                    left: "-25%",
-                    right: "-25%",
-                    height: "720px",
-                    minHeight: "720px",
-                    maxHeight: "720px",
-                    width: "150%",
-                    boxSizing: "border-box",
-                    overflow: "hidden",
-                    display: "flex",
-                    flexDirection: "column",
-                    zIndex: 5,
-                }}
-            >
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 flex-1 flex flex-col overflow-hidden">
                 {loading ? (
                     <div
                         style={{ height: "100%" }}
@@ -436,43 +475,23 @@ const Notification = () => {
                         </p>
                     </div>
                 ) : (
-                    <div
-                        style={{
-                            height: "100%",
-                            overflowY: "auto",
-                            overflowX: "hidden",
-                            padding: "16px 0",
-                        }}
-                        className="divide-y divide-gray-100"
-                    >
+                    <div className="flex-1 overflow-y-auto overflow-x-hidden divide-y divide-gray-100 p-4">
                         {currentNotifications.map((notification) => (
                             <div
                                 key={notification.id}
-                                className={`hover:bg-gray-50 transition-colors ${
+                                className={`p-4 rounded-lg border border-gray-100 mb-2 hover:bg-gray-50 transition-colors ${
                                     notification.unread ? "bg-blue-50" : ""
                                 }`}
-                                style={{
-                                    height: "100px",
-                                    minHeight: "100px",
-                                    maxHeight: "100px",
-                                    padding: "20px 24px",
-                                    margin: "8px 16px",
-                                    display: "flex",
-                                    alignItems: "center",
-                                    boxSizing: "border-box",
-                                    borderRadius: "8px",
-                                    border: "1px solid #f3f4f6",
-                                }}
                             >
                                 <div className="flex items-center space-x-4 w-full">
                                     {getTypeIcon(notification.type)}
-                                    <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                    <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 mb-1">
                                             <h4 className="text-sm font-semibold text-gray-900 truncate">
                                                 {notification.title}
                                             </h4>
                                         </div>
-                                        <p className="text-sm text-gray-600 leading-relaxed line-clamp-2 overflow-hidden mb-1">
+                                        <p className="text-sm text-gray-600 mb-2">
                                             {notification.message}
                                         </p>
                                         <p className="text-xs text-gray-400">
@@ -522,17 +541,7 @@ const Notification = () => {
 
             {/* Pagination Controls - Absolutely Positioned */}
             {!loading && filteredNotifications.length > 0 && totalPages > 1 && (
-                <div
-                    className="flex items-center justify-between bg-white px-4 py-2 rounded-lg shadow-sm border border-gray-200"
-                    style={{
-                        position: "absolute",
-                        top: "950px", // Position below the notification container with reduced gap
-                        left: "-25%",
-                        right: "-25%",
-                        width: "150%",
-                        zIndex: 10,
-                    }}
-                >
+                <div className="flex items-center justify-between bg-white px-4 py-3 rounded-lg shadow-sm border border-gray-200 mt-4">
                     <div className="text-sm text-gray-700">
                         Showing {startIndex + 1} to{" "}
                         {Math.min(endIndex, filteredNotifications.length)} of{" "}
@@ -588,11 +597,6 @@ const Notification = () => {
     );
 };
 
-Notification.layout = (page) => {
-    const { props } = usePage();
-    const user = props?.auth?.user;
-    const roleName = user?.role?.userRole || "User";
-    return <RoleBasedLayout roleName={roleName}>{page}</RoleBasedLayout>;
-};
+Notification.layout = (page) => <RoleBasedLayout>{page}</RoleBasedLayout>;
 
 export default Notification;

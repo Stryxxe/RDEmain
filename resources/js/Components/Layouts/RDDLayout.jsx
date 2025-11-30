@@ -18,6 +18,7 @@ const RDDLayout = ({ children }) => {
     { path: '/rdd', label: 'R&D Initiative Status', icon: BiSearch },
     { path: '/rdd/statistics', label: 'Statistics', icon: BiBarChart },
     { path: '/rdd/review-proposal', label: 'Endorsement', icon: BiFile },
+    { path: '/rdd/archive', label: 'Archive', icon: BiFolder },
     { path: '/rdd/progress-report', label: 'Progress Reports', icon: BiBarChart },
     { path: '/rdd/submit-report', label: 'Submit Report', icon: BiUpload },
     { path: '/rdd/resources', label: 'Resources', icon: BiFolder }

@@ -18,43 +18,43 @@ const UserManagement = () => {
     const [totalPages, setTotalPages] = useState(1);
 
     // Fetch users from API
-    useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                setLoading(true);
-                const queryParams = new URLSearchParams({
-                    page: pagination.page,
-                    perPage: pagination.perPage,
-                    search: filters.search,
-                    role: filters.role,
-                    department: filters.department,
-                    status: filters.status,
-                });
-                
-                const response = await fetch(`/api/admin/users?${queryParams}`, {
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    },
-                    credentials: 'include'
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    setUsers(data.users || []);
-                    setTotalPages(Math.ceil((data.total || data.users?.length || 0) / pagination.perPage));
-                } else {
-                    console.error('Failed to fetch users');
-                    setUsers([]);
-                }
-            } catch (error) {
-                console.error('Error fetching users:', error);
+    const fetchUsers = async () => {
+        try {
+            setLoading(true);
+            const queryParams = new URLSearchParams({
+                page: pagination.page,
+                perPage: pagination.perPage,
+                search: filters.search,
+                role: filters.role,
+                department: filters.department,
+                status: filters.status,
+            });
+            
+            const response = await fetch(`/api/admin/users?${queryParams}`, {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                setUsers(data.users || []);
+                setTotalPages(Math.ceil((data.total || data.users?.length || 0) / pagination.perPage));
+            } else {
+                console.error('Failed to fetch users');
                 setUsers([]);
-            } finally {
-                setLoading(false);
             }
-        };
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            setUsers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchUsers();
     }, [pagination.page, pagination.perPage, filters]);
 
@@ -116,10 +116,41 @@ const UserManagement = () => {
                 
                 if (response.ok) {
                     alert("User deleted successfully!");
-                    // Refresh users list
-                    setUsers(prev => prev.filter(u => u.id !== userId && u.userID !== userId));
+                    // Refresh users list and recalculate pagination
+                    await fetchUsers();
                 } else {
-                    alert("Error deleting user. Please try again.");
+                    const errorData = await response.json();
+                    const errorMessage = errorData?.message || "Error deleting user. Please try again.";
+                    
+                    // If deletion is blocked due to related data, offer to deactivate instead
+                    if (response.status === 422 && errorMessage.includes('Cannot delete user')) {
+                        const confirmDeactivate = window.confirm(
+                            'This user has related data and cannot be deleted.\nWould you like to deactivate this user instead?'
+                        );
+                        if (confirmDeactivate) {
+                            const deactivateRes = await fetch(`/api/admin/users/${userId}`, {
+                                method: 'PUT',
+                                headers: {
+                                    'Accept': 'application/json',
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                                },
+                                credentials: 'include',
+                                body: JSON.stringify({ status: 'inactive' })
+                            });
+                            if (deactivateRes.ok) {
+                                alert('User deactivated successfully.');
+                                await fetchUsers();
+                            } else {
+                                const deErr = await deactivateRes.json().catch(() => ({}));
+                                alert(deErr?.message || 'Failed to deactivate user.');
+                            }
+                        } else {
+                            alert(errorMessage);
+                        }
+                    } else {
+                        alert(errorMessage);
+                    }
                 }
             } catch (error) {
                 console.error('Error deleting user:', error);
@@ -136,10 +167,34 @@ const UserManagement = () => {
         );
     };
 
-    // Calculate paginated users
-    const paginatedUsers = users;
-    
-    const filteredUsers = users;
+    // Client-side filtering as fallback if API ignores filters
+    const filteredUsers = users.filter((u) => {
+        const search = (filters.search || '').toLowerCase().trim();
+        const role = (filters.role || '').toLowerCase();
+        const status = (filters.status || '').toLowerCase();
+        const department = (filters.department || '').toLowerCase();
+
+        const matchesSearch = !search
+            || `${u.firstName || ''} ${u.lastName || ''}`.toLowerCase().includes(search)
+            || (u.email || '').toLowerCase().includes(search)
+            || (u.department || '').toLowerCase().includes(search);
+
+        const normalize = (v) => (v || '').toLowerCase();
+        const userRole = normalize(u.role) || normalize(u.roleName) || normalize(u.role?.userRole);
+        const userStatus = normalize(u.status);
+        const userDept = normalize(u.department) || normalize(u.departmentName) || normalize(u.department?.name);
+
+        const matchesRole = !role || role === 'all' ? true : userRole === role;
+        const matchesStatus = !status || status === 'all' ? true : userStatus === status;
+        const matchesDept = !department || department === 'all' ? true : userDept === department;
+
+        return matchesSearch && matchesRole && matchesStatus && matchesDept;
+    });
+
+    // Paginate filtered results
+    const start = (pagination.page - 1) * pagination.perPage;
+    const end = start + pagination.perPage;
+    const paginatedUsers = filteredUsers.slice(start, end);
 
     const handleSelectAll = () => {
         if (selectedUsers.length === paginatedUsers.length) {
@@ -149,7 +204,7 @@ const UserManagement = () => {
         }
     };
 
-    const handleBulkDelete = () => {
+    const handleBulkDelete = async () => {
         if (selectedUsers.length === 0) {
             alert("Please select users to delete");
             return;
@@ -160,11 +215,53 @@ const UserManagement = () => {
             )
         ) {
             try {
-                selectedUsers.forEach((userId) => deleteUser(userId));
+                const deletePromises = selectedUsers.map(async (userId) => {
+                    const response = await fetch(`/api/admin/users/${userId}`, {
+                        method: 'DELETE',
+                        headers: {
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                        },
+                        credentials: 'include'
+                    });
+                    return response.ok;
+                });
+                
+                const results = await Promise.all(deletePromises);
+                
+                // If some deletes failed, attempt deactivation for those
+                const failedIds = [];
+                for (let i = 0; i < results.length; i++) {
+                    if (!results[i]) failedIds.push(selectedUsers[i]);
+                }
+                
+                if (failedIds.length > 0) {
+                    const confirmDeactivate = window.confirm(
+                        `${failedIds.length} user(s) could not be deleted due to related data.\nDeactivate them instead?`
+                    );
+                    if (confirmDeactivate) {
+                        const deactivatePromises = failedIds.map(userId => fetch(`/api/admin/users/${userId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({ status: 'inactive' })
+                        }));
+                        await Promise.all(deactivatePromises);
+                        alert(`${failedIds.length} user(s) deactivated.`);
+                    }
+                }
+                
+                // Refresh users list and recalculate pagination
+                await fetchUsers();
                 setSelectedUsers([]);
-                alert(`${selectedUsers.length} user(s) deleted successfully!`);
+                alert(`${selectedUsers.length - failedIds.length} user(s) deleted successfully!`);
             } catch (error) {
-                alert("Error deleting users. Please try again.");
+                console.error('Error deleting users:', error);
+                alert("Error deleting some users. They may have existing proposals, reviews, or decisions.");
             }
         }
     };
@@ -266,7 +363,6 @@ const UserManagement = () => {
                             className="admin-input"
                         >
                             <option value="all">All Roles</option>
-                            <option value="admin">Admin</option>
                             <option value="proponent">Proponent</option>
                             <option value="central_manager">
                                 Central Manager
@@ -326,8 +422,8 @@ const UserManagement = () => {
                                 <th>Role</th>
                                 <th>Status</th>
                                 <th>Department</th>
-                                <th>Last Login</th>
-                                <th>Details</th>
+                                <th>Research Center</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -387,13 +483,8 @@ const UserManagement = () => {
                                     <td className="text-sm text-gray-900">
                                         {user.department}
                                     </td>
-                                    <td className="text-sm text-gray-500">
-                                        {user.lastLogin
-                                            ? format(
-                                                  new Date(user.lastLogin),
-                                                  "MMM dd, yyyy"
-                                              )
-                                            : "Never"}
+                                    <td className="text-sm text-gray-900">
+                                        {user.researchCenter || "—"}
                                     </td>
                                     <td>
                                         <div className="flex items-center space-x-2">
@@ -437,13 +528,7 @@ const UserManagement = () => {
                         <div className="text-sm text-gray-700">
                             {filteredUsers.length === 0
                                 ? "No results"
-                                : `Showing ${
-                                      (pagination.page - 1) * pagination.limit +
-                                      1
-                                  } to ${Math.min(
-                                      pagination.page * pagination.limit,
-                                      filteredUsers.length
-                                  )} of ${filteredUsers.length} results`}
+                                : `Showing ${start + 1} to ${Math.min(end, filteredUsers.length)} of ${filteredUsers.length} results`}
                         </div>
                         <div className="flex space-x-2">
                             <button
@@ -488,9 +573,11 @@ const UserManagement = () => {
             {showUserForm && (
                 <UserForm
                     user={editingUser}
-                    onClose={() => {
+                    onClose={async () => {
                         setShowUserForm(false);
                         setEditingUser(null);
+                        // Refetch users so newly added/edited user appears without full page refresh
+                        await fetchUsers();
                     }}
                 />
             )}

@@ -22,4 +22,9 @@ class Department extends Model
     {
         return $this->hasMany(User::class, 'departmentID', 'departmentID');
     }
+
+    public function researchCenters()
+    {
+        return $this->hasMany(ResearchCenter::class, 'departmentID', 'departmentID');
+    }
 }

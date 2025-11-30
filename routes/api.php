@@ -19,11 +19,89 @@ use App\Http\Middleware\RequestDeduplication;
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth:web');
 
+use App\Models\Department;
+use App\Models\ResearchCenter;
+// Get upload settings (max file size) - public endpoint for all authenticated users
+Route::get('/upload-settings', function () {
+    return response()->json([
+        'maxFileSizeMB' => \App\Helpers\SettingsHelper::getMaxFileSizeMB(),
+        'maxFileSizeKB' => \App\Helpers\SettingsHelper::getMaxFileSizeKB(),
+        'allowedFileTypes' => \App\Helpers\SettingsHelper::getAllowedFileTypes(),
+    ]);
+})->middleware('auth:web');
+
 // Get authenticated user
 Route::get('/user', function (Request $request) {
     $user = $request->user();
-    $user->load(['role', 'department']);
+    // Eager load researchCenter so frontend can display correct center instead of defaulting to department
+    $user->load(['role', 'department', 'researchCenter']);
     return $user;
+})->middleware('auth:web');
+
+// Admin: Research Centers list for user creation form
+Route::get('/admin/research-centers', function (Request $request) {
+    try {
+        $query = ResearchCenter::query()->with('department');
+        if ($request->has('departmentID')) {
+            $query->where('departmentID', $request->integer('departmentID'));
+        }
+        $centers = $query->orderBy('name')->get()->map(function ($center) {
+            return [
+                'centerID' => $center->centerID,
+                'centerName' => $center->name,
+                'departmentID' => $center->departmentID,
+                'departmentName' => $center->department->name ?? $center->department->departmentName ?? null,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $centers,
+        ]);
+    } catch (\Throwable $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load research centers',
+        ], 500);
+    }
+})->middleware('auth:web');
+
+// Admin: Create research center
+Route::post('/admin/research-centers', function (Request $request) {
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'departmentID' => 'nullable|exists:departments,departmentID'
+    ]);
+    
+    $center = ResearchCenter::create([
+        'name' => $request->name,
+        'departmentID' => $request->departmentID
+    ]);
+    
+    return response()->json(['success' => true, 'data' => $center]);
+})->middleware('auth:web');
+
+// Admin: Update research center
+Route::put('/admin/research-centers/{id}', function (Request $request, $id) {
+    $request->validate([
+        'name' => 'required|string|max:255',
+        'departmentID' => 'nullable|exists:departments,departmentID'
+    ]);
+    
+    $center = ResearchCenter::findOrFail($id);
+    $center->update([
+        'name' => $request->name,
+        'departmentID' => $request->departmentID
+    ]);
+    
+    return response()->json(['success' => true, 'data' => $center]);
+})->middleware('auth:web');
+
+// Admin: Delete research center
+Route::delete('/admin/research-centers/{id}', function ($id) {
+    $center = ResearchCenter::findOrFail($id);
+    $center->delete();
+    return response()->json(['success' => true]);
 })->middleware('auth:web');
 
 // Update user profile
@@ -41,7 +119,8 @@ Route::put('/user', function (Request $request) {
         'email' => $request->email,
     ]);
 
-    $user->load(['role', 'department']);
+    // Reload with researchCenter relation after update
+    $user->load(['role', 'department', 'researchCenter']);
     return $user;
 })->middleware('auth:web');
 
@@ -101,7 +180,7 @@ Route::post('/user/avatar', function (Request $request) {
 
 // Proposal routes - Use session-based auth for Inertia
 // Explicitly use 'web' guard to ensure session authentication works
-Route::middleware(['auth:web'])->group(function () {
+Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])->group(function () {
     // System Settings - simple JSON-backed storage
     Route::get('/admin/settings', function (Request $request) {
         $path = storage_path('app/settings.json');
@@ -114,10 +193,22 @@ Route::middleware(['auth:web'])->group(function () {
                 'backupFrequency' => 'daily',
                 'allowDepartmentCreation' => true,
                 'requireDepartmentAssignment' => true,
+                'fileStorage' => [
+                    'maxFileSize' => 20,
+                    'allowedTypes' => ['pdf','docx','xlsx','csv','png','jpg'],
+                ],
             ];
             \File::put($path, json_encode($default, JSON_PRETTY_PRINT));
         }
         $json = json_decode(\File::get($path), true);
+        
+        // Flatten maxFileSize for easier frontend access
+        if (isset($json['fileStorage']['maxFileSize'])) {
+            $json['maxFileSize'] = $json['fileStorage']['maxFileSize'];
+        } else {
+            $json['maxFileSize'] = 20;
+        }
+        
         return response()->json($json);
     });
 
@@ -131,15 +222,38 @@ Route::middleware(['auth:web'])->group(function () {
                 'backupFrequency' => 'required|in:hourly,daily,weekly,monthly',
                 'allowDepartmentCreation' => 'required',
                 'requireDepartmentAssignment' => 'required',
+                'maxFileSize' => 'required|integer|min:1|max:20',
             ]);
             
             // Ensure boolean conversion
             $validated['allowDepartmentCreation'] = (bool) $validated['allowDepartmentCreation'];
             $validated['requireDepartmentAssignment'] = (bool) $validated['requireDepartmentAssignment'];
+            
+            // Extract maxFileSize and store in fileStorage structure
+            $maxFileSize = (int) $validated['maxFileSize'];
+            unset($validated['maxFileSize']);
 
             $path = storage_path('app/settings.json');
+            
+            // Read existing settings to preserve fileStorage.allowedTypes
+            $existingData = [];
+            if (\File::exists($path)) {
+                $existingData = json_decode(\File::get($path), true) ?: [];
+            }
+            
+            // Merge with validated data
+            $validated['fileStorage'] = [
+                'maxFileSize' => $maxFileSize,
+                'allowedTypes' => $existingData['fileStorage']['allowedTypes'] ?? ['pdf','docx','xlsx','csv','png','jpg'],
+            ];
+            
             \File::put($path, json_encode($validated, JSON_PRETTY_PRINT));
-            return response()->json(['success' => true, 'settings' => $validated]);
+            
+            // Return with flattened maxFileSize for frontend
+            $response = $validated;
+            $response['maxFileSize'] = $maxFileSize;
+            
+            return response()->json(['success' => true, 'settings' => $response]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Settings validation failed', ['errors' => $e->errors(), 'input' => $request->all()]);
             throw $e;
@@ -193,7 +307,7 @@ Route::middleware(['auth:web'])->group(function () {
 
     Route::put('/admin/storage-settings', function (Request $request) {
         $validated = $request->validate([
-            'maxFileSize' => 'required|integer|min:1|max:200',
+            'maxFileSize' => 'required|integer|min:1|max:20',
             'allowedTypes' => 'nullable|array',
             'allowedTypes.*' => 'string|in:pdf,doc,docx,xls,xlsx,csv,png,jpg,jpeg,gif',
         ]);
@@ -212,8 +326,9 @@ Route::middleware(['auth:web'])->group(function () {
         return response()->json(['success' => true, 'storage' => $data['fileStorage']]);
     });
     Route::get('/proposals/statistics', [ProposalController::class, 'statistics']);
-    Route::get('/proposals/rdd-analytics', [ProposalController::class, 'rddAnalytics']);
+    Route::get('/proposals/rdd-analytics', [ProposalController::class, 'getRddAnalytics']);
     Route::get('/proposals/cm-endorsed', [ProposalController::class, 'getCmEndorsedProposals']);
+    Route::get('/proposals/rdd-endorsed', [ProposalController::class, 'getRddEndorsedProposals']);
     Route::apiResource('proposals', ProposalController::class);
     
     // Endorsement routes
@@ -259,7 +374,13 @@ Route::middleware(['auth:web'])->group(function () {
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
+    Route::delete('/admin/users/{userId}', [AdminUserController::class, 'destroy']);
+    
+    // Department management
     Route::get('/admin/departments', [AdminUserController::class, 'getDepartments']);
+    Route::post('/admin/departments', [AdminUserController::class, 'storeDepartment']);
+    Route::put('/admin/departments/{id}', [AdminUserController::class, 'updateDepartment']);
+    Route::delete('/admin/departments/{id}', [AdminUserController::class, 'destroyDepartment']);
     
     // Template management - Proponent templates
     Route::get('/admin/templates/proponent', function (Request $request) {

@@ -32,8 +32,8 @@ class HandleInertiaRequests extends Middleware
         $user = $request->user();
 
         if ($user) {
-            // Load relationships
-            $user->load(['role', 'department']);
+            // Load relationships including researchCenter so it displays correctly in profile
+            $user->load(['role', 'department', 'researchCenter']);
 
             // Ensure department name is accessible (handle both 'name' and 'departmentName')
             if ($user->department) {

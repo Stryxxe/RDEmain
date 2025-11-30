@@ -20,7 +20,7 @@ Route::get('/', [DashboardController::class, 'index'])
 
 // Pure Inertia routing - each route renders its own page component
 // Explicitly use 'web' guard to ensure session authentication works
-Route::middleware('auth:web')->group(function () {
+Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])->group(function () {
 
     // ============================================================================
     // RDD Routes - Research & Development Division
@@ -31,7 +31,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('/review-proposal', fn() => Inertia::render('RoleViews/RDD/RDDEndorsement'))->name('endorsement');
         Route::get('/review-proposal/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDEndorsementDetail', ['id' => $id]))->name('endorsement.detail');
         Route::get('/progress-report', fn() => Inertia::render('RoleViews/RDD/RDDProgressReport'))->name('progress-report');
-        Route::get('/progress-report/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDProgressReportDetail', ['id' => $id]))->name('progress-report.detail');
+        Route::get('/archive', fn() => Inertia::render('RoleViews/RDD/RDDArchive'))->name('archive');
         Route::get('/submit-report', fn() => Inertia::render('RoleViews/RDD/RDDSubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('RoleViews/RDD/RDDResources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('RoleViews/RDD/RDDAccount'))->name('account');
@@ -49,7 +49,7 @@ Route::middleware('auth:web')->group(function () {
         Route::get('/tracker/{id}', fn($id) => Inertia::render('TrackerDetail', ['id' => $id]))->name('tracker.detail');
         Route::get('/resources', fn() => Inertia::render('Resources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('Account'))->name('account');
-        Route::get('/notification', fn() => Inertia::render('Notification'))->name('notifications');
+        Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');
         Route::get('/messages', fn() => Inertia::render('Messages'))->name('messages');
     });
 

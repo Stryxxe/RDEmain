@@ -55,13 +55,30 @@ class EndorsementController extends Controller
                 ], 404);
             }
 
-            // Department check only applies to CM users
-            // RDD and RDE can endorse proposals from any department
+            // Research center check only applies to CM users
+            // RDD and RDE can endorse proposals from any research center
             if ($user->role->userRole === 'CM') {
-                if ($proposal->user->departmentID !== $user->departmentID) {
+                // CM must have a research center assigned
+                if (!$user->researchCenterID) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'CM users can only endorse proposals from their department'
+                        'message' => 'CM users must be assigned to a research center to endorse proposals'
+                    ], 403);
+                }
+                
+                // Proposal author must have a research center assigned
+                if (!$proposal->user->researchCenterID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot endorse: Proposal author is not assigned to a research center'
+                    ], 403);
+                }
+                
+                // CM can only endorse proposals from their research center
+                if ($proposal->user->researchCenterID !== $user->researchCenterID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'CM users can only endorse proposals from their research center'
                     ], 403);
                 }
             }
@@ -133,6 +150,20 @@ class EndorsementController extends Controller
 
                 // Get department name
                 $departmentName = $proposal->user->department ? $proposal->user->department->name : 'Unknown Department';
+
+                // Notify the CM user about their successful endorsement action
+                Notification::create([
+                    'userID' => $user->userID,
+                    'type' => 'success',
+                    'title' => 'Endorsement Successful',
+                    'message' => "You have successfully endorsed proposal \"{$proposal->researchTitle}\" (ID: {$proposal->proposalID}) by {$proposal->user->fullName}.",
+                    'data' => [
+                        'proposal_id' => $proposal->proposalID,
+                        'proposal_title' => $proposal->researchTitle,
+                        'proponent_name' => $proposal->user->fullName,
+                        'event' => 'proposal.endorsed.cm'
+                    ]
+                ]);
 
                 // Notify the proponent that their proposal has been endorsed
                 Notification::create([

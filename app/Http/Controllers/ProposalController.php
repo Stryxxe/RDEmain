@@ -8,6 +8,7 @@ use App\Models\Notification;
 use App\Models\User;
 use App\Models\Endorsement;
 use App\Events\ProposalSubmitted;
+use App\Helpers\SettingsHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -31,7 +32,7 @@ class ProposalController extends Controller
 
         match ($user->role?->userRole) {
             'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID))
+            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
                          ->whereDoesntHave('endorsements', function ($q) use ($user) {
                              // Exclude proposals already endorsed by this CM user
                              $q->where('endorserID', $user->userID)
@@ -69,7 +70,7 @@ class ProposalController extends Controller
 
         match ($user->role?->userRole) {
             'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID)),
+            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID)),
             default => $query->where('userID', $user->userID),
         };
 
@@ -105,6 +106,9 @@ class ProposalController extends Controller
             $request->merge(['researchCenter' => $defaultResearchCenter]);
         }
 
+        // Get dynamic max file size from settings
+        $maxFileSizeKB = SettingsHelper::getMaxFileSizeKB();
+        
         try {
             $validated = $request->validate([
                 'researchTitle' => 'required|string|max:255',
@@ -115,12 +119,12 @@ class ProposalController extends Controller
                 'dostSPs' => 'required|string', // Will be JSON string from frontend
                 'sustainableDevelopmentGoals' => 'required|string', // Will be JSON string from frontend
                 'proposedBudget' => 'required|numeric|min:0',
-                'reportFile' => 'required|file|mimes:pdf,doc,docx|max:5120', // 5MB max
-                'setiScorecard' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
-                'gadCertificate' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
-                'matrixOfCompliance' => 'nullable|file|mimes:pdf,doc,docx|max:5120',
+                'reportFile' => "required|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'setiScorecard' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'gadCertificate' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'matrixOfCompliance' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
                 'supportingDocuments' => 'nullable|array|max:10',
-                'supportingDocuments.*' => 'file|mimes:pdf,doc,docx|max:5120',
+                'supportingDocuments.*' => "file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
             ]);
         } catch (ValidationException $e) {
             // Log validation errors for debugging
@@ -288,11 +292,11 @@ class ProposalController extends Controller
                 ]
             ]);
 
-            // Find ALL CMs of the same department and notify them
+            // Find ALL CMs of the same research center and notify them
             $cmUsers = User::whereHas('role', function ($query) {
                 $query->where('userRole', 'CM');
             })
-                ->where('departmentID', $user->departmentID)
+                ->where('researchCenterID', $user->researchCenterID)
                 ->get();
 
             // Notify all CMs in the department
@@ -315,14 +319,14 @@ class ProposalController extends Controller
             if ($cmUsers->count() > 0) {
                 Log::info('Notifications created for CMs', [
                     'proposalID' => $proposal->proposalID,
-                    'departmentID' => $user->departmentID,
+                    'researchCenterID' => $user->researchCenterID,
                     'cm_count' => $cmUsers->count(),
                     'cm_userIDs' => $cmUsers->pluck('userID')->toArray()
                 ]);
             } else {
-                Log::warning('No CM users found for department', [
+                Log::warning('No CM users found for research center', [
                     'proposalID' => $proposal->proposalID,
-                    'departmentID' => $user->departmentID
+                    'researchCenterID' => $user->researchCenterID
                 ]);
             }
 
@@ -366,10 +370,10 @@ class ProposalController extends Controller
         // Find the proposal
         $proposal = Proposal::where('proposalID', $id)->with('user')->firstOrFail();
 
-        // Authorization: Allow proposal owner, CM (for their department), and RDD (for all)
+        // Authorization: Allow proposal owner, CM (for their research center), and RDD (for all)
         $canEdit = match ($user->role?->userRole) {
             'RDD' => true, // RDD can edit all proposals
-            'CM' => $proposal->user?->departmentID === $user->departmentID, // CM can edit proposals from their department
+            'CM' => $proposal->user?->researchCenterID === $user->researchCenterID, // CM can edit proposals from their research center
             default => $proposal->userID === $user->userID, // Others can only edit their own
         };
 
@@ -380,6 +384,9 @@ class ProposalController extends Controller
             ], 403);
         }
 
+        // Get dynamic max file size from settings
+        $maxFileSizeKB = SettingsHelper::getMaxFileSizeKB();
+        
         $validated = $request->validate([
             'researchTitle' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
@@ -390,7 +397,7 @@ class ProposalController extends Controller
             'sustainableDevelopmentGoals' => 'sometimes|array',
             'proposedBudget' => 'sometimes|numeric|min:0',
             'budgetBreakdown' => 'sometimes|array',
-            'updatedForm' => 'nullable|file|mimes:pdf,doc,docx|max:5120'
+            'updatedForm' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}"
         ]);
 
         try {
@@ -508,7 +515,7 @@ class ProposalController extends Controller
 
         match ($user->role?->userRole) {
             'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('departmentID', $user->departmentID)),
+            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID)),
             default => $query->where('userID', $user->userID),
         };
 
@@ -626,6 +633,51 @@ class ProposalController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to fetch CM-endorsed proposals',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Get proposals that have been endorsed by RDD (Research & Development Division)
+     * Only returns proposals with approved endorsements from RDD users
+     */
+    public function getRddEndorsedProposals(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $user->loadMissing('role');
+
+            // Only RDD users can access this endpoint
+            if ($user->role?->userRole !== 'RDD') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only RDD users can access this endpoint.'
+                ], 403);
+            }
+
+            // Get RDD user IDs
+            $rddUserIds = User::whereHas('role', function ($q) {
+                $q->where('userRole', 'RDD');
+            })->pluck('userID');
+
+            // Get proposals that have approved endorsements from RDD users
+            $proposals = Proposal::with(['status', 'files', 'user.department', 'user.researchCenter', 'user.role', 'endorsements.endorser.role'])
+                ->whereHas('endorsements', function ($query) use ($rddUserIds) {
+                    $query->where('endorsementStatus', 'approved')
+                        ->whereIn('endorserID', $rddUserIds);
+                })
+                ->orderBy('proposalID', 'desc')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $proposals
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch RDD-endorsed proposals',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -1009,5 +1061,123 @@ class ProposalController extends Controller
         }
 
         return $breakdown;
+    }
+
+    /**
+     * Get analytics data for RDD users
+     */
+    public function getRddAnalytics(): JsonResponse
+    {
+        $user = Auth::user();
+        $user->loadMissing('role');
+
+        // Only RDD users can access this endpoint
+        if ($user->role?->userRole !== 'RDD') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Unauthorized access'
+            ], 403);
+        }
+
+        // Get all proposals with their endorsements
+        $proposals = Proposal::with('endorsements')->get();
+
+        // Initialize counters
+        $totalProposals = $proposals->count();
+        $totalOngoing = 0;
+        $totalCompleted = 0;
+
+        // Initialize aggregation maps
+        $rdeAgendaMap = [];
+        $dost6PsMap = [];
+        $sdgMap = [];
+
+        foreach ($proposals as $proposal) {
+            // Determine endorsement status for this proposal
+            $hasApprovedEndorsement = $proposal->endorsements->contains(function ($endorsement) {
+                return $endorsement->endorsementStatus === 'approved';
+            });
+
+            if ($hasApprovedEndorsement) {
+                $totalCompleted++;
+                $status = 'completed';
+            } else {
+                $totalOngoing++;
+                $status = 'ongoing';
+            }
+
+            // Aggregate by Research Agenda
+            if ($proposal->researchAgenda && is_array($proposal->researchAgenda)) {
+                foreach ($proposal->researchAgenda as $agenda) {
+                    if (!isset($rdeAgendaMap[$agenda])) {
+                        $rdeAgendaMap[$agenda] = ['ongoing' => 0, 'completed' => 0];
+                    }
+                    $rdeAgendaMap[$agenda][$status]++;
+                }
+            }
+
+            // Aggregate by DOST 6Ps
+            if ($proposal->dostSPs && is_array($proposal->dostSPs)) {
+                foreach ($proposal->dostSPs as $dost) {
+                    if (!isset($dost6PsMap[$dost])) {
+                        $dost6PsMap[$dost] = 0;
+                    }
+                    $dost6PsMap[$dost]++;
+                }
+            }
+
+            // Aggregate by SDG
+            if ($proposal->sustainableDevelopmentGoals && is_array($proposal->sustainableDevelopmentGoals)) {
+                foreach ($proposal->sustainableDevelopmentGoals as $sdg) {
+                    if (!isset($sdgMap[$sdg])) {
+                        $sdgMap[$sdg] = 0;
+                    }
+                    $sdgMap[$sdg]++;
+                }
+            }
+        }
+
+        // Format RDE Agenda data
+        $rdeAgenda = [];
+        foreach ($rdeAgendaMap as $name => $counts) {
+            $rdeAgenda[] = [
+                'name' => $name,
+                'ongoing' => $counts['ongoing'],
+                'completed' => $counts['completed'],
+                'total' => $counts['ongoing'] + $counts['completed']
+            ];
+        }
+
+        // Format DOST 6Ps data
+        $dost6Ps = [];
+        foreach ($dost6PsMap as $name => $value) {
+            $dost6Ps[] = [
+                'name' => $name,
+                'value' => $value
+            ];
+        }
+
+        // Format SDG data
+        $sdg = [];
+        foreach ($sdgMap as $name => $value) {
+            $sdg[] = [
+                'name' => $name,
+                'value' => $value
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'overview' => [
+                    'totalProposals' => $totalProposals,
+                    'totalOngoing' => $totalOngoing,
+                    'totalCompleted' => $totalCompleted
+                ],
+                'rdeAgenda' => $rdeAgenda,
+                'dost6Ps' => $dost6Ps,
+                'sdg' => $sdg
+            ]
+        ]);
     }
 }

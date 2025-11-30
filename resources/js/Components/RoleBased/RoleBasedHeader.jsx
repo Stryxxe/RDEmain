@@ -1,16 +1,16 @@
 import React, { useState, useRef, useEffect } from "react";
-import { router, Link } from "@inertiajs/react";
-import { useAuth } from "../../contexts/AuthContext";
-import { useNotifications } from "../../contexts/NotificationContext";
-import { useMessages } from "../../contexts/MessageContext";
+import { router, Link, usePage } from "@inertiajs/react";
+import axios from "axios";
 import { User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { getRoleConfig } from "../../config/roleConfigs";
 import usepLogo from "../../../assets/logo.png";
 
 const RoleBasedHeader = ({ role }) => {
-    const { user } = useAuth();
-    const { notifications, unreadCount, markAsRead } = useNotifications();
-    const { unreadCount: messageUnreadCount } = useMessages();
+    const { props } = usePage();
+    const user = props?.auth?.user;
+    const [notifications, setNotifications] = useState([]);
+    const [unreadCount, setUnreadCount] = useState(0);
+    const [messageUnreadCount, setMessageUnreadCount] = useState(0);
     const [showNotifications, setShowNotifications] = useState(false);
     const [showProfileDropdown, setShowProfileDropdown] = useState(false);
     const dropdownRef = useRef(null);
@@ -18,6 +18,45 @@ const RoleBasedHeader = ({ role }) => {
 
     const config = getRoleConfig(role);
     const roleName = config?.displayName || role;
+
+    // Fetch notifications on mount
+    useEffect(() => {
+        const fetchNotifications = async () => {
+            try {
+                const axiosInstance = window.axios || axios;
+                const response = await axiosInstance.get('/notifications', {
+                    headers: { Accept: 'application/json' },
+                    withCredentials: true,
+                });
+                const data = response.data?.data || response.data || [];
+                setNotifications(data.slice(0, 5)); // Show only latest 5
+                setUnreadCount(data.filter(n => !n.read).length);
+            } catch (error) {
+                console.error('Failed to fetch notifications:', error);
+            }
+        };
+
+        if (user) {
+            fetchNotifications();
+        }
+    }, [user]);
+
+    const markAsRead = async (notificationId) => {
+        try {
+            const axiosInstance = window.axios || axios;
+            await axiosInstance.put(`/notifications/${notificationId}/read`, {}, {
+                headers: { Accept: 'application/json' },
+                withCredentials: true,
+            });
+            // Update local state
+            setNotifications(prev => prev.map(n => 
+                n.id === notificationId ? { ...n, read: true } : n
+            ));
+            setUnreadCount(prev => Math.max(0, prev - 1));
+        } catch (error) {
+            console.error('Failed to mark notification as read:', error);
+        }
+    };
 
     const formatTime = (timestamp) => {
         if (!timestamp) return "Unknown time";

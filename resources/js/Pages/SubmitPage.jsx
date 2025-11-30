@@ -10,6 +10,7 @@ import apiService from "../services/api";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../Components/Layouts/AppLayout";
 import Breadcrumbs from "../Components/Breadcrumbs";
+import { useUploadSettings } from "../hooks/useUploadSettings";
 
 const SubmitPage = () => {
     const { user } = useAuth();
@@ -44,6 +45,10 @@ const SubmitPage = () => {
 
         return () => clearTimeout(checkAuth);
     }, [currentUser]);
+    
+    // Get dynamic upload settings from backend
+    const { maxFileSizeMB, loading: settingsLoading } = useUploadSettings();
+    
     const [formData, setFormData] = useState({
         reportFile: null,
         reportTitle: "",
@@ -454,7 +459,7 @@ const SubmitPage = () => {
                     <DragDropUpload
                         onFileSelect={handleFileSelect}
                         acceptedTypes="PDF, DOC, DOCX"
-                        maxSize="5MB"
+                        maxSize={`${maxFileSizeMB}MB`}
                         selectedFile={formData.reportFile}
                     />
                 </div>
@@ -567,6 +572,7 @@ const SubmitPage = () => {
                         files={formData.supportingDocuments}
                         onChange={handleSupportingDocsChange}
                         maxFiles={10}
+                        maxSizeMB={maxFileSizeMB}
                         label="Supporting Documents"
                         description="Attach SETI Scorecards, GAD Certificates, matrices, and any other approvals in one place. Accepted formats: PDF, DOC, DOCX."
                     />

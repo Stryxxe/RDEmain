@@ -98,7 +98,7 @@ const Header = () => {
   const handleNotificationClick = async (notificationId) => {
     await markAsRead(notificationId);
     setShowNotifications(false);
-    router.visit('/proponent/notification');
+    router.visit('/proponent/notifications');
   };
 
   // Close dropdowns when clicking outside or pressing Escape
@@ -272,7 +272,7 @@ const Header = () => {
               <button 
                 onClick={() => {
                   setShowNotifications(false);
-                  router.visit('/proponent/notification');
+                  router.visit('/proponent/notifications');
                 }}
                 className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium"
               >

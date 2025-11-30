@@ -1,10 +1,13 @@
-import React, { useMemo } from "react";
-import { useAuth } from "../../contexts/AuthContext";
+import React from "react";
+import { usePage } from "@inertiajs/react";
 import RoleBasedHeader from "../RoleBased/RoleBasedHeader";
 import RoleBasedNavigation from "../RoleBased/RoleBasedNavigation";
 
 const RoleBasedLayout = ({ children, roleName, hideSidebar = false }) => {
-    const { role } = useAuth(); // Now comes directly from AuthContext
+    // Get user from Inertia props instead of AuthContext
+    const { props } = usePage();
+    const user = props?.auth?.user;
+    const role = user?.role?.userRole || roleName || "User";
 
     return (
         <div className="min-h-screen bg-gray-100">

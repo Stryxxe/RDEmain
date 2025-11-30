@@ -107,7 +107,8 @@ class ApiService {
       formData.append('sustainableDevelopmentGoals', JSON.stringify(proposalData.sustainableDevelopmentGoals));
       
       // Add files - only append if file exists, is a valid File object, and has valid size
-      const isValidFile = (file) => {
+      // Note: File size validation is also enforced on the server side with dynamic limits from admin settings
+      const isValidFile = (file, maxSizeMB = 20) => {
         if (!file) return false;
         if (!(file instanceof File)) {
           console.warn('Invalid file object:', typeof file, file);
@@ -117,8 +118,9 @@ class ApiService {
           console.warn('File is empty:', file.name);
           return false;
         }
-        if (file.size > 5 * 1024 * 1024) {
-          console.warn('File exceeds 5MB limit:', file.name, (file.size / 1024 / 1024).toFixed(2) + 'MB');
+        const maxBytes = maxSizeMB * 1024 * 1024;
+        if (file.size > maxBytes) {
+          console.warn(`File exceeds ${maxSizeMB}MB limit:`, file.name, (file.size / 1024 / 1024).toFixed(2) + 'MB');
           return false;
         }
         return true;

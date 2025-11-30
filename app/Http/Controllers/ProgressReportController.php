@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ProgressReport;
 use App\Models\Proposal;
 use App\Models\File;
+use App\Helpers\SettingsHelper;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -91,6 +92,9 @@ class ProgressReportController extends Controller
      */
     public function store(Request $request): JsonResponse
     {
+        // Get dynamic max file size from settings
+        $maxFileSizeKB = SettingsHelper::getMaxFileSizeKB();
+        
         $validator = Validator::make($request->all(), [
             'proposalID' => 'required|exists:proposals,proposalID',
             'reportType' => 'required|string|in:Quarterly,Annual,Final,Interim',
@@ -102,7 +106,7 @@ class ProgressReportController extends Controller
             'nextMilestone' => 'required|string',
             'additionalNotes' => 'nullable|string',
             'files' => 'nullable|array',
-            'files.*' => 'file|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx|max:10240' // 10MB max
+            'files.*' => "file|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx|max:{$maxFileSizeKB}"
         ]);
 
         if ($validator->fails()) {

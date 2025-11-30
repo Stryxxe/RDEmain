@@ -33,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'request.deduplication' => \App\Http\Middleware\RequestDeduplication::class,
             'verify.csrf' => \App\Http\Middleware\VerifyCsrfToken::class,
+            'active.user' => \App\Http\Middleware\EnsureUserIsActive::class,
         ]);
 
         //

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useMemo } from "react";
-import { usePage, router, useForm } from "@inertiajs/react";
+import { router } from "@inertiajs/react";
 import { getUserRole } from "../utils/roleHelpers";
 
 const AuthContext = createContext();
@@ -12,12 +12,11 @@ export const useAuth = () => {
     return context;
 };
 
-// Inner component that can use usePage() hook
+// Provider that reads from Inertia router.page to avoid usePage dependency
 const AuthProviderInner = ({ children }) => {
-    // Use usePage to get the latest user data from Inertia
-    // This ensures the user is always up-to-date after navigation
-    const { props } = usePage();
-    const user = props?.auth?.user || null;
+    // Read current page props safely from Inertia router
+    const page = router?.page;
+    const user = page?.props?.auth?.user || null;
 
     // Get role from user data
     const role = useMemo(() => {

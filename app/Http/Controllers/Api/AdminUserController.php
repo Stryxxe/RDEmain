@@ -30,7 +30,11 @@ class AdminUserController extends Controller
             ], 401);
         }
 
-        $users = User::with(['role', 'department'])->get();
+        $users = User::with(['role', 'department', 'researchCenter'])
+            ->whereHas('role', function($query) {
+                $query->where('userRole', '!=', 'Admin');
+            })
+            ->get();
 
         $mapped = $users->map(fn (User $user) => $this->formatUserResponse($user));
 
@@ -48,6 +52,7 @@ class AdminUserController extends Controller
             'email' => ['required', 'email', 'max:50', 'unique:users,email'],
             'role' => ['required', 'string'],
             'department' => ['required', 'string', 'max:255'],
+            'researchCenter' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
@@ -63,6 +68,20 @@ class AdminUserController extends Controller
         $departmentName = $validated['department'];
         $department = $this->resolveDepartment($departmentName);
 
+        // Resolve research center if provided
+        $researchCenterID = null;
+        if (!empty($validated['researchCenter'])) {
+            $researchCenter = \App\Models\ResearchCenter::where('name', $validated['researchCenter'])
+                ->orWhere(function($q) use ($validated) {
+                    $q->whereRaw('LOWER(name) = ?', [strtolower($validated['researchCenter'])]);
+                })
+                ->first();
+            
+            if ($researchCenter) {
+                $researchCenterID = $researchCenter->centerID;
+            }
+        }
+
         $generatedPassword = null;
         $password = $validated['password'] ?? null;
 
@@ -77,14 +96,19 @@ class AdminUserController extends Controller
             'email' => $validated['email'],
             'password' => $password,
             'departmentID' => $department->departmentID,
+            'researchCenterID' => $researchCenterID,
             'userRolesID' => $role->userRoleID,
         ];
+        // Persist status if column exists
+        if (Schema::hasColumn((new User())->getTable(), 'status')) {
+            $createData['status'] = $validated['status'] ?? 'inactive';
+        }
         if (Schema::hasColumn((new User())->getTable(), 'phone')) {
             $createData['phone'] = $validated['phone'] ?? null;
         }
         $user = User::create($createData);
 
-        $user->load(['role', 'department']);
+        $user->load(['role', 'department', 'researchCenter']);
 
         $responseUser = $this->formatUserResponse($user, [
             'role' => $roleSlug,
@@ -117,6 +141,7 @@ class AdminUserController extends Controller
             ],
             'role' => ['required', 'string'],
             'department' => ['required', 'string', 'max:255'],
+            'researchCenter' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
@@ -132,9 +157,27 @@ class AdminUserController extends Controller
         $departmentName = $validated['department'];
         $department = $this->resolveDepartment($departmentName);
 
+        // Resolve research center if provided
+        $researchCenterID = null;
+        if (!empty($validated['researchCenter'])) {
+            $researchCenter = \App\Models\ResearchCenter::where('name', $validated['researchCenter'])
+                ->orWhere(function($q) use ($validated) {
+                    $q->whereRaw('LOWER(name) = ?', [strtolower($validated['researchCenter'])]);
+                })
+                ->first();
+            
+            if ($researchCenter) {
+                $researchCenterID = $researchCenter->centerID;
+            }
+        }
+
         $user->firstName = $validated['firstName'];
         $user->lastName = $validated['lastName'];
         $user->email = $validated['email'];
+        // Persist status if column exists
+        if (Schema::hasColumn((new User())->getTable(), 'status')) {
+            $user->status = $validated['status'] ?? $user->status ?? 'inactive';
+        }
         if (Schema::hasColumn((new User())->getTable(), 'phone')) {
             $user->phone = $validated['phone'] ?? null;
         }
@@ -142,14 +185,15 @@ class AdminUserController extends Controller
             $user->password = $validated['password'];
         }
         $user->departmentID = $department->departmentID;
+        $user->researchCenterID = $researchCenterID;
         $user->userRolesID = $role->userRoleID;
         $user->save();
 
-        $user->load(['role', 'department']);
+        $user->load(['role', 'department', 'researchCenter']);
 
         $responseUser = $this->formatUserResponse($user, [
             'role' => $roleSlug,
-            'status' => $validated['status'] ?? 'active',
+            'status' => Schema::hasColumn((new User())->getTable(), 'status') ? ($validated['status'] ?? ($user->status ?? 'inactive')) : ($validated['status'] ?? 'active'),
             'phone' => $validated['phone'] ?? '',
         ]);
 
@@ -167,13 +211,16 @@ class AdminUserController extends Controller
             'lastName' => $user->lastName,
             'email' => $user->email,
             'role' => $overrides['role'] ?? $this->getRoleSlugFromName($user->role?->userRole ?? ''),
-            'status' => $overrides['status'] ?? 'active',
+            'status' => $overrides['status'] ?? (Schema::hasColumn((new User())->getTable(), 'status') ? ($user->status ?? 'inactive') : 'active'),
             'department' => $user->department?->departmentName
                 ?? $user->department?->name
                 ?? '—',
             'lastLogin' => null,
             'avatar' => 'https://ui-avatars.com/api/?name=' . urlencode($user->firstName . ' ' . $user->lastName) . '&background=3b82f6&color=fff',
             'phone' => $overrides['phone'] ?? ($user->phone ?? ''),
+            // Include research center data so frontend can display and edit it
+            'researchCenter' => $user->researchCenter?->name ?? $user->researchCenter?->centerName ?? null,
+            'researchCenterID' => $user->researchCenter?->centerID ?? null,
         ];
     }
 
@@ -264,6 +311,151 @@ class AdminUserController extends Controller
                 'success' => false,
                 'message' => 'Failed to fetch departments',
                 'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function storeDepartment(Request $request)
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:departments,name'],
+        ]);
+
+        try {
+            $department = Department::create([
+                'name' => $validated['name'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'departmentID' => $department->departmentID,
+                    'name' => $department->name,
+                    'departmentName' => $department->name,
+                ]
+            ], 201);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create department',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateDepartment(Request $request, $id)
+    {
+        $department = Department::findOrFail($id);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:departments,name,' . $id . ',departmentID'],
+        ]);
+
+        try {
+            $department->update([
+                'name' => $validated['name'],
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'departmentID' => $department->departmentID,
+                    'name' => $department->name,
+                    'departmentName' => $department->name,
+                ]
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update department',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function destroyDepartment($id)
+    {
+        try {
+            $department = Department::findOrFail($id);
+            
+            // Check if department has users or research centers
+            if ($department->users()->count() > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete department with assigned users'
+                ], 422);
+            }
+
+            if ($department->researchCenters()->count() > 0) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete department with assigned research centers'
+                ], 422);
+            }
+
+            $department->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Department deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete department',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function destroy($userId)
+    {
+        try {
+            $user = User::findOrFail($userId);
+            
+            // Prevent deletion of admin users
+            if ($user->role && $user->role->userRole === 'Admin') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Cannot delete admin users'
+                ], 422);
+            }
+
+            // Check if user has related records that prevent deletion
+            try {
+                $hasProposals = \DB::table('proposals')->where('userID', $userId)->count() > 0;
+                $hasReviews = \DB::table('reviews')->where('reviewerID', $userId)->count() > 0;
+                $hasDecisions = \DB::table('decisions')->where('decisionMakerID', $userId)->count() > 0;
+                
+                if ($hasProposals || $hasReviews || $hasDecisions) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot delete user with existing proposals, reviews, or decisions. Please reassign or remove them first.'
+                    ], 422);
+                }
+
+                // Delete related records that can be safely removed
+                \DB::table('endorsements')->where('endorserID', $userId)->delete();
+                \DB::table('notifications')->where('userID', $userId)->delete();
+                \DB::table('messages')->where('senderID', $userId)->orWhere('receiverID', $userId)->delete();
+            } catch (\Exception $relException) {
+                // If checking relationships fails, try to delete anyway
+                \Log::warning('Could not check user relationships: ' . $relException->getMessage());
+            }
+            
+            // Now delete the user
+            $user->delete();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'User deleted successfully'
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to delete user ' . $userId . ': ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete user. This user may have related data that prevents deletion.',
+                'error' => config('app.debug') ? $e->getMessage() : 'Internal server error'
             ], 500);
         }
     }

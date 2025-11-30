@@ -49,13 +49,32 @@ const CMAccount = () => {
                 user.department ||
                 "";
 
+            const roleNameMap = {
+                'Admin': 'Administrator',
+                'CM': 'Central Manager',
+                'RDD': 'Research & Development Division',
+                'RDE': 'Research, Development & Extension',
+                'OP': 'Office of the President',
+                'OSUORU': 'Office of Student Affairs & University Relations Unit',
+                'Proponent': 'Proponent'
+            };
+            const fullRoleName = roleNameMap[user.role?.userRole] || user.role?.userRole || '';
+
+            // Backend sends as snake_case (research_center), also check camelCase for consistency
+            const researchCenterName =
+                user.research_center?.name ||
+                user.researchCenter?.name ||
+                user.research_center?.centerName ||
+                user.researchCenter?.centerName ||
+                "";
+
             setFormData({
                 firstName: user.firstName || "",
                 lastName: user.lastName || "",
                 email: user.email || "",
                 department: departmentName,
-                role: user.role?.userRole || "",
-                researchCenter: departmentName,
+                role: fullRoleName,
+                researchCenter: researchCenterName,
             });
         }
     }, [user]);
@@ -99,7 +118,7 @@ const CMAccount = () => {
         }
 
         try {
-            const response = await window.axios.post("/api/user/change-password", {
+            const response = await window.axios.post("/user/change-password", {
                 current_password: passwordData.currentPassword,
                 new_password: passwordData.newPassword,
                 new_password_confirmation: passwordData.confirmPassword,
@@ -130,7 +149,7 @@ const CMAccount = () => {
             setMessage("");
 
             const response = await window.axios.put(
-                "/api/user",
+                "/user",
                 {
                     firstName: formData.firstName,
                     lastName: formData.lastName,
