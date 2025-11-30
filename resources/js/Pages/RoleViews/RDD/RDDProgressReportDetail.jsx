@@ -174,6 +174,35 @@ const RDDProgressReportDetail = ({ id: reportId }) => {
                 {/* Divider */}
                 <hr className="border-t border-gray-200" />
 
+                {/* Description */}
+                {report.achievements && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                            Description
+                        </h3>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {report.achievements}
+                        </p>
+                    </div>
+                )}
+
+                {/* Additional Notes */}
+                {report.additionalNotes && (
+                    <div>
+                        <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                            Additional Notes
+                        </h3>
+                        <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
+                            {report.additionalNotes}
+                        </p>
+                    </div>
+                )}
+
+                {/* Divider */}
+                {(report.achievements || report.additionalNotes) && (
+                    <hr className="border-t border-gray-200" />
+                )}
+
                 {/* Submitted Documents */}
                 <div>
                     <h3 className="text-lg font-semibold text-gray-800 mb-2">

@@ -49,11 +49,22 @@ class ProgressReportController extends Controller
                 'files'
             ]);
 
-            // For RDD users, show all reports; for others, show only their own
+            // For RDD users, show all reports
             if ($user->role && $user->role->userRole === 'RDD') {
                 // RDD users can see all reports - no filtering needed
-            } else {
-                // For other users, show only their own reports
+            } 
+            // For CM users, show reports from their department
+            else if ($user->role && $user->role->userRole === 'CM') {
+                if (!$user->relationLoaded('department')) {
+                    $user->load('department');
+                }
+                // Filter by department through proposal relationship
+                $query->whereHas('proposal.user', function($q) use ($user) {
+                    $q->where('departmentID', $user->departmentID);
+                });
+            } 
+            // For other users, show only their own reports
+            else {
                 $query->where('userID', $user->userID);
             }
 
