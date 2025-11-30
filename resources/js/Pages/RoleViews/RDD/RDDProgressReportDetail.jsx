@@ -1,36 +1,71 @@
 import React, { useState, useEffect } from "react";
 import { useRouteParams } from "../../../Components/RoleBased/InertiaRoleRouter";
-import { router } from "@inertiajs/react";
+import { router, usePage } from "@inertiajs/react";
 import { FaArrowLeft } from "react-icons/fa";
 import rddService from "../../../services/rddService";
 import PDFViewer from "../../../Components/PDFViewer";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
 
-const RDDProgressReportDetail = () => {
-    const { id } = useRouteParams();
+const RDDProgressReportDetail = ({ id: reportId }) => {
+    const { props } = usePage();
+    const routeParams = useRouteParams();
+    // Get ID from props, route params, or fallback to prop
+    const id = reportId || routeParams.id || props?.id;
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
     useEffect(() => {
-        if (id) {
+        // Wait a bit for ID to be available (in case of initial page load)
+        const checkAndLoad = setTimeout(() => {
+            if (!id) {
+                setError("Progress report ID is required");
+                setLoading(false);
+                return;
+            }
+            
             fetchProgressReport();
-        }
+        }, 100);
+
+        return () => clearTimeout(checkAndLoad);
     }, [id]);
 
     const fetchProgressReport = async () => {
+        if (!id) {
+            setError("Progress report ID is required");
+            setLoading(false);
+            return;
+        }
+
         try {
             setLoading(true);
             setError(null);
             const response = await rddService.getProgressReportById(id);
             if (response.success) {
                 setReport(response.data);
+                // Debug: Log file structure
+                if (response.data.files && response.data.files.length > 0) {
+                    console.log("Progress Report Files:", response.data.files);
+                    console.log("First file structure:", response.data.files[0]);
+                    console.log("File ID (fileID):", response.data.files[0].fileID);
+                    console.log("File ID (id):", response.data.files[0].id);
+                    console.log("File Path:", response.data.files[0].filePath);
+                    console.log("File Name:", response.data.files[0].fileName);
+                } else {
+                    console.log("No files found in progress report");
+                }
             } else {
-                setError("Failed to fetch progress report");
+                setError(response.message || "Failed to fetch progress report");
             }
         } catch (err) {
             console.error("Error fetching progress report:", err);
-            setError("Error loading progress report");
+            if (err.response?.status === 404) {
+                setError("Progress report not found");
+            } else if (err.response?.status === 401) {
+                setError("Unauthorized. Please log in again.");
+            } else {
+                setError("Error loading progress report");
+            }
         } finally {
             setLoading(false);
         }
@@ -88,11 +123,11 @@ const RDDProgressReportDetail = () => {
           })
         : "Not specified";
 
-    // Get PDF path from report files
+    // Get PDF path from report files - use authenticated route with filepath
     const pdfPath =
-        report.files && report.files.length > 0
-            ? `/storage/${report.files[0].filePath}`
-            : "/Balbuena_Concept+Paper.pdf";
+        report.files && report.files.length > 0 && report.files[0].filePath
+            ? `/api/files/view?path=${encodeURIComponent(report.files[0].filePath)}`
+            : null;
 
     // Get submitted documents list
     const submittedDocuments =
@@ -157,7 +192,21 @@ const RDDProgressReportDetail = () => {
             </div>
 
             {/* PDF Preview */}
-            <PDFViewer pdfPath={pdfPath} title="Document" />
+            {pdfPath ? (
+                <PDFViewer pdfPath={pdfPath} title="Document" />
+            ) : (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                    <div className="text-center py-12">
+                        <div className="text-gray-400 text-6xl mb-4">📄</div>
+                        <h3 className="text-lg font-medium text-gray-900 mb-2">
+                            No Document Available
+                        </h3>
+                        <p className="text-gray-600">
+                            This progress report doesn't have any uploaded documents yet.
+                        </p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
