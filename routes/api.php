@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\EndorsementController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ProjectRoleController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OptimizedNotificationController;
@@ -1030,4 +1031,13 @@ Route::middleware(['auth:web'])->group(function () {
             ], 500);
         }
     });
+});
+
+// Project Roles Management (Admin only)
+Route::middleware('auth:web')->group(function () {
+    Route::get('/project-roles', [ProjectRoleController::class, 'index']);
+    Route::get('/project-roles/active', [ProjectRoleController::class, 'getActive']);
+    Route::post('/project-roles', [ProjectRoleController::class, 'store']);
+    Route::put('/project-roles/{id}', [ProjectRoleController::class, 'update']);
+    Route::delete('/project-roles/{id}', [ProjectRoleController::class, 'destroy']);
 });

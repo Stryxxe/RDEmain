@@ -110,7 +110,17 @@ class ProposalController extends Controller
                 default => $query->whereHas('proponents', fn($q) => $q->where('users.userID', $user->userID)),
             };
 
-            return $query->firstOrFail();
+            $result = $query->firstOrFail();
+            
+            // Load project roles for proponents
+            $result->proponents->each(function ($proponent) {
+                if ($proponent->pivot->projectRoleID) {
+                    $projectRole = \App\Models\ProjectRole::find($proponent->pivot->projectRoleID);
+                    $proponent->projectRole = $projectRole;
+                }
+            });
+            
+            return $result;
         });
 
         return response()->json([
@@ -312,15 +322,31 @@ class ProposalController extends Controller
             }
 
             // Save additional proponents if provided
-            $proponentIDs = $request->input('proponentIDs', []);
-            if (!empty($proponentIDs) && is_array($proponentIDs)) {
-                // Always include the submitter as a proponent
-                $allProponents = array_unique(array_merge([$user->userID], $proponentIDs));
-                $proposal->proponents()->sync($allProponents);
-            } else {
-                // Only the submitter
-                $proposal->proponents()->sync([$user->userID]);
+            $proponentsData = $request->input('proponents');
+            
+            // Parse proponents data if it's a JSON string
+            if (is_string($proponentsData)) {
+                $proponentsData = json_decode($proponentsData, true);
             }
+            
+            $syncData = [];
+            
+            // Include the submitter with selected project role if provided
+            $submitterProjectRoleID = $request->input('submitterProjectRoleID');
+            $syncData[$user->userID] = ['projectRoleID' => $submitterProjectRoleID ?: null];
+            
+            if (!empty($proponentsData) && is_array($proponentsData)) {
+                foreach ($proponentsData as $proponent) {
+                    $userId = $proponent['userID'] ?? null;
+                    $projectRoleID = $proponent['projectRoleID'] ?? null;
+                    
+                    if ($userId && $userId != $user->userID) {
+                        $syncData[$userId] = ['projectRoleID' => $projectRoleID];
+                    }
+                }
+            }
+            
+            $proposal->proponents()->sync($syncData);
 
             $proposal->load(['status', 'files']);
 

@@ -788,12 +788,22 @@ const TrackerDetail = ({ id: propId }) => {
                             const allAuthors = submitter ? [submitter, ...others] : proposal.proponents;
                             
                             return (
-                                <div className="flex flex-wrap gap-2">
+                                <div className="space-y-2">
                                     {allAuthors.map(p => (
-                                        <span key={p.userID} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-red-50 text-red-700 border border-red-200 text-sm">
-                                            <span className="font-medium">{p.firstName} {p.lastName}</span>
-                                            {p.role && <span className="text-red-500/60">• {p.role?.userRole || p.role}</span>}
-                                        </span>
+                                        <div key={p.userID} className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-50 border border-red-200">
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-red-900">{p.firstName} {p.lastName}</span>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    {p.role && <span className="text-xs text-red-600/70">{p.role?.userRole || p.role}</span>}
+                                                    {p.projectRole && (
+                                                        <>
+                                                            {p.role && <span className="text-xs text-red-600/40">•</span>}
+                                                            <span className="text-xs font-medium text-red-700">{p.projectRole.roleName}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
                                     ))}
                                 </div>
                             );

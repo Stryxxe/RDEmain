@@ -106,10 +106,18 @@ class ApiService {
       formData.append('dostSPs', JSON.stringify(proposalData.dostSPs));
       formData.append('sustainableDevelopmentGoals', JSON.stringify(proposalData.sustainableDevelopmentGoals));
 
-      // Add selected proponents (IDs)
+      // Add selected proponents with their roles as JSON
       if (Array.isArray(proposalData.proponents) && proposalData.proponents.length > 0) {
-        const ids = proposalData.proponents.map(p => p.userID || p.id).filter(Boolean);
-        ids.forEach(id => formData.append('proponentIDs[]', id));
+        const proponentsData = proposalData.proponents.map(p => ({
+          userID: p.userID || p.id,
+          projectRoleID: p.projectRoleID || null
+        })).filter(p => p.userID);
+        formData.append('proponents', JSON.stringify(proponentsData));
+      }
+
+      // Add submitter's selected project role if any
+      if (proposalData.submitterProjectRoleID) {
+        formData.append('submitterProjectRoleID', proposalData.submitterProjectRoleID);
       }
       
       // Add files - only append if file exists, is a valid File object, and has valid size
