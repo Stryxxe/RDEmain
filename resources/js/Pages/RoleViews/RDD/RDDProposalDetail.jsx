@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { router } from "@inertiajs/react";
+import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../../../contexts/AuthContext";
+import { useRouteParams } from "../../../Components/RoleBased/InertiaRoleRouter";
 import axios from "axios";
 import PDFViewer from "../../../Components/PDFViewer";
 import CoAuthorsCard from "../../../Components/CoAuthorsCard";
@@ -29,8 +30,13 @@ if (!window.axios) {
 }
 
 const RDDProposalDetail = ({ id: proposalId }) => {
-    const id = proposalId;
+    const { props } = usePage();
+    const routeParams = useRouteParams();
+    // Get ID from props, route params, or fallback to prop
+    const id = proposalId || routeParams.id || props?.id;
     const { user } = useAuth();
+    // Get user from Inertia props (more reliable than context on initial load)
+    const currentUser = user || props?.auth?.user;
     const [proposal, setProposal] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -41,30 +47,23 @@ const RDDProposalDetail = ({ id: proposalId }) => {
     const [refreshKey, setRefreshKey] = useState(0);
 
     console.log("RDDProposalDetail rendered with ID:", id);
-    console.log("Current user:", user);
-
-    useEffect(() => {
-        if (user) {
-            fetchProposalAndEndorsements();
-        }
-    }, [id, user, refreshKey]);
-
-    // Force refresh function
-    const handleRefresh = () => {
-        setRefreshKey((prev) => prev + 1);
-    };
+    console.log("Current user:", currentUser);
 
     // Fetch proposal and endorsements in parallel to reduce loading time
     const fetchProposalAndEndorsements = async () => {
-        if (!user) {
-            setError("Please log in to view proposal details");
+        if (!id) {
+            setError("Proposal ID is required");
             setLoading(false);
             return;
         }
 
         try {
             setLoading(true);
+<<<<<<< HEAD
             const startTime = performance.now();
+=======
+            setError("");
+>>>>>>> 3b414fbf3e9fb27617c9ca06894beef34ad6ada4
             console.log("Fetching proposal with ID:", id);
             
             // Fetch only the proposal - it already includes endorsements
@@ -129,8 +128,29 @@ const RDDProposalDetail = ({ id: proposalId }) => {
         }
     };
 
+    useEffect(() => {
+        // Wait a bit for user to be available (in case of initial page load)
+        const checkAndLoad = setTimeout(() => {
+            if (!id) {
+                setError("Proposal ID is required");
+                setLoading(false);
+                return;
+            }
+            
+            // Try to fetch even if user is not yet loaded (API will handle auth)
+            fetchProposalAndEndorsements();
+        }, 100);
+
+        return () => clearTimeout(checkAndLoad);
+    }, [id, currentUser, refreshKey]);
+
+    // Force refresh function
+    const handleRefresh = () => {
+        setRefreshKey((prev) => prev + 1);
+    };
+
     const handleBack = () => {
-        router.visit("/cm");
+        router.visit("/rdd");
     };
 
     const handleEndorse = () => {

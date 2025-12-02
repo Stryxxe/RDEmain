@@ -3,6 +3,8 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProposalController;
@@ -392,6 +394,303 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     
     // Progress Report routes
     Route::apiResource('progress-reports', \App\Http\Controllers\ProgressReportController::class);
+    
+    // File view route by filepath with authentication
+    Route::get('/files/view', function (Request $request) {
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response('Unauthorized', 401);
+        }
+        
+        $filePath = $request->query('path');
+        
+        if (!$filePath) {
+            return response('File path is required', 400);
+        }
+        
+        // Find file by path
+        $file = \App\Models\File::where('filePath', $filePath)->first();
+        
+        if (!$file) {
+            \Log::warning("File not found by path: filePath={$filePath}, userID={$user->userID}");
+            return response('File not found', 404);
+        }
+        
+        // Check permissions based on file type
+        if ($file->fileType === 'progress_report') {
+            // Load user role
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // RDD users can access all progress report files
+            if ($user->role && $user->role->userRole === 'RDD') {
+                // Allow access
+            } 
+            // CM users can access files from their department
+            else if ($user->role && $user->role->userRole === 'CM') {
+                if (!$file->relationLoaded('progressReport.proposal.user.department')) {
+                    $file->load('progressReport.proposal.user.department');
+                }
+                if (!$user->relationLoaded('department')) {
+                    $user->load('department');
+                }
+                
+                if ($file->progressReport && 
+                    $file->progressReport->proposal && 
+                    $file->progressReport->proposal->user &&
+                    $file->progressReport->proposal->user->departmentID !== $user->departmentID) {
+                    return response('Forbidden: You can only access files from your department', 403);
+                }
+            }
+            // Other users can only access their own files
+            else {
+                if (!$file->relationLoaded('progressReport')) {
+                    $file->load('progressReport');
+                }
+                if ($file->progressReport && $file->progressReport->userID !== $user->userID) {
+                    return response('Forbidden: You can only access your own files', 403);
+                }
+            }
+        } else if ($file->fileType === 'proposal') {
+            // Similar permission checks for proposal files
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // RDD and CM users can access all proposal files
+            if ($user->role && in_array($user->role->userRole, ['RDD', 'CM'])) {
+                // Allow access
+            } 
+            // Other users can only access their own proposal files
+            else {
+                if (!$file->relationLoaded('proposal')) {
+                    $file->load('proposal');
+                }
+                if ($file->proposal && $file->proposal->userID !== $user->userID) {
+                    return response('Forbidden: You can only access your own files', 403);
+                }
+            }
+        }
+        
+        // Check if file exists in storage
+        if (!Storage::disk('public')->exists($file->filePath)) {
+            \Log::error("File path not found in storage: fileID={$file->fileID}, filePath={$file->filePath}, userID={$user->userID}");
+            return response('File not found in storage: ' . $file->filePath, 404);
+        }
+        
+        // Return file with appropriate headers for viewing
+        $path = Storage::disk('public')->path($file->filePath);
+        $mimeType = Storage::disk('public')->mimeType($file->filePath);
+        
+        \Log::info("Serving file: fileID={$file->fileID}, filePath={$file->filePath}, mimeType={$mimeType}");
+        
+        return response()->file($path, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $file->fileName . '"',
+        ]);
+    })->name('files.view.path');
+    
+    // File view route by file ID with authentication
+    Route::get('/files/{fileId}/view', function (Request $request, $fileId) {
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response('Unauthorized', 401);
+        }
+        
+        // Use where clause with fileID since that's the primary key
+        // Convert to integer if it's a string
+        $fileIdInt = (int) $fileId;
+        $file = \App\Models\File::where('fileID', $fileIdInt)->first();
+        
+        if (!$file) {
+            \Log::warning("File not found: fileID={$fileId} (as int: {$fileIdInt}), userID={$user->userID}");
+            // Try as string as well
+            $file = \App\Models\File::where('fileID', $fileId)->first();
+        }
+        
+        if (!$file) {
+            return response('File not found', 404);
+        }
+        
+        // Check permissions based on file type
+        if ($file->fileType === 'progress_report') {
+            // Load user role
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // RDD users can access all progress report files
+            if ($user->role && $user->role->userRole === 'RDD') {
+                // Allow access
+            } 
+            // CM users can access files from their department
+            else if ($user->role && $user->role->userRole === 'CM') {
+                if (!$file->relationLoaded('progressReport.proposal.user.department')) {
+                    $file->load('progressReport.proposal.user.department');
+                }
+                if (!$user->relationLoaded('department')) {
+                    $user->load('department');
+                }
+                
+                if ($file->progressReport && 
+                    $file->progressReport->proposal && 
+                    $file->progressReport->proposal->user &&
+                    $file->progressReport->proposal->user->departmentID !== $user->departmentID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Forbidden: You can only access files from your department'
+                    ], 403);
+                }
+            }
+            // Other users can only access their own files
+            else {
+                if (!$file->relationLoaded('progressReport')) {
+                    $file->load('progressReport');
+                }
+                if ($file->progressReport && $file->progressReport->userID !== $user->userID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Forbidden: You can only access your own files'
+                    ], 403);
+                }
+            }
+        } else if ($file->fileType === 'proposal') {
+            // Similar permission checks for proposal files
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // RDD and CM users can access all proposal files
+            if ($user->role && in_array($user->role->userRole, ['RDD', 'CM'])) {
+                // Allow access
+            } 
+            // Other users can only access their own proposal files
+            else {
+                if (!$file->relationLoaded('proposal')) {
+                    $file->load('proposal');
+                }
+                if ($file->proposal && $file->proposal->userID !== $user->userID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Forbidden: You can only access your own files'
+                    ], 403);
+                }
+            }
+        }
+        
+        // Check if file exists in storage
+        if (!Storage::disk('public')->exists($file->filePath)) {
+            \Log::error("File path not found in storage: fileID={$file->fileID}, filePath={$file->filePath}, userID={$user->userID}");
+            return response('File not found in storage: ' . $file->filePath, 404);
+        }
+        
+        // Return file with appropriate headers for viewing
+        $path = Storage::disk('public')->path($file->filePath);
+        $mimeType = Storage::disk('public')->mimeType($file->filePath);
+        
+        \Log::info("Serving file: fileID={$file->fileID}, filePath={$file->filePath}, mimeType={$mimeType}");
+        
+        return response()->file($path, [
+            'Content-Type' => $mimeType,
+            'Content-Disposition' => 'inline; filename="' . $file->fileName . '"',
+        ]);
+    })->name('files.view');
+    
+    Route::get('/files/{fileId}/download', function (Request $request, $fileId) {
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response('Unauthorized', 401);
+        }
+        
+        // Use where clause with fileID since that's the primary key
+        $file = \App\Models\File::where('fileID', $fileId)->first();
+        
+        if (!$file) {
+            \Log::warning("File not found for download: fileID={$fileId}, userID={$user->userID}");
+            return response('File not found', 404);
+        }
+        
+        // Check permissions based on file type
+        if ($file->fileType === 'progress_report') {
+            // Load user role
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // RDD users can access all progress report files
+            if ($user->role && $user->role->userRole === 'RDD') {
+                // Allow access
+            } 
+            // CM users can access files from their department
+            else if ($user->role && $user->role->userRole === 'CM') {
+                if (!$file->relationLoaded('progressReport.proposal.user.department')) {
+                    $file->load('progressReport.proposal.user.department');
+                }
+                if (!$user->relationLoaded('department')) {
+                    $user->load('department');
+                }
+                
+                if ($file->progressReport && 
+                    $file->progressReport->proposal && 
+                    $file->progressReport->proposal->user &&
+                    $file->progressReport->proposal->user->departmentID !== $user->departmentID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Forbidden: You can only access files from your department'
+                    ], 403);
+                }
+            }
+            // Other users can only access their own files
+            else {
+                if (!$file->relationLoaded('progressReport')) {
+                    $file->load('progressReport');
+                }
+                if ($file->progressReport && $file->progressReport->userID !== $user->userID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Forbidden: You can only access your own files'
+                    ], 403);
+                }
+            }
+        } else if ($file->fileType === 'proposal') {
+            // Similar permission checks for proposal files
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            
+            // RDD and CM users can access all proposal files
+            if ($user->role && in_array($user->role->userRole, ['RDD', 'CM'])) {
+                // Allow access
+            } 
+            // Other users can only access their own proposal files
+            else {
+                if (!$file->relationLoaded('proposal')) {
+                    $file->load('proposal');
+                }
+                if ($file->proposal && $file->proposal->userID !== $user->userID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Forbidden: You can only access your own files'
+                    ], 403);
+                }
+            }
+        }
+        
+        // Check if file exists in storage
+        if (!Storage::disk('public')->exists($file->filePath)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'File not found in storage'
+            ], 404);
+        }
+        
+        // Return file download response
+        return Storage::disk('public')->download($file->filePath, $file->fileName);
+    })->name('files.download');
     
     // Review routes
     Route::post('/reviews', [ReviewController::class, 'store']);
