@@ -57,13 +57,8 @@ const RDDProposalDetail = ({ id: proposalId }) => {
 
         try {
             setLoading(true);
-<<<<<<< HEAD
-const startTime = performance.now();
-            setError("");
-=======
-            setError("");
             const startTime = performance.now();
->>>>>>> 890c120beb59459f2012e5f758560508d7897bb1
+            setError("");
             console.log("Fetching proposal with ID:", id);
             
             // Fetch only the proposal - it already includes endorsements
