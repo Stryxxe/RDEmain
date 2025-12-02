@@ -105,6 +105,12 @@ class ApiService {
       formData.append('researchAgenda', JSON.stringify(proposalData.researchAgenda));
       formData.append('dostSPs', JSON.stringify(proposalData.dostSPs));
       formData.append('sustainableDevelopmentGoals', JSON.stringify(proposalData.sustainableDevelopmentGoals));
+
+      // Add selected proponents (IDs)
+      if (Array.isArray(proposalData.proponents) && proposalData.proponents.length > 0) {
+        const ids = proposalData.proponents.map(p => p.userID || p.id).filter(Boolean);
+        ids.forEach(id => formData.append('proponentIDs[]', id));
+      }
       
       // Add files - only append if file exists, is a valid File object, and has valid size
       // Note: File size validation is also enforced on the server side with dynamic limits from admin settings

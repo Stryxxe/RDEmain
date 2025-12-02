@@ -38,6 +38,60 @@ Route::get('/user', function (Request $request) {
     return $user;
 })->middleware('auth:web');
 
+// Live user search for adding proposal proponents
+Route::get('/users/search', function (Request $request) {
+    $validated = $request->validate([
+        'q' => 'nullable|string|max:100',
+        'limit' => 'nullable|integer|min:1|max:20',
+    ]);
+
+    $q = trim($validated['q'] ?? '');
+    $limit = (int)($validated['limit'] ?? 10);
+    $currentUser = $request->user();
+
+    $users = \App\Models\User::query()
+        ->with('role')
+        ->select(['userID', 'firstName', 'lastName', 'email', 'userRolesID', 'researchCenterID'])
+        // Restrict to same research center as current user
+        ->when(!is_null($currentUser->researchCenterID), function ($query) use ($currentUser) {
+            $query->where('researchCenterID', $currentUser->researchCenterID);
+        }, function ($query) {
+            // If current user has no research center, return no results
+            $query->whereRaw('1 = 0');
+        })
+        // Only allow searching other Proponents
+        ->whereHas('role', function ($q) {
+            $q->where('userRole', 'Proponent');
+        })
+        // Exclude current user
+        ->where('userID', '!=', $currentUser->userID)
+        // Text search
+        ->when($q !== '', function ($query) use ($q) {
+            $like = "%{$q}%";
+            $query->where(function ($sub) use ($like) {
+                $sub->where('firstName', 'like', $like)
+                    ->orWhere('lastName', 'like', $like)
+                    ->orWhereRaw("CONCAT(firstName,' ',lastName) like ?", [$like])
+                    ->orWhere('email', 'like', $like);
+            });
+        })
+        ->orderBy('lastName')
+        ->orderBy('firstName')
+        ->limit($limit)
+        ->get()
+        ->map(function ($u) {
+            return [
+                'userID' => $u->userID,
+                'firstName' => $u->firstName,
+                'lastName' => $u->lastName,
+                'email' => $u->email,
+                'role' => $u->role?->userRole,
+            ];
+        });
+
+    return response()->json(['success' => true, 'data' => $users]);
+})->middleware('auth:web');
+
 // Admin: Research Centers list for user creation form
 Route::get('/admin/research-centers', function (Request $request) {
     try {

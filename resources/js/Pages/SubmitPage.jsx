@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
 import FormField from "../Components/FormField";
+import AsyncProponentSelect from "../Components/AsyncProponentSelect";
 import CheckboxGroup from "../Components/CheckboxGroup";
 import TextAreaField from "../Components/TextAreaField";
 import DragDropUpload from "../Components/DragDropUpload";
@@ -59,6 +60,7 @@ const SubmitPage = () => {
         sustainableDevelopmentGoals: [],
         proposedBudget: "",
         supportingDocuments: [],
+        proponents: [],
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
@@ -317,7 +319,8 @@ const SubmitPage = () => {
                     dostSPs: [],
                     sustainableDevelopmentGoals: [],
                     proposedBudget: "",
-                    supportingDocuments: [],
+                        supportingDocuments: [],
+                        proponents: [],
                 });
 
                 // Redirect to tracker page after 2 seconds
@@ -564,6 +567,16 @@ const SubmitPage = () => {
                         }
                         placeholder="Enter proposed budget amount"
                         hint="Enter the proposed budget amount in Philippine Peso (₱)"
+                    />
+                </div>
+                <div className="mb-8">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Additional Proponents <span className="text-gray-400 font-normal">(optional)</span>
+                    </label>
+                    <AsyncProponentSelect
+                        value={formData.proponents}
+                        onChange={(list) => setFormData(prev => ({ ...prev, proponents: list }))}
+                        placeholder="Type a name to add co-proponents"
                     />
                 </div>
 

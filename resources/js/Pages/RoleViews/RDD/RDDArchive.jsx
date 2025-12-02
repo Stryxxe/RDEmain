@@ -168,6 +168,7 @@ const RDDArchive = () => {
                     <th>Proposal</th>
                     <th>Proponent</th>
                     <th>Research Center</th>
+                    <th>Archived Date</th>
                     <th>Status</th>
                     <th>Actions</th>
                   </tr>
@@ -187,7 +188,14 @@ const RDDArchive = () => {
                         {p.user?.fullName || `${p.user?.firstName || ""} ${p.user?.lastName || ""}`}
                       </td>
                       <td className="text-sm text-gray-900">
-                        {p.user?.researchCenter?.name || "—"}
+                        {p.user?.researchCenter?.name || p.user?.department?.name || "—"}
+                      </td>
+                      <td className="text-sm text-gray-600">
+                        {p.archivedByRDD ? new Date(p.archivedByRDD).toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric"
+                        }) : "—"}
                       </td>
                       <td>
                         <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">

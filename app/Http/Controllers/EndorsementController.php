@@ -10,6 +10,8 @@ use App\Events\ProposalEndorsed;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class EndorsementController extends Controller
@@ -138,6 +140,11 @@ class EndorsementController extends Controller
                 'endorsementStatus' => $request->endorsementStatus
             ]);
 
+            // If RDD user approves, archive the proposal
+            if ($user->role->userRole === 'RDD' && $request->endorsementStatus === 'approved') {
+                $proposal->update(['archivedByRDD' => now()]);
+            }
+
             // If approved, notify RDD users and dispatch the ProposalEndorsed event
             if ($request->endorsementStatus === 'approved') {
                 // Ensure proposal user and department relationships are loaded
@@ -205,6 +212,9 @@ class EndorsementController extends Controller
                 event(new ProposalEndorsed($proposal, $user));
             }
 
+            // Clear proposal cache since endorsement data has changed
+            $this->clearProposalCache($request->proposalID);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Endorsement created successfully',
@@ -265,6 +275,32 @@ class EndorsementController extends Controller
                 'message' => 'Failed to fetch endorsements',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Clear proposal cache for all users
+     * 
+     * @param int $proposalId
+     * @return void
+     */
+    private function clearProposalCache(int $proposalId): void
+    {
+        try {
+            // Clear cache with wildcard pattern for this proposal
+            $pattern = "proposal_{$proposalId}_user_*";
+            
+            if (Cache::getStore() instanceof \Illuminate\Cache\RedisStore) {
+                $keys = Cache::getRedis()->keys($pattern);
+                if (!empty($keys)) {
+                    Cache::getRedis()->del($keys);
+                }
+            } else {
+                // For non-Redis stores, we can't wildcard delete
+                Cache::forget("proposal_{$proposalId}_user_*");
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to clear proposal cache: " . $e->getMessage());
         }
     }
 }

@@ -3,6 +3,7 @@ import { router } from "@inertiajs/react";
 import { useAuth } from "../../../contexts/AuthContext";
 import axios from "axios";
 import PDFViewer from "../../../Components/PDFViewer";
+import CoAuthorsCard from "../../../Components/CoAuthorsCard";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 import RDDEditProposal from './RDDEditProposal';
@@ -63,55 +64,63 @@ const RDDProposalDetail = ({ id: proposalId }) => {
 
         try {
             setLoading(true);
+            const startTime = performance.now();
             console.log("Fetching proposal with ID:", id);
             
-            // Fetch both proposal and endorsements in parallel
-            const [proposalResponse, endorsementResponse] = await Promise.allSettled([
-                axiosInstance.get(`/proposals/${id}`, {
-                    headers: { Accept: "application/json" },
-                    withCredentials: true,
-                }),
-                axiosInstance.get(`/endorsements/proposal/${id}`, {
-                    headers: { Accept: "application/json" },
-                    withCredentials: true,
-                })
-            ]);
+            // Fetch only the proposal - it already includes endorsements
+            const proposalResponse = await axiosInstance.get(`/proposals/${id}`, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            
+            const fetchTime = performance.now() - startTime;
+            console.log(`API call completed in ${fetchTime.toFixed(2)}ms`);
 
-            // Handle proposal response
-            if (proposalResponse.status === 'fulfilled' && proposalResponse.value.data.success) {
-                setProposal(proposalResponse.value.data.data);
-                console.log("Proposal loaded successfully:", proposalResponse.value.data.data);
-            } else {
-                console.error("API returned error:", proposalResponse.value?.data?.message || proposalResponse.reason);
-                setError("Proposal not found");
-            }
-
-            // Handle endorsement response
-            if (endorsementResponse.status === 'fulfilled' && 
-                endorsementResponse.value.data.success && 
-                Array.isArray(endorsementResponse.value.data.data)) {
+            if (proposalResponse.data.success) {
+                const proposalData = proposalResponse.data.data;
+                setProposal(proposalData);
+                console.log("Proposal loaded successfully:", proposalData);
                 
-                const endorsements = endorsementResponse.value.data.data;
-                const cmEndorsement = endorsements.find(
-                    (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
-                );
-                const rddEndorsement = endorsements.find(
-                    (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
-                );
+                // Extract endorsement data from the proposal's included endorsements
+                console.log("Proposal endorsements:", proposalData.endorsements);
+                if (Array.isArray(proposalData.endorsements) && proposalData.endorsements.length > 0) {
+                    // Log the structure of the first endorsement to debug
+                    console.log("First endorsement structure:", proposalData.endorsements[0]);
+                    console.log("Endorser object:", proposalData.endorsements[0]?.endorser);
+                    console.log("Endorser role object:", proposalData.endorsements[0]?.endorser?.role);
+                    
+                    const cmEndorsement = proposalData.endorsements.find(
+                        (e) => {
+                            console.log("Checking endorsement:", e.endorsementID, "Role:", e.endorser?.role?.userRole, "Status:", e.endorsementStatus);
+                            return e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved";
+                        }
+                    );
+                    const rddEndorsement = proposalData.endorsements.find(
+                        (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+                    );
 
-                setHasCmEndorsement(Boolean(cmEndorsement));
-                setHasRddEndorsement(Boolean(rddEndorsement));
-                setEndorsementData(cmEndorsement || null);
+                    console.log("CM Endorsement found:", cmEndorsement);
+                    console.log("RDD Endorsement found:", rddEndorsement);
+
+                    setHasCmEndorsement(Boolean(cmEndorsement));
+                    setHasRddEndorsement(Boolean(rddEndorsement));
+                    setEndorsementData(cmEndorsement || null);
+                } else {
+                    console.log("No endorsements array found");
+                    setHasCmEndorsement(false);
+                    setHasRddEndorsement(false);
+                    setEndorsementData(null);
+                }
             } else {
-                // If endorsement fetch fails, just set defaults (non-critical)
-                setHasCmEndorsement(false);
-                setHasRddEndorsement(false);
-                setEndorsementData(null);
+                console.error("API returned error:", proposalResponse.data?.message);
+                setError("Proposal not found");
             }
         } catch (error) {
             console.error("Error fetching data:", error);
             if (error.response?.status === 401) {
                 setError("Unauthorized. Please log in again.");
+            } else if (error.response?.status === 404) {
+                setError("Proposal not found");
             } else {
                 setError("Error loading proposal");
             }
@@ -167,12 +176,14 @@ const RDDProposalDetail = ({ id: proposalId }) => {
         if (!proposal) return [];
 
         const statusId = proposal.statusID;
+        const isArchived = Boolean(proposal.archivedByRDD);
+        console.log("Timeline calculation - StatusID:", statusId, "hasCmEndorsement:", hasCmEndorsement, "hasRddEndorsement:", hasRddEndorsement, "isArchived:", isArchived);
 
         // Define all possible timeline stages (ordered from start to finish)
         const allStages = [
             { id: 0, name: "Proposal Submitted", status: "pending" },
             { id: 1, name: "College Endorsement", status: "pending" },
-            { id: 2, name: "R&D Division", status: "pending" },
+            { id: 2, name: "R&D Division Endorsement", status: "pending" },
             { id: 3, name: "Proposal Review", status: "pending" },
             { id: 4, name: "Ethics Review", status: "pending" },
             { id: 5, name: "OVPRDE", status: "pending" },
@@ -182,6 +193,15 @@ const RDDProposalDetail = ({ id: proposalId }) => {
             { id: 9, name: "Monitoring", status: "pending" },
             { id: 10, name: "For Completion", status: "pending" },
         ];
+
+        // If archived, show completion through RDD endorsement
+        if (isArchived) {
+            allStages[0].status = "completed"; // Proposal Submitted
+            allStages[1].status = "completed"; // College Endorsement
+            allStages[2].status = "completed"; // R&D Division Endorsement
+            allStages[3].status = "current"; // Proposal Review (next phase)
+            return allStages;
+        }
 
         // Update stages based on actual proposal status (matching StatusSeeder IDs)
         switch (statusId) {
@@ -334,8 +354,22 @@ const RDDProposalDetail = ({ id: proposalId }) => {
             });
         }
 
+        // 3.5. Add RDD endorsement entry if archived
+        if (proposal.archivedByRDD) {
+            const rddEndorsementDate = new Date(proposal.archivedByRDD);
+            const rddEndorser = proposal.endorsements?.find(e => e.endorser?.role?.userRole === 'RDD' && e.endorsementStatus === 'approved');
+            timelineEntries.push({
+                date: rddEndorsementDate,
+                status: "R&D Division Endorsement",
+                action: `Proposal endorsed by RDD${rddEndorser ? ` - ${rddEndorser.endorser.fullName}` : ''} and moved to archive.`,
+                priority: "high",
+                type: "completed",
+            });
+        }
+
         // 4. Add current stage (most recent)
-        if (currentStage) {
+        if (currentStage && !proposal.archivedByRDD) {
+            // Don't show current stage if archived
             const currentDate = new Date();
             timelineEntries.push({
                 date: currentDate,
@@ -495,6 +529,11 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                             );
                             const isRddCurrent = rddStage?.status === "current";
 
+                            // Find RDD endorsement data
+                            const rddEndorsementData = proposal.endorsements?.find(
+                                (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+                            );
+
                             if (hasRddEndorsement) {
                                 return (
                                     <div className="flex items-center space-x-4">
@@ -514,16 +553,17 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                             </svg>
                                             Project Endorsed
                                         </div>
-                                        {endorsementData && (
+                                        {rddEndorsementData && (
                                             <div className="text-sm text-gray-600">
-                                                CM endorsed on: {new Date(
-                                                    endorsementData.endorsementDate
+                                                RDD endorsed on: {new Date(
+                                                    rddEndorsementData.endorsedAt
                                                 ).toLocaleDateString()}
                                             </div>
                                         )}
                                     </div>
                                 );
-                            } else if (isRddCurrent) {
+                            } else if (isRddCurrent && !proposal.archivedByRDD) {
+                                // Only show endorse button if proposal is not archived
                                 return (
                                     <button
                                         onClick={handleEndorse}
@@ -544,6 +584,19 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                         </svg>
                                         Endorse Project
                                     </button>
+                                );
+                            } else if (proposal.archivedByRDD) {
+                                // Show archived badge for archived proposals
+                                return (
+                                    <div className="flex items-center gap-3 bg-green-50 border-2 border-green-200 text-green-700 px-6 py-3 rounded-xl">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                        </svg>
+                                        <div>
+                                            <div className="font-semibold">Archived</div>
+                                            <div className="text-sm">RDD endorsed on {new Date(proposal.archivedByRDD).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
                                 );
                             }
                             return null;
@@ -693,6 +746,8 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                             </div>
                         </div>
                     </div>
+                    {/* Co-Authors Card */}
+                    <CoAuthorsCard proposal={proposal} />
                 </div>
 
                 {/* Status Timeline Section */}
@@ -845,9 +900,6 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                     <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
                                         Action Details
                                     </th>
-                                    <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
-                                        Priority
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -903,16 +955,6 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                             <span className="text-sm text-gray-600 leading-relaxed">
                                                 {entry.action ||
                                                     "No additional details"}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <span
-                                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getPriorityColor(
-                                                    entry.priority
-                                                )}`}
-                                            >
-                                                {entry.priority?.toUpperCase() ||
-                                                    "NORMAL"}
                                             </span>
                                         </td>
                                     </tr>

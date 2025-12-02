@@ -8,6 +8,8 @@ use App\Models\ReviewDecision;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class ReviewController extends Controller
@@ -84,6 +86,9 @@ class ReviewController extends Controller
                     'decisionID' => $decision->decisionID
                 ]);
 
+                // Clear proposal cache
+                $this->clearProposalCache($request->proposalID);
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Review updated successfully',
@@ -101,6 +106,9 @@ class ReviewController extends Controller
                 'decisionID' => $decision->decisionID
             ]);
 
+            // Clear proposal cache
+            $this->clearProposalCache($request->proposalID);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Review submitted successfully',
@@ -113,6 +121,32 @@ class ReviewController extends Controller
                 'message' => 'Failed to submit review',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Clear proposal cache for all users
+     * 
+     * @param int $proposalId
+     * @return void
+     */
+    private function clearProposalCache(int $proposalId): void
+    {
+        try {
+            // Clear cache with wildcard pattern for this proposal
+            $pattern = "proposal_{$proposalId}_user_*";
+            
+            if (Cache::getStore() instanceof \Illuminate\Cache\RedisStore) {
+                $keys = Cache::getRedis()->keys($pattern);
+                if (!empty($keys)) {
+                    Cache::getRedis()->del($keys);
+                }
+            } else {
+                // For non-Redis stores, we can't wildcard delete
+                Cache::forget("proposal_{$proposalId}_user_*");
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to clear proposal cache: " . $e->getMessage());
         }
     }
 }

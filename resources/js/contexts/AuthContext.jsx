@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useMemo } from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
 import { router } from "@inertiajs/react";
 import { getUserRole } from "../utils/roleHelpers";
 
@@ -12,11 +12,27 @@ export const useAuth = () => {
     return context;
 };
 
-// Provider that reads from Inertia router.page to avoid usePage dependency
-const AuthProviderInner = ({ children }) => {
-    // Read current page props safely from Inertia router
-    const page = router?.page;
-    const user = page?.props?.auth?.user || null;
+// Provider that listens to Inertia page changes
+export const AuthProvider = ({ children, user: initialUser }) => {
+    const [user, setUser] = useState(initialUser);
+
+    // Listen to Inertia navigation events to update user
+    useEffect(() => {
+        const handleNavigate = (event) => {
+            const newUser = event.detail.page.props?.auth?.user || null;
+            setUser(newUser);
+        };
+
+        // Subscribe to navigation events
+        const removeListener = router.on("navigate", handleNavigate);
+
+        // Cleanup function - removeListener is returned by router.on()
+        return () => {
+            if (typeof removeListener === 'function') {
+                removeListener();
+            }
+        };
+    }, []);
 
     // Get role from user data
     const role = useMemo(() => {
@@ -32,9 +48,4 @@ const AuthProviderInner = ({ children }) => {
     return (
         <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
     );
-};
-
-// Outer provider that wraps the Inertia App
-export const AuthProvider = ({ children }) => {
-    return <AuthProviderInner>{children}</AuthProviderInner>;
 };

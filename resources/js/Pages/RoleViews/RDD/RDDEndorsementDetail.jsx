@@ -197,12 +197,8 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
         setEndorsementData(responseData.data);
         setShowEndorsementModal(false);
         setEndorsementComments('');
-        handleRefresh();
-        // Redirect to RDD dashboard's proposal details for this proposal
-        const pid = fullProposal.proposalID || fullProposal.id;
-        if (pid) {
-          router.visit(`/rdd/proposal/${pid}`, { replace: true });
-        }
+        // Redirect back to endorsement list page
+        router.visit('/rdd/review-proposal', { replace: true });
       } else {
         alert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }

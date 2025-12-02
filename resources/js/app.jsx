@@ -37,7 +37,7 @@ createInertiaApp({
         const root = createRoot(el);
 
         root.render(
-            <AuthProvider>
+            <AuthProvider user={props.initialPage.props?.auth?.user || null}>
                 <ScrollToTop />
                 <App {...props} />
             </AuthProvider>
