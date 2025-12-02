@@ -7,8 +7,6 @@ import PDFViewer from "../../../Components/PDFViewer";
 import CoAuthorsCard from "../../../Components/CoAuthorsCard";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
-import RDDEditProposal from './RDDEditProposal';
-import { updateProposal } from '../../../services/proposalService';
 import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 // Use window.axios which has session-based auth configured, or configure this instance
@@ -59,8 +57,13 @@ const RDDProposalDetail = ({ id: proposalId }) => {
 
         try {
             setLoading(true);
+<<<<<<< HEAD
 const startTime = performance.now();
             setError("");
+=======
+            setError("");
+            const startTime = performance.now();
+>>>>>>> 890c120beb59459f2012e5f758560508d7897bb1
             console.log("Fetching proposal with ID:", id);
             
             // Fetch only the proposal - it already includes endorsements
@@ -542,7 +545,7 @@ const startTime = performance.now();
                         {(() => {
                             const timelineStagesLocal = getTimelineStages();
                             const rddStage = timelineStagesLocal.find(
-                                (stage) => stage.name === "R&D Division"
+                                (stage) => stage.name === "R&D Division Endorsement"
                             );
                             const isRddCurrent = rddStage?.status === "current";
 
@@ -550,6 +553,9 @@ const startTime = performance.now();
                             const rddEndorsementData = proposal.endorsements?.find(
                                 (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
                             );
+
+                            // Show endorse button if: CM has endorsed, RDD hasn't endorsed, and proposal is not archived
+                            const canEndorse = hasCmEndorsement && !hasRddEndorsement && !proposal.archivedByRDD;
 
                             if (hasRddEndorsement) {
                                 return (
@@ -573,14 +579,14 @@ const startTime = performance.now();
                                         {rddEndorsementData && (
                                             <div className="text-sm text-gray-600">
                                                 RDD endorsed on: {new Date(
-                                                    rddEndorsementData.endorsedAt
+                                                    rddEndorsementData.endorsedAt || rddEndorsementData.endorsementDate
                                                 ).toLocaleDateString()}
                                             </div>
                                         )}
                                     </div>
                                 );
-                            } else if (isRddCurrent && !proposal.archivedByRDD) {
-                                // Only show endorse button if proposal is not archived
+                            } else if (canEndorse || (isRddCurrent && !proposal.archivedByRDD)) {
+                                // Show endorse button if CM has endorsed and RDD hasn't, or if timeline shows RDD as current
                                 return (
                                     <button
                                         onClick={handleEndorse}
