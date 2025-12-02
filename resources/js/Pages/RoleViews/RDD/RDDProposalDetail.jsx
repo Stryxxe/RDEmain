@@ -59,11 +59,8 @@ const RDDProposalDetail = ({ id: proposalId }) => {
 
         try {
             setLoading(true);
-<<<<<<< HEAD
-            const startTime = performance.now();
-=======
             setError("");
->>>>>>> 3b414fbf3e9fb27617c9ca06894beef34ad6ada4
+            const startTime = performance.now();
             console.log("Fetching proposal with ID:", id);
             
             // Fetch only the proposal - it already includes endorsements
@@ -545,7 +542,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                         {(() => {
                             const timelineStagesLocal = getTimelineStages();
                             const rddStage = timelineStagesLocal.find(
-                                (stage) => stage.name === "R&D Division"
+                                (stage) => stage.name === "R&D Division Endorsement"
                             );
                             const isRddCurrent = rddStage?.status === "current";
 
@@ -553,6 +550,9 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                             const rddEndorsementData = proposal.endorsements?.find(
                                 (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
                             );
+
+                            // Show endorse button if: CM has endorsed, RDD hasn't endorsed, and proposal is not archived
+                            const canEndorse = hasCmEndorsement && !hasRddEndorsement && !proposal.archivedByRDD;
 
                             if (hasRddEndorsement) {
                                 return (
@@ -576,14 +576,14 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                         {rddEndorsementData && (
                                             <div className="text-sm text-gray-600">
                                                 RDD endorsed on: {new Date(
-                                                    rddEndorsementData.endorsedAt
+                                                    rddEndorsementData.endorsedAt || rddEndorsementData.endorsementDate
                                                 ).toLocaleDateString()}
                                             </div>
                                         )}
                                     </div>
                                 );
-                            } else if (isRddCurrent && !proposal.archivedByRDD) {
-                                // Only show endorse button if proposal is not archived
+                            } else if (canEndorse || (isRddCurrent && !proposal.archivedByRDD)) {
+                                // Show endorse button if CM has endorsed and RDD hasn't, or if timeline shows RDD as current
                                 return (
                                     <button
                                         onClick={handleEndorse}

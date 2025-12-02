@@ -186,7 +186,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     
     // Check if already endorsed before submitting
     if (isEndorsed) {
-      alert('This proposal has already been endorsed by you.');
+      await window.customAlert('This proposal has already been endorsed by you.');
       setShowEndorsementModal(false);
       return;
     }
@@ -212,7 +212,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         const proponentName = fullProposal.user?.fullName || fullProposal.user?.firstName + ' ' + fullProposal.user?.lastName || 'Unknown';
         const proposalId = fullProposal.proposalID || fullProposal.id;
         
-        alert(`Successfully endorsed proposal "${proposalTitle}" by ${proponentName}!`);
+        await window.customAlert('', 'Endorsed Successfully!', 3000);
         setIsEndorsed(true);
         setEndorsementData(responseData.data);
         setShowEndorsementModal(false);
@@ -226,7 +226,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         // Navigate back to review proposal list page
         router.visit('/cm/review-proposal', { replace: true });
       } else {
-        alert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
+        await window.customAlert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error endorsing proposal:', error);
@@ -260,7 +260,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         errorMessage = error.message || 'Unknown error occurred';
       }
       
-      alert('Error endorsing proposal: ' + errorMessage);
+      await window.customAlert('Error endorsing proposal: ' + errorMessage);
       
       // If it's a 409 conflict, refresh the endorsement status
       if (error.response?.status === 409) {

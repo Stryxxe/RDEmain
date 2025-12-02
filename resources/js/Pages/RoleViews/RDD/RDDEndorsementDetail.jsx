@@ -158,9 +158,9 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
 
   const attachedDocuments = getAttachedDocuments();
 
-  const handleEndorse = () => {
+  const handleEndorse = async () => {
     if (isEndorsed) {
-      alert('This proposal has already been endorsed by you.');
+      await window.customAlert('This proposal has already been endorsed by you.');
       return;
     }
     setShowEndorsementModal(true);
@@ -170,7 +170,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
     if (isEndorsing) return;
 
     if (isEndorsed) {
-      alert('This proposal has already been endorsed by you.');
+      await window.customAlert('This proposal has already been endorsed by you.');
       setShowEndorsementModal(false);
       return;
     }
@@ -192,7 +192,9 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
       const responseData = response.data;
 
       if (responseData.success) {
-        alert('Proposal endorsed successfully!');
+        const proposalTitle = fullProposal.researchTitle || fullProposal.title || 'Untitled';
+        const proponentName = fullProposal.user?.fullName || fullProposal.user?.firstName + ' ' + fullProposal.user?.lastName || 'Unknown';
+        await window.customAlert('', 'Endorsed Successfully!', 3000);
         setIsEndorsed(true);
         setEndorsementData(responseData.data);
         setShowEndorsementModal(false);
@@ -200,7 +202,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
         // Redirect back to endorsement list page
         router.visit('/rdd/review-proposal', { replace: true });
       } else {
-        alert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
+        await window.customAlert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }
     } catch (error) {
       console.error('Error endorsing proposal:', error);
@@ -231,7 +233,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
         errorMessage = error.message || 'Unknown error occurred';
       }
 
-      alert('Error endorsing proposal: ' + errorMessage);
+      await window.customAlert('Error endorsing proposal: ' + errorMessage);
 
       if (error.response?.status === 409) {
         handleRefresh();

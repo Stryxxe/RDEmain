@@ -147,7 +147,7 @@ const UserFormFixed = ({ user, onClose }) => {
           headers: { 'Accept': 'application/json' },
           withCredentials: true,
         });
-        alert('User updated successfully!');
+        await window.customAlert('User updated successfully!');
       } else {
         // Create new user via API
         const response = await axiosInstance.post('/admin/users', formData, {
@@ -156,9 +156,9 @@ const UserFormFixed = ({ user, onClose }) => {
         });
         const result = response?.data;
         if (result?.temporaryPassword) {
-          alert(`User added successfully! Temporary password: ${result.temporaryPassword}`);
+          await window.customAlert(`User added successfully! Temporary password: ${result.temporaryPassword}`);
         } else {
-          alert('User added successfully!');
+          await window.customAlert('User added successfully!');
         }
       }
       onClose();
@@ -172,11 +172,11 @@ const UserFormFixed = ({ user, onClose }) => {
           backendErrors[field] = error.response.data.errors[field][0];
         });
         setErrors(backendErrors);
-        alert('Please fix the errors in the form');
+        await window.customAlert('Please fix the errors in the form');
       } else if (error?.response?.data?.message) {
-        alert(error.response.data.message);
+        await window.customAlert(error.response.data.message);
       } else {
-        alert('Error saving user. Please try again.');
+        await window.customAlert('Error saving user. Please try again.');
       }
     }
   };
