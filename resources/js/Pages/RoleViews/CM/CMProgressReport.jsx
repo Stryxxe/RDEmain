@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useNotifications } from "../../../contexts/NotificationContext";
 import { useMessages } from "../../../contexts/MessageContext";
+import { usePage } from "@inertiajs/react";
 import { RefreshCw } from "lucide-react";
 import AutoRefreshControls from "../../../Components/AutoRefreshControls";
 import RefreshStatusIndicator from "../../../Components/RefreshStatusIndicator";
@@ -18,7 +19,10 @@ if (!window.axios) {
 }
 
 const CMProgressReport = () => {
-    const { user } = useAuth();
+    const { user: authUser } = useAuth();
+    const { props } = usePage();
+    // Get user from Inertia props (more reliable than context on initial load)
+    const user = authUser || props?.auth?.user;
     const { refreshAllNotifications } = useNotifications();
     const { refreshAllMessages } = useMessages();
     const [proposals, setProposals] = useState([]);
@@ -30,9 +34,16 @@ const CMProgressReport = () => {
     const [expandedProposals, setExpandedProposals] = useState(new Set());
 
     useEffect(() => {
-        if (user) {
+        // Wait a bit for user to be available (in case of initial page load)
+        const checkAndLoad = setTimeout(() => {
+            if (!user) {
+                setLoading(false);
+                return;
+            }
             fetchData();
-        }
+        }, 100);
+
+        return () => clearTimeout(checkAndLoad);
     }, [user]);
 
     const fetchData = async () => {
@@ -40,7 +51,7 @@ const CMProgressReport = () => {
             setLoading(true);
 
             // Fetch proposals and progress reports in parallel
-            const [proposalsResponse, reportsResponse] = await Promise.all([
+            const [proposalsResponse, reportsResponse] = await Promise.allSettled([
                 axiosInstance.get("/proposals", {
                     headers: { Accept: "application/json" },
                     withCredentials: true,
@@ -51,9 +62,10 @@ const CMProgressReport = () => {
                 }),
             ]);
 
-            if (proposalsResponse.data.success) {
+            // Handle proposals response
+            if (proposalsResponse.status === 'fulfilled' && proposalsResponse.value?.data?.success) {
                 // Filter proposals from the same department
-                const filteredProposals = proposalsResponse.data.data.filter(
+                const filteredProposals = proposalsResponse.value.data.data.filter(
                     (proposal) => {
                         return (
                             proposal.user?.departmentID === user?.departmentID
@@ -61,16 +73,32 @@ const CMProgressReport = () => {
                     }
                 );
                 setProposals(filteredProposals);
+            } else if (proposalsResponse.status === 'rejected') {
+                console.error("Error fetching proposals:", proposalsResponse.reason);
             }
 
-            if (reportsResponse.data.success) {
-                setProgressReports(reportsResponse.data.data || []);
+            // Handle progress reports response
+            if (reportsResponse.status === 'fulfilled' && reportsResponse.value?.data?.success) {
+                setProgressReports(reportsResponse.value.data.data || []);
+            } else if (reportsResponse.status === 'rejected') {
+                console.error("Error fetching progress reports:", reportsResponse.reason);
+                setProgressReports([]);
+            } else if (reportsResponse.status === 'fulfilled' && !reportsResponse.value?.data?.success) {
+                console.error("Failed to fetch progress reports:", reportsResponse.value?.data);
+                setProgressReports([]);
             }
         } catch (error) {
             console.error("Error fetching data:", error);
             if (error.response?.status === 401) {
                 console.error("Unauthorized - session may have expired");
+            } else if (error.response?.status === 404) {
+                console.error("API endpoint not found");
+            } else {
+                console.error("Unexpected error:", error.message);
             }
+            // Set empty arrays on error to prevent infinite loading
+            setProgressReports([]);
+            setProposals([]);
         } finally {
             setLoading(false);
         }

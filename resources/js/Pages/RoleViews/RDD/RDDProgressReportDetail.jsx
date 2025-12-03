@@ -64,7 +64,7 @@ const RDDProgressReportDetail = ({ id: reportId }) => {
             } else if (err.response?.status === 401) {
                 setError("Unauthorized. Please log in again.");
             } else {
-                setError("Error loading progress report");
+            setError("Error loading progress report");
             }
         } finally {
             setLoading(false);
@@ -222,7 +222,7 @@ const RDDProgressReportDetail = ({ id: reportId }) => {
 
             {/* PDF Preview */}
             {pdfPath ? (
-                <PDFViewer pdfPath={pdfPath} title="Document" />
+            <PDFViewer pdfPath={pdfPath} title="Document" />
             ) : (
                 <div className="bg-white rounded-lg shadow-md p-6">
                     <div className="text-center py-12">

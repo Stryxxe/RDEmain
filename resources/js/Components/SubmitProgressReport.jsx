@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../contexts/AuthContext";
 import { usePage } from "@inertiajs/react";
+import { useRouteParams } from "./RoleBased/InertiaRoleRouter";
 import { BiUpload, BiFile, BiCheck, BiX } from "react-icons/bi";
-import SearchableSelect from "./SearchableSelect";
 import axios from "axios";
 
 // Use window.axios which has session-based auth configured
@@ -12,94 +12,20 @@ if (!window.axios) {
     axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
 }
 
-const SubmitProgressReport = ({ onSuccess }) => {
+const SubmitProgressReport = ({ onSuccess, proposalID: propProposalID }) => {
     const { user: authUser } = useAuth();
     const { props } = usePage();
+    const routeParams = useRouteParams();
+    // Get proposalID from props, route params, or query string
+    const proposalID = propProposalID || routeParams.proposalID || props?.proposalID || 
+        (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('proposalID') : null);
     // Get user from Inertia props (more reliable than context on initial load)
     const user = authUser || props?.auth?.user;
-    const [projects, setProjects] = useState([]);
-    const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-    const [selectedProject, setSelectedProject] = useState("");
     const [description, setDescription] = useState("");
     const [uploadedFiles, setUploadedFiles] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
-
-    useEffect(() => {
-        // Wait a bit for user to be available (in case of initial page load)
-        const checkAndLoad = setTimeout(() => {
-            if (!user) {
-                setError("Please log in to submit progress reports");
-                setLoading(false);
-                return;
-            }
-            fetchProjects();
-        }, 100);
-
-        return () => clearTimeout(checkAndLoad);
-    }, [user]);
-
-    const fetchProjects = async () => {
-        if (!user) {
-            setLoading(false);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            setError(null);
-
-            // Fetch proposals based on user role
-            const response = await axiosInstance.get("/proposals", {
-                headers: { Accept: "application/json" },
-                withCredentials: true,
-            });
-
-            if (response.data.success) {
-                let filteredProposals = response.data.data;
-
-                // Filter by jurisdiction based on role
-                if (user.role?.userRole === "CM") {
-                    // CM users see projects from their department
-                    filteredProposals = filteredProposals.filter(
-                        (proposal) =>
-                            proposal.user?.departmentID === user.departmentID
-                    );
-                } else if (user.role?.userRole === "RDD") {
-                    // RDD users see all projects
-                    filteredProposals = filteredProposals;
-                } else {
-                    // Other users see only their own projects
-                    filteredProposals = filteredProposals.filter(
-                        (proposal) => proposal.userID === user.userID
-                    );
-                }
-
-                // Transform to format expected by SearchableSelect
-                const transformedProjects = filteredProposals.map((proposal) => ({
-                    proposalID: proposal.proposalID,
-                    value: proposal.proposalID,
-                    label: `${proposal.researchTitle} (ID: PRO-${String(
-                        proposal.proposalID
-                    ).padStart(6, "0")})`,
-                    title: proposal.researchTitle,
-                    author: proposal.user
-                        ? `${proposal.user.firstName} ${proposal.user.lastName}`
-                        : "Unknown",
-                }));
-
-                setProjects(transformedProjects);
-            } else {
-                setError("Failed to fetch projects");
-            }
-        } catch (err) {
-            console.error("Error fetching projects:", err);
-            setError("Error loading projects");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     const handleFileUpload = (files) => {
         setUploadedFiles((prev) => [...prev, ...files]);
@@ -112,8 +38,8 @@ const SubmitProgressReport = ({ onSuccess }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
 
-        if (!selectedProject) {
-            setError("Please select a project");
+        if (!proposalID) {
+            setError("Project ID is required");
             return;
         }
 
@@ -131,17 +57,17 @@ const SubmitProgressReport = ({ onSuccess }) => {
         setError(null);
 
         try {
-            const proposalID = parseInt(selectedProject);
+            const proposalId = typeof proposalID === 'string' ? parseInt(proposalID) : proposalID;
 
-            if (isNaN(proposalID)) {
-                setError("Invalid project selected");
+            if (isNaN(proposalId)) {
+                setError("Invalid project ID");
                 setIsSubmitting(false);
                 return;
             }
 
             // Prepare form data
             const submitData = new FormData();
-            submitData.append("proposalID", proposalID);
+            submitData.append("proposalID", proposalId);
             submitData.append("reportType", "Interim");
             submitData.append("reportPeriod", new Date().toLocaleDateString());
             submitData.append("progressPercentage", 0);
@@ -170,7 +96,6 @@ const SubmitProgressReport = ({ onSuccess }) => {
             if (response.data.success) {
                 setSubmitSuccess(true);
                 // Reset form
-                setSelectedProject("");
                 setDescription("");
                 setUploadedFiles([]);
 
@@ -202,17 +127,6 @@ const SubmitProgressReport = ({ onSuccess }) => {
         }
     };
 
-    if (loading) {
-        return (
-            <div className="flex items-center justify-center h-64">
-                <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Loading projects...</p>
-                </div>
-            </div>
-        );
-    }
-
     return (
         <div className="max-w-4xl mx-auto">
             {submitSuccess && (
@@ -231,18 +145,6 @@ const SubmitProgressReport = ({ onSuccess }) => {
             )}
 
             <form onSubmit={handleSubmit} className="bg-white rounded-lg shadow-lg p-8">
-                {/* Project Selection with Search */}
-                <SearchableSelect
-                    label="Select Project"
-                    required
-                    options={projects}
-                    value={selectedProject}
-                    onChange={setSelectedProject}
-                    placeholder="Search and select a project..."
-                    getOptionLabel={(option) => option.label}
-                    getOptionValue={(option) => option.value || option.proposalID}
-                    disabled={loading || isSubmitting}
-                />
 
                 {/* Description */}
                 <div className="mb-6">

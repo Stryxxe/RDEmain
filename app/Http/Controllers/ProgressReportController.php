@@ -53,15 +53,10 @@ class ProgressReportController extends Controller
             if ($user->role && $user->role->userRole === 'RDD') {
                 // RDD users can see all reports - no filtering needed
             } 
-            // For CM users, show reports from their department
+            // For CM users, show only reports they submitted themselves
             else if ($user->role && $user->role->userRole === 'CM') {
-                if (!$user->relationLoaded('department')) {
-                    $user->load('department');
-                }
-                // Filter by department through proposal relationship
-                $query->whereHas('proposal.user', function($q) use ($user) {
-                    $q->where('departmentID', $user->departmentID);
-                });
+                // CM users see only their own submitted reports
+                $query->where('userID', $user->userID);
             } 
             // For other users, show only their own reports
             else {

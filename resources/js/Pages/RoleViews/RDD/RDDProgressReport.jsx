@@ -13,15 +13,8 @@ const RDDProgressReport = () => {
     const [error, setError] = useState(null);
 
     const researchCenters = [
-        { id: "all", name: "All Research Centers" },
-        { id: "RC-001", name: "Center for Research and Development" },
-        { id: "RC-002", name: "Center for Technology Innovation" },
-        { id: "RC-003", name: "Center for Agricultural Research" },
-        { id: "RC-004", name: "Center for Environmental Studies" },
-        { id: "RC-005", name: "Center for Health Sciences" },
-        { id: "RC-006", name: "Center for Engineering Research" },
-        { id: "RC-007", name: "Center for Social Sciences" },
-        { id: "RC-008", name: "Center for Business and Economics" },
+        { id: "all", name: "All Center Managers" },
+        // Dynamic CM list will be populated from actual data
     ];
 
     const formatDate = (date) => {
@@ -39,6 +32,16 @@ const RDDProgressReport = () => {
         fetchProgressReports();
     }, []);
 
+    // Helper function to get quarter from date
+    const getQuarter = (date) => {
+        if (!date) return null;
+        const d = new Date(date);
+        const month = d.getMonth();
+        const year = d.getFullYear();
+        const quarter = Math.floor(month / 3) + 1;
+        return `Q${quarter} ${year}`;
+    };
+
     const fetchProgressReports = async () => {
         try {
             setLoading(true);
@@ -46,54 +49,99 @@ const RDDProgressReport = () => {
             // Fetch actual submitted progress reports
             const response = await rddService.getProgressReports();
             if (response.success) {
-                // Transform progress reports to match the reference structure
-                // Group by research center/department
-                const reportsByCenter = {};
+                // Group reports by CM (user who submitted) and then by quarter
+                // Structure: { cmId: { cmName, quarters: { quarter: [reports] } } }
+                const reportsByCM = {};
 
                 response.data.forEach((report) => {
                     const submittedAt = report.submittedAt
                         ? new Date(report.submittedAt)
                         : null;
                     const formattedDate = formatDate(submittedAt);
-                    const researchCenter =
-                        report.proposal?.user?.department?.name ||
-                        "Unassigned Department";
-                    const centerId = `RC-${String(report.reportID).padStart(
-                        3,
-                        "0"
-                    )}`;
-
-                    // Use department as research center, create unique ID
-                    if (!reportsByCenter[researchCenter]) {
-                        reportsByCenter[researchCenter] = {
-                            id: centerId,
-                            researchCenterId: centerId,
-                            researchCenter: researchCenter,
-                            dateSubmitted: formattedDate || "Not specified",
-                            reportCount: 0,
+                    
+                    // Get CM info (user who submitted the report)
+                    const cmUser = report.user;
+                    const cmId = cmUser?.userID || report.userID || 'unknown';
+                    const cmName = cmUser 
+                        ? `${cmUser.firstName || ''} ${cmUser.lastName || ''}`.trim() || 'Unknown CM'
+                        : 'Unknown CM';
+                    const cmDepartment = cmUser?.department?.name || report.proposal?.user?.department?.name || 'Unassigned Department';
+                    
+                    // Get quarter
+                    const quarter = getQuarter(submittedAt) || 'Unknown Quarter';
+                    
+                    // Initialize CM entry if not exists
+                    if (!reportsByCM[cmId]) {
+                        reportsByCM[cmId] = {
+                            cmId: cmId,
+                            cmName: cmName,
+                            cmDepartment: cmDepartment,
+                            quarters: {},
+                            totalReports: 0,
                             latestReport: report,
+                            latestDate: submittedAt,
                         };
                     }
-                    reportsByCenter[researchCenter].reportCount += 1;
-
-                    // Use the most recent date
-                    if (
-                        submittedAt &&
-                        (!reportsByCenter[researchCenter].dateSubmitted ||
-                            submittedAt >
-                                new Date(
-                                    reportsByCenter[
-                                        researchCenter
-                                    ].dateSubmitted
-                                ))
-                    ) {
-                        reportsByCenter[researchCenter].dateSubmitted =
-                            formattedDate;
-                        reportsByCenter[researchCenter].latestReport = report;
+                    
+                    // Initialize quarter entry if not exists
+                    if (!reportsByCM[cmId].quarters[quarter]) {
+                        reportsByCM[cmId].quarters[quarter] = [];
+                    }
+                    
+                    // Add report to quarter
+                    reportsByCM[cmId].quarters[quarter].push({
+                        ...report,
+                        formattedDate: formattedDate,
+                    });
+                    
+                    // Update totals
+                    reportsByCM[cmId].totalReports += 1;
+                    
+                    // Update latest report if this is more recent
+                    if (submittedAt && (!reportsByCM[cmId].latestDate || submittedAt > reportsByCM[cmId].latestDate)) {
+                        reportsByCM[cmId].latestDate = submittedAt;
+                        reportsByCM[cmId].latestReport = report;
                     }
                 });
 
-                const transformedReports = Object.values(reportsByCenter);
+                // Transform to flat structure for display
+                // Each entry represents a CM with their quarterly consolidated reports
+                const transformedReports = Object.values(reportsByCM).map((cmData) => {
+                    // Sort quarters by date (most recent first)
+                    const sortedQuarters = Object.keys(cmData.quarters).sort((a, b) => {
+                        // Extract year and quarter for sorting
+                        const getQuarterValue = (q) => {
+                            const match = q.match(/Q(\d)\s+(\d{4})/);
+                            if (!match) return 0;
+                            return parseInt(match[2]) * 10 + parseInt(match[1]);
+                        };
+                        return getQuarterValue(b) - getQuarterValue(a);
+                    });
+
+                    return {
+                        id: `CM-${String(cmData.cmId).padStart(3, "0")}`,
+                        researchCenterId: `CM-${String(cmData.cmId).padStart(3, "0")}`,
+                        researchCenter: `${cmData.cmName} (${cmData.cmDepartment})`,
+                        cmName: cmData.cmName,
+                        cmDepartment: cmData.cmDepartment,
+                        dateSubmitted: formatDate(cmData.latestDate) || "Not specified",
+                        reportCount: cmData.totalReports,
+                        latestReport: cmData.latestReport,
+                        quarters: sortedQuarters.map(quarter => ({
+                            quarter: quarter,
+                            reports: cmData.quarters[quarter],
+                            count: cmData.quarters[quarter].length,
+                        })),
+                    };
+                });
+
+                // Sort by latest date (most recent first)
+                transformedReports.sort((a, b) => {
+                    const dateA = new Date(a.latestReport?.submittedAt || 0);
+                    const dateB = new Date(b.latestReport?.submittedAt || 0);
+                    return dateB - dateA;
+                });
+
                 setProgressReports(transformedReports);
             } else {
                 setError("Failed to fetch progress reports");
@@ -120,9 +168,10 @@ const RDDProgressReport = () => {
 
     // Filter projects based on search and research center
     const filteredProjects = progressReports.filter((project) => {
-        const matchesSearch = project.researchCenter
-            .toLowerCase()
-            .includes(search.toLowerCase());
+        const matchesSearch = 
+            project.cmName?.toLowerCase().includes(search.toLowerCase()) ||
+            project.cmDepartment?.toLowerCase().includes(search.toLowerCase()) ||
+            project.researchCenter?.toLowerCase().includes(search.toLowerCase());
         const matchesResearchCenter =
             selectedResearchCenter === "all" ||
             project.researchCenterId === selectedResearchCenter;
@@ -232,11 +281,11 @@ const RDDProgressReport = () => {
                     />
                 </div>
 
-                {/* Research Center Filter */}
+                {/* Center Manager Filter */}
                 <div className="flex items-center space-x-2">
                     <FilterIcon />
                     <span className="text-sm font-medium text-gray-700">
-                        Research Center:
+                        Center Manager:
                     </span>
                     <select
                         value={selectedResearchCenter}
@@ -245,9 +294,10 @@ const RDDProgressReport = () => {
                         }
                         className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors min-w-48"
                     >
-                        {researchCenters.map((center) => (
-                            <option key={center.id} value={center.id}>
-                                {center.name}
+                        <option value="all">All Center Managers</option>
+                        {progressReports.map((project) => (
+                            <option key={project.researchCenterId} value={project.researchCenterId}>
+                                {project.cmName}
                             </option>
                         ))}
                     </select>
@@ -310,13 +360,16 @@ const RDDProgressReport = () => {
                                 No
                             </th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                Research Center ID
+                                CM ID
                             </th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                Research Center
+                                Center Manager / Department
                             </th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                Date Submitted
+                                Quarterly Reports
+                            </th>
+                            <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                Latest Submission
                             </th>
                             <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                 Details
@@ -327,7 +380,7 @@ const RDDProgressReport = () => {
                         {filteredProjects.length === 0 ? (
                             <tr>
                                 <td
-                                    colSpan="5"
+                                    colSpan="6"
                                     className="px-6 py-12 text-center"
                                 >
                                     <div className="flex flex-col items-center justify-center">
@@ -372,13 +425,30 @@ const RDDProgressReport = () => {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="text-sm font-medium text-gray-900">
-                                            {project.researchCenter}
+                                            {project.cmName}
                                         </div>
-                                        {project.reportCount > 1 && (
-                                            <div className="text-xs text-gray-500 mt-1">
-                                                {project.reportCount} reports
-                                            </div>
-                                        )}
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            {project.cmDepartment}
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-sm text-gray-700">
+                                            {project.quarters && project.quarters.length > 0 ? (
+                                                <div className="space-y-1">
+                                                    {project.quarters.map((q, idx) => (
+                                                        <div key={idx} className="flex items-center space-x-2">
+                                                            <span className="font-medium text-blue-600">{q.quarter}:</span>
+                                                            <span className="text-gray-600">{q.count} report{q.count !== 1 ? 's' : ''}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <span className="text-gray-400">No quarterly data</span>
+                                            )}
+                                        </div>
+                                        <div className="text-xs text-gray-500 mt-1">
+                                            Total: {project.reportCount} report{project.reportCount !== 1 ? 's' : ''}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <div className="text-sm text-gray-700">
