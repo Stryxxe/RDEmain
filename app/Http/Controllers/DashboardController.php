@@ -21,6 +21,9 @@ class DashboardController extends Controller
             return redirect()->route('login');
         }
 
+        // Load user relationships for redirect
+        $user->load(['role', 'department']);
+
         // Get role-based redirect path
         $redirectPath = $this->getRoleBasedRedirect($user);
 

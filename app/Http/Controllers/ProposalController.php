@@ -104,11 +104,15 @@ class ProposalController extends Controller
                 'proponents.role:userRoleID,userRole'
             ]);
 
-            match ($user->role?->userRole) {
-                'RDD' => null, // RDD users can see all proposals including archived ones
-                'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID)),
-                default => $query->whereHas('proponents', fn($q) => $q->where('users.userID', $user->userID)),
-            };
+            // Apply authorization filters based on user role
+            $userRole = $user->role?->userRole;
+            if ($userRole === 'RDD') {
+                // RDD users can see all proposals including archived ones - no filter needed
+            } elseif ($userRole === 'CM') {
+                $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+            } else {
+                $query->whereHas('proponents', fn($q) => $q->where('users.userID', $user->userID));
+            }
 
             $result = $query->firstOrFail();
             
@@ -593,11 +597,15 @@ class ProposalController extends Controller
         // For RDD users, count only archived (endorsed) proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::query();
 
-        match ($user->role?->userRole) {
-            'RDD' => $query->whereNotNull('archivedByRDD'), // RDD users see statistics for archived (endorsed) proposals only
-            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID)),
-            default => $query->where('userID', $user->userID),
-        };
+        // Apply authorization filters based on user role
+        $userRole = $user->role?->userRole;
+        if ($userRole === 'RDD') {
+            $query->whereNotNull('archivedByRDD'); // RDD users see statistics for archived (endorsed) proposals only
+        } elseif ($userRole === 'CM') {
+            $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+        } else {
+            $query->where('userID', $user->userID);
+        }
 
         $stats = [
             'total' => $query->count(),

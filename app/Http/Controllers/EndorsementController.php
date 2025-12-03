@@ -290,14 +290,23 @@ class EndorsementController extends Controller
             // Clear cache with wildcard pattern for this proposal
             $pattern = "proposal_{$proposalId}_user_*";
             
-            if (Cache::getStore() instanceof \Illuminate\Cache\RedisStore) {
-                $keys = Cache::getRedis()->keys($pattern);
-                if (!empty($keys)) {
-                    Cache::getRedis()->del($keys);
+            try {
+                $store = Cache::getStore();
+                if ($store instanceof \Illuminate\Cache\RedisStore) {
+                    // Redis supports pattern matching
+                    $keys = Cache::getRedis()->keys($pattern);
+                    if (!empty($keys)) {
+                        Cache::getRedis()->del($keys);
+                    }
+                } else {
+                    // For non-Redis stores, we can't use wildcard patterns
+                    // Instead, we'll clear the cache entry for the current user if we have access to it
+                    // Note: This is a limitation - we can't clear all user-specific caches for this proposal
+                    // without knowing all user IDs. Consider using cache tags if your store supports them.
+                    Log::info("Cache wildcard pattern not supported for non-Redis store. Skipping cache clear for pattern: {$pattern}");
                 }
-            } else {
-                // For non-Redis stores, we can't wildcard delete
-                Cache::forget("proposal_{$proposalId}_user_*");
+            } catch (\Exception $e) {
+                Log::warning("Failed to clear proposal cache: " . $e->getMessage());
             }
         } catch (\Exception $e) {
             Log::warning("Failed to clear proposal cache: " . $e->getMessage());
