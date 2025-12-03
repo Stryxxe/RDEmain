@@ -212,19 +212,24 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         const proponentName = fullProposal.user?.fullName || fullProposal.user?.firstName + ' ' + fullProposal.user?.lastName || 'Unknown';
         const proposalId = fullProposal.proposalID || fullProposal.id;
         
-        await window.customAlert('', 'Endorsed Successfully!', 3000);
-        setIsEndorsed(true);
-        setEndorsementData(responseData.data);
+        // Close the endorsement modal first
         setShowEndorsementModal(false);
         setEndorsementComments('');
+        setIsEndorsed(true);
+        setEndorsementData(responseData.data);
+        
+        // Show success alert that auto-closes after 3 seconds
+        window.customAlert('', 'Endorsed Successfully!', 3000);
         
         // Notify parent component that this proposal has been endorsed
         if (onEndorsed && proposalId) {
           onEndorsed(proposalId);
         }
 
-        // Navigate back to review proposal list page
-        router.visit('/cm/review-proposal', { replace: true });
+        // Navigate back to review proposal list page after a short delay
+        setTimeout(() => {
+          router.visit('/cm/review-proposal', { replace: true });
+        }, 3500);
       } else {
         await window.customAlert('Failed to endorse proposal: ' + (responseData.message || 'Unknown error'));
       }

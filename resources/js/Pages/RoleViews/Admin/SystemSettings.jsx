@@ -239,7 +239,11 @@ const SystemSettings = () => {
     const deleteDepartment = async (dept) => {
         const id = dept.departmentID || dept.id;
         if (!id) return;
-        if (!window.confirm(`Delete department "${dept.name || dept.departmentName}"?`)) return;
+        const confirmed = await window.customConfirm(
+            `Delete department "${dept.name || dept.departmentName}"?`,
+            "Confirm Deletion"
+        );
+        if (!confirmed) return;
         try {
             setDeptLoading(true);
             await axiosInstance.delete(`/admin/departments/${id}`, {
@@ -324,7 +328,11 @@ const SystemSettings = () => {
     const deleteResearchCenter = async (center) => {
         const id = center.centerID || center.id;
         if (!id) return;
-        if (!window.confirm(`Delete research center "${center.name || center.centerName}"?`)) return;
+        const confirmed = await window.customConfirm(
+            `Delete research center "${center.name || center.centerName}"?`,
+            "Confirm Deletion"
+        );
+        if (!confirmed) return;
         try {
             setCenterLoading(true);
             await axiosInstance.delete(`/admin/research-centers/${id}`, {
@@ -471,7 +479,11 @@ const SystemSettings = () => {
     const deleteTemplate = async (template, type) => {
         const id = template.id || template.templateID;
         if (!id) return;
-        if (!window.confirm(`Delete template "${template.name || template.fileName}"?`)) return;
+        const confirmed = await window.customConfirm(
+            `Delete template "${template.name || template.fileName}"?`,
+            "Confirm Deletion"
+        );
+        if (!confirmed) return;
         try {
             setTemplatesLoading(true);
             await axiosInstance.delete(`/admin/templates/${type}/${id}`, {

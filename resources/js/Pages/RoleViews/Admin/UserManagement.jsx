@@ -99,63 +99,65 @@ const UserManagement = () => {
     };
 
     const handleDeleteUser = async (userId) => {
-        if (
-            window.confirm(
-                "Are you sure you want to delete this user? This action cannot be undone."
-            )
-        ) {
-            try {
-                const response = await fetch(`/api/admin/users/${userId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Accept': 'application/json',
-                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                    },
-                    credentials: 'include'
-                });
+        const confirmed = await window.customConfirm(
+            "Are you sure you want to delete this user? This action cannot be undone.",
+            "Confirm Deletion"
+        );
+        
+        if (!confirmed) return;
+
+        try {
+            const response = await fetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                await window.customAlert('', '1 user(s) deleted successfully!', 3000);
+                // Refresh users list and recalculate pagination
+                await fetchUsers();
+            } else {
+                const errorData = await response.json();
+                const errorMessage = errorData?.message || "Error deleting user. Please try again.";
                 
-                if (response.ok) {
-                    alert("User deleted successfully!");
-                    // Refresh users list and recalculate pagination
-                    await fetchUsers();
-                } else {
-                    const errorData = await response.json();
-                    const errorMessage = errorData?.message || "Error deleting user. Please try again.";
-                    
-                    // If deletion is blocked due to related data, offer to deactivate instead
-                    if (response.status === 422 && errorMessage.includes('Cannot delete user')) {
-                        const confirmDeactivate = window.confirm(
-                            'This user has related data and cannot be deleted.\nWould you like to deactivate this user instead?'
-                        );
-                        if (confirmDeactivate) {
-                            const deactivateRes = await fetch(`/api/admin/users/${userId}`, {
-                                method: 'PUT',
-                                headers: {
-                                    'Accept': 'application/json',
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                                },
-                                credentials: 'include',
-                                body: JSON.stringify({ status: 'inactive' })
-                            });
-                            if (deactivateRes.ok) {
-                                alert('User deactivated successfully.');
-                                await fetchUsers();
-                            } else {
-                                const deErr = await deactivateRes.json().catch(() => ({}));
-                                alert(deErr?.message || 'Failed to deactivate user.');
-                            }
+                // If deletion is blocked due to related data, offer to deactivate instead
+                if (response.status === 422 && errorMessage.includes('Cannot delete user')) {
+                    const confirmDeactivate = await window.customConfirm(
+                        'This user has related data and cannot be deleted.\nWould you like to deactivate this user instead?',
+                        'Deactivate Instead?'
+                    );
+                    if (confirmDeactivate) {
+                        const deactivateRes = await fetch(`/api/admin/users/${userId}`, {
+                            method: 'PUT',
+                            headers: {
+                                'Accept': 'application/json',
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                            },
+                            credentials: 'include',
+                            body: JSON.stringify({ status: 'inactive' })
+                        });
+                        if (deactivateRes.ok) {
+                            await window.customAlert('', 'User deactivated successfully.');
+                            await fetchUsers();
                         } else {
-                            alert(errorMessage);
+                            const deErr = await deactivateRes.json().catch(() => ({}));
+                            await window.customAlert(deErr?.message || 'Failed to deactivate user.', 'Error');
                         }
                     } else {
-                        alert(errorMessage);
+                        await window.customAlert(errorMessage, 'Error');
                     }
+                } else {
+                    await window.customAlert(errorMessage, 'Error');
                 }
-            } catch (error) {
-                console.error('Error deleting user:', error);
-                alert("Error deleting user. Please try again.");
             }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            await window.customAlert("Error deleting user. Please try again.", 'Error');
         }
     };
 
@@ -206,63 +208,69 @@ const UserManagement = () => {
 
     const handleBulkDelete = async () => {
         if (selectedUsers.length === 0) {
-            alert("Please select users to delete");
+            await window.customAlert("Please select users to delete", 'Warning');
             return;
         }
-        if (
-            window.confirm(
-                `Are you sure you want to delete ${selectedUsers.length} selected user(s)? This action cannot be undone.`
-            )
-        ) {
-            try {
-                const deletePromises = selectedUsers.map(async (userId) => {
-                    const response = await fetch(`/api/admin/users/${userId}`, {
-                        method: 'DELETE',
+        
+        const confirmed = await window.customConfirm(
+            `Are you sure you want to delete ${selectedUsers.length} selected user(s)? This action cannot be undone.`,
+            "Confirm Deletion"
+        );
+        
+        if (!confirmed) return;
+
+        try {
+            const deletePromises = selectedUsers.map(async (userId) => {
+                const response = await fetch(`/api/admin/users/${userId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                return response.ok;
+            });
+            
+            const results = await Promise.all(deletePromises);
+            
+            // If some deletes failed, attempt deactivation for those
+            const failedIds = [];
+            for (let i = 0; i < results.length; i++) {
+                if (!results[i]) failedIds.push(selectedUsers[i]);
+            }
+            
+            if (failedIds.length > 0) {
+                const confirmDeactivate = await window.customConfirm(
+                    `${failedIds.length} user(s) could not be deleted due to related data.\nDeactivate them instead?`,
+                    'Deactivate Instead?'
+                );
+                if (confirmDeactivate) {
+                    const deactivatePromises = failedIds.map(userId => fetch(`/api/admin/users/${userId}`, {
+                        method: 'PUT',
                         headers: {
                             'Accept': 'application/json',
+                            'Content-Type': 'application/json',
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
                         },
-                        credentials: 'include'
-                    });
-                    return response.ok;
-                });
-                
-                const results = await Promise.all(deletePromises);
-                
-                // If some deletes failed, attempt deactivation for those
-                const failedIds = [];
-                for (let i = 0; i < results.length; i++) {
-                    if (!results[i]) failedIds.push(selectedUsers[i]);
+                        credentials: 'include',
+                        body: JSON.stringify({ status: 'inactive' })
+                    }));
+                    await Promise.all(deactivatePromises);
+                    await window.customAlert('', `${failedIds.length} user(s) deactivated.`);
                 }
-                
-                if (failedIds.length > 0) {
-                    const confirmDeactivate = window.confirm(
-                        `${failedIds.length} user(s) could not be deleted due to related data.\nDeactivate them instead?`
-                    );
-                    if (confirmDeactivate) {
-                        const deactivatePromises = failedIds.map(userId => fetch(`/api/admin/users/${userId}`, {
-                            method: 'PUT',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Content-Type': 'application/json',
-                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
-                            },
-                            credentials: 'include',
-                            body: JSON.stringify({ status: 'inactive' })
-                        }));
-                        await Promise.all(deactivatePromises);
-                        alert(`${failedIds.length} user(s) deactivated.`);
-                    }
-                }
-                
-                // Refresh users list and recalculate pagination
-                await fetchUsers();
-                setSelectedUsers([]);
-                alert(`${selectedUsers.length - failedIds.length} user(s) deleted successfully!`);
-            } catch (error) {
-                console.error('Error deleting users:', error);
-                alert("Error deleting some users. They may have existing proposals, reviews, or decisions.");
             }
+            
+            // Refresh users list and recalculate pagination
+            await fetchUsers();
+            const successCount = selectedUsers.length - failedIds.length;
+            setSelectedUsers([]);
+            if (successCount > 0) {
+                await window.customAlert('', `${successCount} user(s) deleted successfully!`, 3000);
+            }
+        } catch (error) {
+            console.error('Error deleting users:', error);
+            await window.customAlert("Error deleting some users. They may have existing proposals, reviews, or decisions.", 'Error');
         }
     };
 

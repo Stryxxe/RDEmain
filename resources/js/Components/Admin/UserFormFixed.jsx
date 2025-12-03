@@ -147,7 +147,7 @@ const UserFormFixed = ({ user, onClose }) => {
           headers: { 'Accept': 'application/json' },
           withCredentials: true,
         });
-        await window.customAlert('User updated successfully!');
+        await window.customAlert('', 'User Updated Successfully!');
       } else {
         // Create new user via API
         const response = await axiosInstance.post('/admin/users', formData, {

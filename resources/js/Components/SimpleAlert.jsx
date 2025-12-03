@@ -5,6 +5,19 @@ const SimpleAlert = ({ message, onClose, title = null, autoClose = null }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [passwordCopied, setPasswordCopied] = useState(false);
+  
+  // Normalize autoClose to ensure it's a number or null
+  // Check if autoClose is a valid number greater than 0
+  const hasAutoClose = React.useMemo(() => {
+    if (autoClose === null || autoClose === undefined || autoClose === false) return false;
+    const numValue = Number(autoClose);
+    const result = !isNaN(numValue) && numValue > 0;
+    // Debug log (remove in production)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('SimpleAlert autoClose check:', { autoClose, numValue, result });
+    }
+    return result;
+  }, [autoClose]);
 
   const handleClose = useCallback(() => {
     setIsVisible(false);
@@ -18,13 +31,13 @@ const SimpleAlert = ({ message, onClose, title = null, autoClose = null }) => {
     setTimeout(() => setIsVisible(true), 10);
     
     // Auto-close if specified
-    if (autoClose && autoClose > 0) {
+    if (hasAutoClose) {
       const timer = setTimeout(() => {
         handleClose();
       }, autoClose);
       return () => clearTimeout(timer);
     }
-  }, [autoClose, handleClose]);
+  }, [autoClose, handleClose, hasAutoClose]);
 
   useEffect(() => {
     // Close on Escape key
@@ -48,14 +61,20 @@ const SimpleAlert = ({ message, onClose, title = null, autoClose = null }) => {
     ? message.replace(/User added successfully!?\s*/i, '').replace(/Temporary password:\s*[^\s]+/i, '').trim()
     : message;
 
-  // Detect if message contains success/error keywords for styling
-  const isSuccess = message.toLowerCase().includes('successfully') || 
-                    message.toLowerCase().includes('success') ||
-                    message.toLowerCase().includes('added') ||
-                    message.toLowerCase().includes('created');
-  const isError = message.toLowerCase().includes('error') || 
-                  message.toLowerCase().includes('failed') ||
-                  message.toLowerCase().includes('invalid');
+  // Detect if message or title contains success/error keywords for styling
+  const messageText = (message || '').toLowerCase();
+  const titleText = (title || '').toLowerCase();
+  const combinedText = `${messageText} ${titleText}`.trim();
+  
+  const isSuccess = combinedText.includes('successfully') || 
+                    combinedText.includes('success') ||
+                    combinedText.includes('added') ||
+                    combinedText.includes('created') ||
+                    combinedText.includes('updated') ||
+                    combinedText.includes('endorsed');
+  const isError = combinedText.includes('error') || 
+                  combinedText.includes('failed') ||
+                  combinedText.includes('invalid');
 
   const handleCopyPassword = async () => {
     if (temporaryPassword) {
@@ -133,11 +152,16 @@ const SimpleAlert = ({ message, onClose, title = null, autoClose = null }) => {
         )}
 
         {/* Message Content */}
-        <div className="px-5 py-4 bg-white">
-          {!temporaryPassword && !autoClose && (
+        <div className={`px-5 bg-white ${!temporaryPassword && !hasAutoClose ? 'py-4' : 'py-3'}`}>
+          {!temporaryPassword && !hasAutoClose && baseMessage && (
             <p className="text-sm text-gray-700 mb-3 leading-relaxed">
               {baseMessage}
             </p>
+          )}
+          
+          {/* Show minimal padding when auto-close and no message */}
+          {!temporaryPassword && hasAutoClose && !baseMessage && (
+            <div className="min-h-[20px]"></div>
           )}
 
           {/* Password Field and OK Button in same div */}
@@ -181,7 +205,7 @@ const SimpleAlert = ({ message, onClose, title = null, autoClose = null }) => {
                   </div>
                 </div>
               </div>
-              {!autoClose && (
+              {!hasAutoClose && (
                 <div className="flex justify-end pt-1">
                   <button
                     onClick={handleClose}
@@ -202,7 +226,8 @@ const SimpleAlert = ({ message, onClose, title = null, autoClose = null }) => {
         </div>
 
         {/* Footer - OK Button (only when no password and no auto-close) */}
-        {!temporaryPassword && !autoClose && (
+        {/* DO NOT show OK button if hasAutoClose is true */}
+        {!temporaryPassword && hasAutoClose === false && (
           <div className="px-5 py-3 bg-gray-50 border-t border-gray-200 flex justify-end">
             <button
               onClick={handleClose}

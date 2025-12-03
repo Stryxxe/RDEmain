@@ -3,9 +3,15 @@ import axios from 'axios';
 window.axios = axios;
 
 // Lazy load customAlert - only initialize when needed
-window.customAlert = async (message, title = null) => {
+window.customAlert = async (message, title = null, autoClose = null) => {
   const { customAlert } = await import('./utils/alert');
-  return customAlert(message, title);
+  return customAlert(message, title, autoClose);
+};
+
+// Lazy load customConfirm - only initialize when needed
+window.customConfirm = async (message, title = null) => {
+  const { customConfirm } = await import('./utils/confirm');
+  return customConfirm(message, title);
 };
 
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
