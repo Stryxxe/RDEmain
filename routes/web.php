@@ -76,7 +76,6 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('RoleViews/Dashboards/AdminDashboard'))->name('dashboard');
         Route::get('/user-management', fn() => Inertia::render('RoleViews/Admin/UserManagement'))->name('user-management');
         Route::get('/system-settings', fn() => Inertia::render('RoleViews/Admin/SystemSettings'))->name('system-settings');
-        Route::get('/reports', fn() => Inertia::render('RoleViews/Admin/Reports'))->name('reports');
         Route::get('/profile', fn() => Inertia::render('RoleViews/Admin/Profile'))->name('profile');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');
         Route::get('/messages', fn() => Inertia::render('Messages'))->name('messages');

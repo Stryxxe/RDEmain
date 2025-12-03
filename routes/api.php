@@ -17,6 +17,7 @@ use App\Http\Controllers\Api\OptimizedNotificationController;
 use App\Http\Controllers\Api\OptimizedMessageController;
 use App\Http\Controllers\Api\SimpleOptimizedMessageController;
 use App\Http\Controllers\Api\AdminUserController;
+use App\Http\Controllers\SettingController;
 use App\Http\Middleware\RequestDeduplication;
 
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
@@ -24,12 +25,22 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->midd
 
 use App\Models\Department;
 use App\Models\ResearchCenter;
+use App\Models\Setting;
 // Get upload settings (max file size) - public endpoint for all authenticated users
 Route::get('/upload-settings', function () {
+    $allowedTypes = Setting::get('allowed_file_types', '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg');
+    $maxFileSize = Setting::get('max_file_size', 20);
+    
+    // Convert comma-separated string to array for frontend
+    $typesArray = array_map('trim', explode(',', $allowedTypes));
+    $typesArray = array_map(function($type) {
+        return str_replace('.', '', $type);
+    }, $typesArray);
+    
     return response()->json([
-        'maxFileSizeMB' => \App\Helpers\SettingsHelper::getMaxFileSizeMB(),
-        'maxFileSizeKB' => \App\Helpers\SettingsHelper::getMaxFileSizeKB(),
-        'allowedFileTypes' => \App\Helpers\SettingsHelper::getAllowedFileTypes(),
+        'maxFileSizeMB' => (int) $maxFileSize,
+        'maxFileSizeKB' => (int) $maxFileSize * 1024,
+        'allowedFileTypes' => $typesArray,
     ]);
 })->middleware('auth:web');
 
@@ -725,6 +736,11 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
 // Admin - Users management
 // Explicitly use 'web' guard to ensure session authentication works
 Route::middleware(['auth:web'])->group(function () {
+    // Settings management
+    Route::get('/settings', [SettingController::class, 'index']);
+    Route::get('/settings/{key}', [SettingController::class, 'show']);
+    Route::put('/settings', [SettingController::class, 'update']);
+    
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
