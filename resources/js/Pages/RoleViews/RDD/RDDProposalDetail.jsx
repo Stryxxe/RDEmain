@@ -7,8 +7,6 @@ import PDFViewer from "../../../Components/PDFViewer";
 import CoAuthorsCard from "../../../Components/CoAuthorsCard";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
-import RDDEditProposal from './RDDEditProposal';
-import { updateProposal } from '../../../services/proposalService';
 import Breadcrumbs from "../../../Components/Breadcrumbs";
 
 // Use window.axios which has session-based auth configured, or configure this instance
@@ -59,8 +57,8 @@ const RDDProposalDetail = ({ id: proposalId }) => {
 
         try {
             setLoading(true);
-            setError("");
             const startTime = performance.now();
+            setError("");
             console.log("Fetching proposal with ID:", id);
             
             // Fetch only the proposal - it already includes endorsements

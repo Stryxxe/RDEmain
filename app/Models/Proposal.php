@@ -106,7 +106,9 @@ class Proposal extends Model
      */
     public function proponents()
     {
-        return $this->belongsToMany(User::class, 'proposal_proponents', 'proposalID', 'userID');
+        return $this->belongsToMany(User::class, 'proposal_proponents', 'proposalID', 'userID')
+            ->withPivot('projectRoleID')
+            ->withTimestamps();
     }
 
     /**

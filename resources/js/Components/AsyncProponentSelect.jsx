@@ -7,10 +7,28 @@ const AsyncProponentSelect = ({ value = [], onChange, placeholder = "Search user
   const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const [projectRoles, setProjectRoles] = useState([]);
+  const [rolesLoading, setRolesLoading] = useState(false);
   const containerRef = useRef(null);
   const controllerRef = useRef(null);
 
   const selectedIds = useMemo(() => new Set((value || []).map(u => u.userID || u.id)), [value]);
+
+  // Fetch active project roles
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        setRolesLoading(true);
+        const data = await apiService.get('/project-roles/active');
+        setProjectRoles(data?.data || []);
+      } catch (err) {
+        console.error('Failed to load project roles', err);
+      } finally {
+        setRolesLoading(false);
+      }
+    };
+    fetchRoles();
+  }, []);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -61,7 +79,8 @@ const AsyncProponentSelect = ({ value = [], onChange, placeholder = "Search user
     if (!onChange) return;
     if (value.length >= maxSelections) return;
     if (selectedIds.has(user.userID || user.id)) return;
-    onChange([...(value || []), user]);
+    // Add user with null projectRoleID initially
+    onChange([...(value || []), { ...user, projectRoleID: null }]);
     setQuery("");
     setOpen(false);
   };
@@ -71,27 +90,54 @@ const AsyncProponentSelect = ({ value = [], onChange, placeholder = "Search user
     onChange((value || []).filter(u => (u.userID || u.id) !== id));
   };
 
+  const updateUserRole = (id, roleId) => {
+    if (!onChange) return;
+    onChange((value || []).map(u => 
+      (u.userID || u.id) === id ? { ...u, projectRoleID: roleId } : u
+    ));
+  };
+
   return (
     <div ref={containerRef} className="w-full">
-      <div className="mb-2">
-        <div className="flex flex-wrap gap-2">
-          {(value || []).map((user) => {
-            const id = user.userID || user.id;
-            const name = user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim();
-            const role = user.role?.userRole || user.role || "";
-            return (
-              <span key={id} className="inline-flex items-center gap-1 bg-red-50 text-red-700 border border-red-200 px-2 py-1 rounded-full text-sm">
-                <span className="font-medium">{name}</span>
-                {role && <span className="text-red-500/70">• {role}</span>}
-                <button type="button" onClick={() => removeUser(id)} className="ml-1 rounded-full hover:bg-red-100 p-1" aria-label="Remove">
-                  <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.293 7.293a1 1 0 011.414 0L10 7.586l.293-.293a1 1 0 111.414 1.414L11.414 9l.293.293a1 1 0 01-1.414 1.414L10 10.414l-.293.293a1 1 0 01-1.414-1.414L8.586 9l-.293-.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </button>
-              </span>
-            );
-          })}
-        </div>
+      <div className="mb-3 space-y-2">
+        {(value || []).map((user) => {
+          const id = user.userID || user.id;
+          const name = user.name || `${user.firstName || ""} ${user.lastName || ""}`.trim();
+          const userRole = user.role?.userRole || user.role || "";
+          return (
+            <div key={id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="flex-1">
+                <div className="font-medium text-gray-900">{name}</div>
+                {userRole && <div className="text-xs text-gray-500">{userRole}</div>}
+              </div>
+              <div className="flex-shrink-0 w-48">
+                <select
+                  value={user.projectRoleID || ""}
+                  onChange={(e) => updateUserRole(id, e.target.value || null)}
+                  className="w-full text-sm border-gray-300 rounded-md focus:ring-red-500 focus:border-red-500"
+                  disabled={rolesLoading}
+                >
+                  <option value="">Select role...</option>
+                  {projectRoles.map((role) => (
+                    <option key={role.projectRoleID} value={role.projectRoleID}>
+                      {role.roleName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => removeUser(id)} 
+                className="flex-shrink-0 text-red-600 hover:text-red-800 p-1"
+                aria-label="Remove"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </button>
+            </div>
+          );
+        })}
       </div>
 
       <div className="relative">
@@ -136,7 +182,9 @@ const AsyncProponentSelect = ({ value = [], onChange, placeholder = "Search user
           </div>
         )}
       </div>
-      <p className="mt-2 text-xs text-gray-500">Add co-proponents. They will see this proposal in their tracker.</p>
+      <p className="mt-2 text-xs text-gray-500">
+        Add co-proponents and assign their project role. They will see this proposal in their tracker.
+      </p>
     </div>
   );
 };

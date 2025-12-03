@@ -66,6 +66,13 @@ const SystemSettings = () => {
     const [showGeneralModal, setShowGeneralModal] = useState(false);
     const [pendingFile, setPendingFile] = useState(null);
     const [templateName, setTemplateName] = useState('');
+    
+    // Project Roles
+    const [projectRoles, setProjectRoles] = useState([]);
+    const [rolesLoading, setRolesLoading] = useState(false);
+    const [roleForm, setRoleForm] = useState({ id: null, roleName: "", isActive: true });
+    const [roleErrors, setRoleErrors] = useState("");
+    const [editingRole, setEditingRole] = useState(null);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -499,6 +506,91 @@ const SystemSettings = () => {
         }
     };
 
+    // Project Roles CRUD handlers
+    const fetchProjectRoles = async () => {
+        try {
+            setRolesLoading(true);
+            const res = await axiosInstance.get("/project-roles", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            const list = res?.data?.data || res?.data || [];
+            setProjectRoles(Array.isArray(list) ? list : []);
+        } catch (e) {
+            console.error("Failed to load project roles", e);
+            setProjectRoles([]);
+        } finally {
+            setRolesLoading(false);
+        }
+    };
+
+    const handleRoleSubmit = async (e) => {
+        e.preventDefault();
+        if (!roleForm.roleName.trim()) {
+            setRoleErrors("Role name is required");
+            return;
+        }
+        try {
+            setRolesLoading(true);
+            setRoleErrors("");
+            if (editingRole) {
+                await axiosInstance.put(`/project-roles/${editingRole}`, roleForm, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+            } else {
+                await axiosInstance.post("/project-roles", roleForm, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+            }
+            setRoleForm({ id: null, roleName: "", description: "", isActive: true });
+            setEditingRole(null);
+            await fetchProjectRoles();
+        } catch (e) {
+            console.error("Save role failed", e);
+            setRoleErrors(e?.response?.data?.message || "Failed to save role");
+        } finally {
+            setRolesLoading(false);
+        }
+    };
+
+    const handleEditRole = (role) => {
+        setEditingRole(role.projectRoleID);
+        setRoleForm({
+            id: role.projectRoleID,
+            roleName: role.roleName,
+            isActive: role.isActive
+        });
+    };
+
+    const handleCancelEditRole = () => {
+        setEditingRole(null);
+        setRoleForm({ id: null, roleName: "", isActive: true });
+        setRoleErrors("");
+    };
+
+    const handleDeleteRole = async (id) => {
+        if (!window.confirm("Delete this project role? Members with this role will have it set to null.")) return;
+        try {
+            setRolesLoading(true);
+            await axiosInstance.delete(`/project-roles/${id}`, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            await fetchProjectRoles();
+        } catch (e) {
+            console.error("Delete role failed", e);
+            alert("Failed to delete role");
+        } finally {
+            setRolesLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProjectRoles();
+    }, []);
+
     return (
         <AdminLayout>
             <div className="space-y-6">
@@ -644,6 +736,135 @@ const SystemSettings = () => {
                         </div>
                         <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
                             File storage is configured via `config/filesystems.php`.
+                        </div>
+                    </div>
+                </div>
+
+                {/* Project Roles */}
+                <div className="admin-card">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <FiShield className="w-5 h-5 mr-2" />
+                        Project Roles
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                        Manage roles that proponents can assign to team members when adding them to proposals.
+                    </p>
+
+                    {/* Add/Edit Role Form */}
+                    <form onSubmit={handleRoleSubmit} className="mb-6 bg-gray-50 rounded-lg p-4">
+                        <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Role Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={roleForm.roleName}
+                                onChange={(e) => setRoleForm({ ...roleForm, roleName: e.target.value })}
+                                className="admin-input"
+                                placeholder="e.g., Principal Investigator"
+                                required
+                            />
+                        </div>
+                        <div className="flex items-center gap-4 mb-3">
+                            <label className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    checked={roleForm.isActive}
+                                    onChange={(e) => setRoleForm({ ...roleForm, isActive: e.target.checked })}
+                                    className="rounded border-gray-300 text-red-600 focus:ring-red-500 mr-2"
+                                />
+                                <span className="text-sm text-gray-700">Active (available for selection)</span>
+                            </label>
+                        </div>
+                        {roleErrors && (
+                            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                                {roleErrors}
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <button
+                                type="submit"
+                                disabled={rolesLoading}
+                                className="admin-button-primary"
+                            >
+                                {editingRole ? "Update Role" : "Add Role"}
+                            </button>
+                            {editingRole && (
+                                <button
+                                    type="button"
+                                    onClick={handleCancelEditRole}
+                                    className="admin-button-secondary"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
+                    </form>
+
+                    {/* Roles List */}
+                    <div className="overflow-x-auto">
+                        <table className="admin-table">
+                            <thead>
+                                <tr>
+                                    <th className="text-left">Role Name</th>
+                                    <th className="text-left w-24">Status</th>
+                                    <th className="text-right w-40">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rolesLoading ? (
+                                    <tr>
+                                        <td colSpan="3" className="text-center text-sm text-gray-500 py-6">
+                                            Loading roles...
+                                        </td>
+                                    </tr>
+                                ) : projectRoles.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="3" className="text-center text-sm text-gray-500 py-6">
+                                            No project roles yet. Add one above.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    projectRoles.map((role) => (
+                                        <tr key={role.projectRoleID} className="hover:bg-gray-50">
+                                            <td className="text-sm font-medium text-gray-900">{role.roleName}</td>
+                                            <td className="text-sm">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${role.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                    {role.isActive ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                            <td className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => handleEditRole(role)}
+                                                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteRole(role.projectRoleID)}
+                                                        className="text-sm text-red-600 hover:text-red-800 font-medium"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex">
+                            <FiBell className="w-5 h-5 text-blue-400" />
+                            <div className="ml-3">
+                                <h4 className="text-sm font-medium text-blue-800">How Project Roles Work</h4>
+                                <p className="text-sm text-blue-700 mt-1">
+                                    When proponents add team members to their proposals, they can assign these roles to define each member's contribution (e.g., Principal Investigator, Co-Investigator, Research Assistant).
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>
