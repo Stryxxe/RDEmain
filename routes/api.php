@@ -10,12 +10,14 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\EndorsementController;
 use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\ProjectRoleController;
 use App\Http\Controllers\Api\NotificationController;
 use App\Http\Controllers\Api\MessageController;
 use App\Http\Controllers\Api\OptimizedNotificationController;
 use App\Http\Controllers\Api\OptimizedMessageController;
 use App\Http\Controllers\Api\SimpleOptimizedMessageController;
 use App\Http\Controllers\Api\AdminUserController;
+use App\Http\Controllers\SettingController;
 use App\Http\Middleware\RequestDeduplication;
 
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
@@ -23,12 +25,22 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->midd
 
 use App\Models\Department;
 use App\Models\ResearchCenter;
+use App\Models\Setting;
 // Get upload settings (max file size) - public endpoint for all authenticated users
 Route::get('/upload-settings', function () {
+    $allowedTypes = Setting::get('allowed_file_types', '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg');
+    $maxFileSize = Setting::get('max_file_size', 20);
+    
+    // Convert comma-separated string to array for frontend
+    $typesArray = array_map('trim', explode(',', $allowedTypes));
+    $typesArray = array_map(function($type) {
+        return str_replace('.', '', $type);
+    }, $typesArray);
+    
     return response()->json([
-        'maxFileSizeMB' => \App\Helpers\SettingsHelper::getMaxFileSizeMB(),
-        'maxFileSizeKB' => \App\Helpers\SettingsHelper::getMaxFileSizeKB(),
-        'allowedFileTypes' => \App\Helpers\SettingsHelper::getAllowedFileTypes(),
+        'maxFileSizeMB' => (int) $maxFileSize,
+        'maxFileSizeKB' => (int) $maxFileSize * 1024,
+        'allowedFileTypes' => $typesArray,
     ]);
 })->middleware('auth:web');
 
@@ -38,6 +50,60 @@ Route::get('/user', function (Request $request) {
     // Eager load researchCenter so frontend can display correct center instead of defaulting to department
     $user->load(['role', 'department', 'researchCenter']);
     return $user;
+})->middleware('auth:web');
+
+// Live user search for adding proposal proponents
+Route::get('/users/search', function (Request $request) {
+    $validated = $request->validate([
+        'q' => 'nullable|string|max:100',
+        'limit' => 'nullable|integer|min:1|max:20',
+    ]);
+
+    $q = trim($validated['q'] ?? '');
+    $limit = (int)($validated['limit'] ?? 10);
+    $currentUser = $request->user();
+
+    $users = \App\Models\User::query()
+        ->with('role')
+        ->select(['userID', 'firstName', 'lastName', 'email', 'userRolesID', 'researchCenterID'])
+        // Restrict to same research center as current user
+        ->when(!is_null($currentUser->researchCenterID), function ($query) use ($currentUser) {
+            $query->where('researchCenterID', $currentUser->researchCenterID);
+        }, function ($query) {
+            // If current user has no research center, return no results
+            $query->whereRaw('1 = 0');
+        })
+        // Only allow searching other Proponents
+        ->whereHas('role', function ($q) {
+            $q->where('userRole', 'Proponent');
+        })
+        // Exclude current user
+        ->where('userID', '!=', $currentUser->userID)
+        // Text search
+        ->when($q !== '', function ($query) use ($q) {
+            $like = "%{$q}%";
+            $query->where(function ($sub) use ($like) {
+                $sub->where('firstName', 'like', $like)
+                    ->orWhere('lastName', 'like', $like)
+                    ->orWhereRaw("CONCAT(firstName,' ',lastName) like ?", [$like])
+                    ->orWhere('email', 'like', $like);
+            });
+        })
+        ->orderBy('lastName')
+        ->orderBy('firstName')
+        ->limit($limit)
+        ->get()
+        ->map(function ($u) {
+            return [
+                'userID' => $u->userID,
+                'firstName' => $u->firstName,
+                'lastName' => $u->lastName,
+                'email' => $u->email,
+                'role' => $u->role?->userRole,
+            ];
+        });
+
+    return response()->json(['success' => true, 'data' => $users]);
 })->middleware('auth:web');
 
 // Admin: Research Centers list for user creation form
@@ -670,6 +736,11 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
 // Admin - Users management
 // Explicitly use 'web' guard to ensure session authentication works
 Route::middleware(['auth:web'])->group(function () {
+    // Settings management
+    Route::get('/settings', [SettingController::class, 'index']);
+    Route::get('/settings/{key}', [SettingController::class, 'show']);
+    Route::put('/settings', [SettingController::class, 'update']);
+    
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
@@ -976,4 +1047,13 @@ Route::middleware(['auth:web'])->group(function () {
             ], 500);
         }
     });
+});
+
+// Project Roles Management (Admin only)
+Route::middleware('auth:web')->group(function () {
+    Route::get('/project-roles', [ProjectRoleController::class, 'index']);
+    Route::get('/project-roles/active', [ProjectRoleController::class, 'getActive']);
+    Route::post('/project-roles', [ProjectRoleController::class, 'store']);
+    Route::put('/project-roles/{id}', [ProjectRoleController::class, 'update']);
+    Route::delete('/project-roles/{id}', [ProjectRoleController::class, 'destroy']);
 });

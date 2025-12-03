@@ -34,7 +34,6 @@ const AdminLayout = ({ children }) => {
   const navigation = [
     { name: 'Dashboard', href: '/admin', icon: FiHome },
     { name: 'User Management', href: '/admin/user-management', icon: FiUsers },
-    { name: 'Reports', href: '/admin/reports', icon: FiFileText },
     { name: 'System Settings', href: '/admin/system-settings', icon: FiSettings },
     { name: 'Profile', href: '/admin/profile', icon: FiUser },
   ];

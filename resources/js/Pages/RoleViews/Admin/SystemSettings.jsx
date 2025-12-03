@@ -13,6 +13,7 @@ import {
     FiTrash2,
 } from "react-icons/fi";
 import AdminLayout from "../../../Components/Layouts/AdminLayout";
+import SimpleAlert from "../../../Components/SimpleAlert";
 import axios from "axios";
 
 const SystemSettings = () => {
@@ -29,6 +30,8 @@ const SystemSettings = () => {
         logRetention: "90",
         // Backup
         backupFrequency: "daily",
+        // File Types
+        allowedFileTypes: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg",
         // Departments
         allowDepartmentCreation: true,
         requireDepartmentAssignment: true,
@@ -66,6 +69,32 @@ const SystemSettings = () => {
     const [showGeneralModal, setShowGeneralModal] = useState(false);
     const [pendingFile, setPendingFile] = useState(null);
     const [templateName, setTemplateName] = useState('');
+    
+    // Project Roles
+    const [projectRoles, setProjectRoles] = useState([]);
+    const [rolesLoading, setRolesLoading] = useState(false);
+    const [roleForm, setRoleForm] = useState({ id: null, roleName: "", isActive: true });
+    const [roleErrors, setRoleErrors] = useState("");
+    const [editingRole, setEditingRole] = useState(null);
+    // UI feedback
+    const [alertState, setAlertState] = useState({ visible: false, type: 'success', title: '', message: '' });
+
+    // Auto-hide alerts after 3 seconds
+    useEffect(() => {
+        if (!alertState.visible) return;
+        const t = setTimeout(() => {
+            setAlertState(prev => ({ ...prev, visible: false }));
+        }, 3000);
+        return () => clearTimeout(t);
+    }, [alertState.visible]);
+
+    const FILE_TYPE_PRESETS = [
+        { key: 'docs', label: 'Documents (PDF, DOC, DOCX)', value: '.pdf,.doc,.docx' },
+        { key: 'sheets', label: 'Spreadsheets (XLS, XLSX, CSV)', value: '.xls,.xlsx,.csv' },
+        { key: 'images', label: 'Images (PNG, JPG, JPEG)', value: '.png,.jpg,.jpeg' },
+        { key: 'common', label: 'Common Docs + Images', value: '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg' },
+    ];
+    const [showFileTypesMenu, setShowFileTypesMenu] = useState(false);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -73,6 +102,30 @@ const SystemSettings = () => {
             ...prev,
             [name]: type === "checkbox" ? checked : value,
         }));
+    };
+
+    const togglePreset = (presetKey) => {
+        const preset = FILE_TYPE_PRESETS.find(p => p.key === presetKey);
+        if (!preset) return;
+        const current = (settings.allowedFileTypes || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean);
+        const toAdd = preset.value.split(',').map(s => s.trim());
+        const merged = Array.from(new Set([...current, ...toAdd]));
+        setSettings(prev => ({ ...prev, allowedFileTypes: merged.join(',') }));
+    };
+
+    const removePresetExts = (presetKey) => {
+        const preset = FILE_TYPE_PRESETS.find(p => p.key === presetKey);
+        if (!preset) return;
+        const removeSet = new Set(preset.value.split(',').map(s => s.trim()));
+        const next = (settings.allowedFileTypes || '')
+            .split(',')
+            .map(s => s.trim())
+            .filter(Boolean)
+            .filter(ext => !removeSet.has(ext));
+        setSettings(prev => ({ ...prev, allowedFileTypes: next.join(',') }));
     };
 
     const handleSave = async () => {
@@ -113,18 +166,33 @@ const SystemSettings = () => {
                 backupFrequency: settings.backupFrequency,
                 allowDepartmentCreation: !!settings.allowDepartmentCreation,
                 requireDepartmentAssignment: !!settings.requireDepartmentAssignment,
+                allowedFileTypes: settings.allowedFileTypes,
             };
             
             console.log('Sending payload:', payload);
-            
-            const res = await axiosInstance.put('/admin/settings', payload, {
+            const res = await axiosInstance.put('/settings', {
+                settings: {
+                    allowed_file_types: settings.allowedFileTypes,
+                    max_file_size: maxFileSizeNum,
+                }
+            }, {
                 headers: { Accept: 'application/json' },
                 withCredentials: true,
             });
-            alert('Settings saved');
+            setAlertState({
+                visible: true,
+                type: 'success',
+                title: 'Settings Saved',
+                message: 'Your changes have been applied successfully.',
+            });
         } catch (e) {
             console.error('Save settings failed', e?.response?.data || e?.message || e);
-            alert('Failed to save settings');
+            setAlertState({
+                visible: true,
+                type: 'error',
+                title: 'Save Failed',
+                message: e?.response?.data?.message || 'Failed to save settings. Please try again.',
+            });
         } finally {
             setLoading(false);
         }
@@ -145,6 +213,12 @@ const SystemSettings = () => {
                 backupFrequency: "daily",
                 allowDepartmentCreation: true,
                 requireDepartmentAssignment: true,
+            });
+            setAlertState({
+                visible: true,
+                type: 'success',
+                title: 'Defaults Restored',
+                message: 'System settings have been reset to defaults.',
             });
         }
     };
@@ -172,21 +246,22 @@ const SystemSettings = () => {
         // Load current settings
         (async () => {
             try {
-                const res = await axiosInstance.get('/admin/settings', {
+                const res = await axiosInstance.get('/settings', {
                     headers: { Accept: 'application/json' },
                     withCredentials: true,
                 });
-                const s = res?.data || {};
+                const s = res?.data?.data || res?.data || {};
                 setSettings(prev => ({
                     ...prev,
                     systemName: s.systemName ?? prev.systemName,
                     systemVersion: s.systemVersion ?? prev.systemVersion,
                     sessionTimeout: String(s.sessionTimeout ?? prev.sessionTimeout),
-                    maxFileSize: String(s.maxFileSize ?? prev.maxFileSize),
+                    maxFileSize: String(s.max_file_size ?? prev.maxFileSize),
                     logRetention: String(s.logRetention ?? prev.logRetention),
                     backupFrequency: s.backupFrequency ?? prev.backupFrequency,
                     allowDepartmentCreation: Boolean(s.allowDepartmentCreation ?? prev.allowDepartmentCreation),
                     requireDepartmentAssignment: Boolean(s.requireDepartmentAssignment ?? prev.requireDepartmentAssignment),
+                    allowedFileTypes: s.allowed_file_types ?? prev.allowedFileTypes,
                 }));
             } catch (e) {
                 console.warn('Failed to fetch settings, using defaults');
@@ -239,7 +314,11 @@ const SystemSettings = () => {
     const deleteDepartment = async (dept) => {
         const id = dept.departmentID || dept.id;
         if (!id) return;
-        if (!window.confirm(`Delete department "${dept.name || dept.departmentName}"?`)) return;
+        const confirmed = await window.customConfirm(
+            `Delete department "${dept.name || dept.departmentName}"?`,
+            "Confirm Deletion"
+        );
+        if (!confirmed) return;
         try {
             setDeptLoading(true);
             await axiosInstance.delete(`/admin/departments/${id}`, {
@@ -324,7 +403,11 @@ const SystemSettings = () => {
     const deleteResearchCenter = async (center) => {
         const id = center.centerID || center.id;
         if (!id) return;
-        if (!window.confirm(`Delete research center "${center.name || center.centerName}"?`)) return;
+        const confirmed = await window.customConfirm(
+            `Delete research center "${center.name || center.centerName}"?`,
+            "Confirm Deletion"
+        );
+        if (!confirmed) return;
         try {
             setCenterLoading(true);
             await axiosInstance.delete(`/admin/research-centers/${id}`, {
@@ -471,7 +554,11 @@ const SystemSettings = () => {
     const deleteTemplate = async (template, type) => {
         const id = template.id || template.templateID;
         if (!id) return;
-        if (!window.confirm(`Delete template "${template.name || template.fileName}"?`)) return;
+        const confirmed = await window.customConfirm(
+            `Delete template "${template.name || template.fileName}"?`,
+            "Confirm Deletion"
+        );
+        if (!confirmed) return;
         try {
             setTemplatesLoading(true);
             await axiosInstance.delete(`/admin/templates/${type}/${id}`, {
@@ -486,6 +573,91 @@ const SystemSettings = () => {
             setTemplatesLoading(false);
         }
     };
+
+    // Project Roles CRUD handlers
+    const fetchProjectRoles = async () => {
+        try {
+            setRolesLoading(true);
+            const res = await axiosInstance.get("/project-roles", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            const list = res?.data?.data || res?.data || [];
+            setProjectRoles(Array.isArray(list) ? list : []);
+        } catch (e) {
+            console.error("Failed to load project roles", e);
+            setProjectRoles([]);
+        } finally {
+            setRolesLoading(false);
+        }
+    };
+
+    const handleRoleSubmit = async (e) => {
+        e.preventDefault();
+        if (!roleForm.roleName.trim()) {
+            setRoleErrors("Role name is required");
+            return;
+        }
+        try {
+            setRolesLoading(true);
+            setRoleErrors("");
+            if (editingRole) {
+                await axiosInstance.put(`/project-roles/${editingRole}`, roleForm, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+            } else {
+                await axiosInstance.post("/project-roles", roleForm, {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+            }
+            setRoleForm({ id: null, roleName: "", description: "", isActive: true });
+            setEditingRole(null);
+            await fetchProjectRoles();
+        } catch (e) {
+            console.error("Save role failed", e);
+            setRoleErrors(e?.response?.data?.message || "Failed to save role");
+        } finally {
+            setRolesLoading(false);
+        }
+    };
+
+    const handleEditRole = (role) => {
+        setEditingRole(role.projectRoleID);
+        setRoleForm({
+            id: role.projectRoleID,
+            roleName: role.roleName,
+            isActive: role.isActive
+        });
+    };
+
+    const handleCancelEditRole = () => {
+        setEditingRole(null);
+        setRoleForm({ id: null, roleName: "", isActive: true });
+        setRoleErrors("");
+    };
+
+    const handleDeleteRole = async (id) => {
+        if (!window.confirm("Delete this project role? Members with this role will have it set to null.")) return;
+        try {
+            setRolesLoading(true);
+            await axiosInstance.delete(`/project-roles/${id}`, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            await fetchProjectRoles();
+        } catch (e) {
+            console.error("Delete role failed", e);
+            alert("Failed to delete role");
+        } finally {
+            setRolesLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchProjectRoles();
+    }, []);
 
     return (
         <AdminLayout>
@@ -625,13 +797,197 @@ const SystemSettings = () => {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Allowed File Types</label>
-                            <div className="admin-input text-sm text-gray-600">PDF, DOCX, XLSX, CSV, PNG, JPG</div>
+                            <div className="relative">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowFileTypesMenu(v => !v)}
+                                    className="admin-input flex items-center justify-between"
+                                >
+                                    <span>Select presets</span>
+                                    <svg className="w-4 h-4 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.25 8.27a.75.75 0 01-.02-1.06z" clipRule="evenodd"/></svg>
+                                </button>
+                                {showFileTypesMenu && (
+                                    <div className="absolute z-10 mt-2 w-full bg-white border border-gray-200 rounded-lg shadow-lg p-3 space-y-2">
+                                        {FILE_TYPE_PRESETS.map(preset => {
+                                            const current = (settings.allowedFileTypes || '')
+                                                .split(',')
+                                                .map(s => s.trim())
+                                                .filter(Boolean);
+                                            const allIncluded = preset.value.split(',').every(ext => current.includes(ext));
+                                            return (
+                                                <label key={preset.key} className="flex items-center justify-between gap-2 cursor-pointer">
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={allIncluded}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    togglePreset(preset.key);
+                                                                } else {
+                                                                    removePresetExts(preset.key);
+                                                                }
+                                                            }}
+                                                            className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                        />
+                                                        <span className="text-sm text-gray-800">{preset.label}</span>
+                                                    </div>
+                                                    <span className="text-xs text-gray-500 font-mono">{preset.value}</span>
+                                                </label>
+                                            );
+                                        })}
+                                        <div className="flex justify-end pt-2">
+                                            <button type="button" onClick={() => setShowFileTypesMenu(false)} className="admin-button-secondary">Done</button>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                                {(settings.allowedFileTypes || '')
+                                    .split(',')
+                                    .map(s => s.trim())
+                                    .filter(Boolean)
+                                    .map(ext => (
+                                        <span key={ext} className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200 font-mono">
+                                            {ext}
+                                        </span>
+                                    ))}
+                            </div>
                         </div>
                         <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800 border border-blue-200">
                             <strong>System-wide Setting:</strong> This max file size applies to all file uploads across the system including proposal submissions, progress reports, and template uploads.
                         </div>
                         <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-600">
                             File storage is configured via `config/filesystems.php`.
+                        </div>
+                    </div>
+                </div>
+
+                {/* Inline alerts */}
+                {alertState.visible && (
+                    <div className="mb-4">
+                        <SimpleAlert
+                            type={alertState.type}
+                            title={alertState.title}
+                            message={alertState.message}
+                            onClose={() => setAlertState(prev => ({ ...prev, visible: false }))}
+                        />
+                    </div>
+                )}
+
+                {/* Project Roles */}
+                <div className="admin-card">
+                    <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                        <FiShield className="w-5 h-5 mr-2" />
+                        Project Roles
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-4">
+                        Manage roles that proponents can assign to team members when adding them to proposals.
+                    </p>
+
+                    {/* Add/Edit Role Form */}
+                    <form onSubmit={handleRoleSubmit} className="mb-6 bg-gray-50 rounded-lg p-4">
+                        <div className="mb-3">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Role Name <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                                type="text"
+                                value={roleForm.roleName}
+                                onChange={(e) => setRoleForm({ ...roleForm, roleName: e.target.value })}
+                                className="admin-input"
+                                placeholder="e.g., Principal Investigator"
+                                required
+                            />
+                        </div>
+                        {roleErrors && (
+                            <div className="mb-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+                                {roleErrors}
+                            </div>
+                        )}
+                        <div className="flex gap-2">
+                            <button
+                                type="submit"
+                                disabled={rolesLoading}
+                                className="admin-button-primary"
+                            >
+                                {editingRole ? "Update Role" : "Add Role"}
+                            </button>
+                            {editingRole && (
+                                <button
+                                    type="button"
+                                    onClick={handleCancelEditRole}
+                                    className="admin-button-secondary"
+                                >
+                                    Cancel
+                                </button>
+                            )}
+                        </div>
+                    </form>
+
+                    {/* Roles List */}
+                    <div className="overflow-x-auto">
+                        <table className="admin-table">
+                            <thead>
+                                <tr>
+                                    <th className="text-left">Role Name</th>
+                                    <th className="text-left w-24">Status</th>
+                                    <th className="text-right w-40">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rolesLoading ? (
+                                    <tr>
+                                        <td colSpan="3" className="text-center text-sm text-gray-500 py-6">
+                                            Loading roles...
+                                        </td>
+                                    </tr>
+                                ) : projectRoles.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="3" className="text-center text-sm text-gray-500 py-6">
+                                            No project roles yet. Add one above.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    projectRoles.map((role) => (
+                                        <tr key={role.projectRoleID} className="hover:bg-gray-50">
+                                            <td className="text-sm font-medium text-gray-900">{role.roleName}</td>
+                                            <td className="text-sm">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${role.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                                                    {role.isActive ? 'Active' : 'Inactive'}
+                                                </span>
+                                            </td>
+                                            <td className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <button
+                                                        onClick={() => handleEditRole(role)}
+                                                        className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteRole(role.projectRoleID)}
+                                                        className="text-sm text-red-600 hover:text-red-800 font-medium"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex">
+                            <FiBell className="w-5 h-5 text-blue-400" />
+                            <div className="ml-3">
+                                <h4 className="text-sm font-medium text-blue-800">How Project Roles Work</h4>
+                                <p className="text-sm text-blue-700 mt-1">
+                                    When proponents add team members to their proposals, they can assign these roles to define each member's contribution (e.g., Principal Investigator, Co-Investigator, Research Assistant).
+                                </p>
+                            </div>
                         </div>
                     </div>
                 </div>

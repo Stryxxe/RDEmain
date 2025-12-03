@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import PDFViewer from './PDFViewer';
+import AsyncProponentSelect from './AsyncProponentSelect';
 
 const EditProposalForm = ({ proposal, onBack, onSave }) => {
   const [formData, setFormData] = useState({
@@ -7,7 +8,8 @@ const EditProposalForm = ({ proposal, onBack, onSave }) => {
     dost6Ps: [],
     sdg: [],
     budget: '',
-    updatedForm: null
+    updatedForm: null,
+    proponents: []
   });
 
   const [expandedSections, setExpandedSections] = useState({
@@ -292,6 +294,16 @@ const EditProposalForm = ({ proposal, onBack, onSave }) => {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Proponents Section */}
+                <div className="space-y-4 pt-6 border-t border-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-800">Proponents</h2>
+                  <p className="text-gray-600 text-sm">Add other proponents to this proposal. Start typing to search by name or email.</p>
+                  <AsyncProponentSelect
+                    selectedProponents={formData.proponents || []}
+                    onChange={(proponents) => setFormData({ ...formData, proponents })}
+                  />
                 </div>
 
                 {/* Upload Updated Form Section */}

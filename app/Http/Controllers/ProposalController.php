@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -27,21 +28,44 @@ class ProposalController extends Controller
         $user = Auth::user();
         $user->loadMissing('role');
 
-        // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
-        $query = Proposal::with(['status', 'files', 'user.department', 'user.role']);
+        // Build base query with common eager loads
+        $query = Proposal::with([
+            'status:statusID,statusName,statusColor',
+            'files:fileID,proposalID,fileName,filePath,fileType',
+            'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
+            'user.department:departmentID,departmentName',
+            'user.role:userRoleID,userRole',
+            'proponents:userID,firstName,lastName,email'
+        ]);
 
-        match ($user->role?->userRole) {
-            'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                         ->whereDoesntHave('endorsements', function ($q) use ($user) {
-                             // Exclude proposals already endorsed by this CM user
-                             $q->where('endorserID', $user->userID)
-                               ->where('endorsementStatus', 'approved');
-                         }),
-            default => $query->where('userID', $user->userID),
-        };
+        // Apply role-specific filtering
+        $role = $user->role?->userRole;
+        if ($role === 'RDD') {
+            // Exclude archived proposals - see all non-archived proposals
+            $query->whereNull('archivedByRDD');
+        } elseif ($role === 'CM') {
+            // Show proposals whose submitting user is in same research center
+            // but exclude proposals that this CM has already endorsed
+            if ($user->researchCenterID) {
+                $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                    ->whereDoesntHave('endorsements', function ($q) use ($user) {
+                        $q->where('endorserID', $user->userID);
+                    });
+            } else {
+                // If CM has no research center assigned, return empty set
+                $query->whereRaw('1=0');
+            }
+        } elseif ($role === 'Proponent') {
+            // Show proposals where this user is one of the proponents
+            $query->whereHas('proponents', function ($q) use ($user) {
+                $q->where('users.userID', $user->userID);
+            });
+        } else {
+            // Fallback: show proposals submitted by the user
+            $query->where('userID', $user->userID);
+        }
 
-        $proposals = $query->orderBy('proposalID')->get();
+        $proposals = $query->orderByDesc('proposalID')->get();
 
         return response()->json([
             'success' => true,
@@ -57,24 +81,52 @@ class ProposalController extends Controller
         $user = Auth::user();
         $user->loadMissing('role');
 
-        // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
-        $query = Proposal::where('proposalID', $id)->with([
-            'status',
-            'files',
-            'user.department',
-            'user.role',
-            'reviews.reviewer',
-            'reviews.decision',
-            'endorsements.endorser.role'
-        ]);
+        // Cache key includes user ID to handle different permissions
+        $cacheKey = "proposal_{$id}_user_{$user->userID}";
+        
+        // Cache for 2 minutes - balance between performance and data freshness
+        $proposal = Cache::remember($cacheKey, 120, function () use ($id, $user) {
+            // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
+            $query = Proposal::where('proposalID', $id)->with([
+                'status:statusID,statusName,statusColor',
+                'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
+                'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
+                'user.department:departmentID,departmentName',
+                'user.role:userRoleID,userRole',
+                'reviews:reviewID,proposalID,reviewerID,remarks,reviewedAt,decisionID',
+                'reviews.reviewer:userID,firstName,lastName,email,userRolesID',
+                'reviews.decision:decisionID,decisionName',
+                'endorsements:endorsementID,proposalID,endorserID,endorsementComments,endorsedAt,endorsementStatus',
+                'endorsements.endorser:userID,firstName,lastName,email,userRolesID',
+                'endorsements.endorser.role:userRoleID,userRole',
+                // Load all proponents (co-authors) with their role and pivot data for display
+                // Note: Cannot use column-specific select for proponents as it excludes pivot columns
+                'proponents',
+                'proponents.role:userRoleID,userRole'
+            ]);
 
-        match ($user->role?->userRole) {
-            'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID)),
-            default => $query->where('userID', $user->userID),
-        };
+            // Apply authorization filters based on user role
+            $userRole = $user->role?->userRole;
+            if ($userRole === 'RDD') {
+                // RDD users can see all proposals including archived ones - no filter needed
+            } elseif ($userRole === 'CM') {
+                $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+            } else {
+                $query->whereHas('proponents', fn($q) => $q->where('users.userID', $user->userID));
+            }
 
-        $proposal = $query->firstOrFail();
+            $result = $query->firstOrFail();
+            
+            // Load project roles for proponents
+            $result->proponents->each(function ($proponent) {
+                if ($proponent->pivot->projectRoleID) {
+                    $projectRole = \App\Models\ProjectRole::find($proponent->pivot->projectRoleID);
+                    $proponent->projectRole = $projectRole;
+                }
+            });
+            
+            return $result;
+        });
 
         return response()->json([
             'success' => true,
@@ -274,6 +326,33 @@ class ProposalController extends Controller
                 }
             }
 
+            // Save additional proponents if provided
+            $proponentsData = $request->input('proponents');
+            
+            // Parse proponents data if it's a JSON string
+            if (is_string($proponentsData)) {
+                $proponentsData = json_decode($proponentsData, true);
+            }
+            
+            $syncData = [];
+            
+            // Include the submitter with selected project role if provided
+            $submitterProjectRoleID = $request->input('submitterProjectRoleID');
+            $syncData[$user->userID] = ['projectRoleID' => $submitterProjectRoleID ?: null];
+            
+            if (!empty($proponentsData) && is_array($proponentsData)) {
+                foreach ($proponentsData as $proponent) {
+                    $userId = $proponent['userID'] ?? null;
+                    $projectRoleID = $proponent['projectRoleID'] ?? null;
+                    
+                    if ($userId && $userId != $user->userID) {
+                        $syncData[$userId] = ['projectRoleID' => $projectRoleID];
+                    }
+                }
+            }
+            
+            $proposal->proponents()->sync($syncData);
+
             $proposal->load(['status', 'files']);
 
             // Dispatch the ProposalSubmitted event
@@ -445,6 +524,9 @@ class ProposalController extends Controller
             $proposal->update($updateData);
             $proposal->load(['status', 'files', 'user.department']);
 
+            // Clear cache for this proposal for all users
+            $this->clearProposalCache($id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Proposal updated successfully',
@@ -489,6 +571,9 @@ class ProposalController extends Controller
 
             $proposal->delete();
 
+            // Clear cache for this proposal
+            $this->clearProposalCache($id);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Proposal deleted successfully'
@@ -510,14 +595,18 @@ class ProposalController extends Controller
         $user = Auth::user();
         $user->loadMissing('role');
 
-        // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
+        // For RDD users, count only archived (endorsed) proposals; for CM users, show proposals from their department; for others, show only their own
         $query = Proposal::query();
 
-        match ($user->role?->userRole) {
-            'RDD' => null, // RDD users can see all proposals - no filtering needed
-            'CM' => $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID)),
-            default => $query->where('userID', $user->userID),
-        };
+        // Apply authorization filters based on user role
+        $userRole = $user->role?->userRole;
+        if ($userRole === 'RDD') {
+            $query->whereNotNull('archivedByRDD'); // RDD users see statistics for archived (endorsed) proposals only
+        } elseif ($userRole === 'CM') {
+            $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+        } else {
+            $query->where('userID', $user->userID);
+        }
 
         $stats = [
             'total' => $query->count(),
@@ -612,8 +701,9 @@ class ProposalController extends Controller
             })->pluck('userID');
 
             // Get proposals that have approved endorsements from CM users
-            // but NOT yet endorsed by RDD users
+            // but NOT yet endorsed by RDD users, and are not archived
             $proposals = Proposal::with(['status', 'files', 'user.department', 'user.role', 'endorsements.endorser.role'])
+                ->whereNull('archivedByRDD')
                 ->whereHas('endorsements', function ($query) use ($cmUserIds) {
                     $query->where('endorsementStatus', 'approved')
                         ->whereIn('endorserID', $cmUserIds);
@@ -656,18 +746,11 @@ class ProposalController extends Controller
                 ], 403);
             }
 
-            // Get RDD user IDs
-            $rddUserIds = User::whereHas('role', function ($q) {
-                $q->where('userRole', 'RDD');
-            })->pluck('userID');
-
-            // Get proposals that have approved endorsements from RDD users
-            $proposals = Proposal::with(['status', 'files', 'user.department', 'user.researchCenter', 'user.role', 'endorsements.endorser.role'])
-                ->whereHas('endorsements', function ($query) use ($rddUserIds) {
-                    $query->where('endorsementStatus', 'approved')
-                        ->whereIn('endorserID', $rddUserIds);
-                })
-                ->orderBy('proposalID', 'desc')
+            // Get proposals that have been archived by RDD (endorsed with approved status)
+            // These are proposals where archivedByRDD timestamp is set
+            $proposals = Proposal::with(['status', 'files', 'user.department', 'user.researchCenter', 'user.role', 'endorsements.endorser.role', 'proponents'])
+                ->whereNotNull('archivedByRDD')
+                ->orderByDesc('archivedByRDD')
                 ->get();
 
             return response()->json([
@@ -1079,13 +1162,16 @@ class ProposalController extends Controller
             ], 403);
         }
 
-        // Get all proposals with their endorsements
-        $proposals = Proposal::with('endorsements')->get();
+        // Get only archived proposals (those endorsed by RDD)
+        $proposals = Proposal::with('endorsements')
+            ->whereNotNull('archivedByRDD')
+            ->get();
 
         // Initialize counters
+        // All archived proposals are considered completed since they were RDD-endorsed
         $totalProposals = $proposals->count();
         $totalOngoing = 0;
-        $totalCompleted = 0;
+        $totalCompleted = $totalProposals;
 
         // Initialize aggregation maps
         $rdeAgendaMap = [];
@@ -1093,18 +1179,8 @@ class ProposalController extends Controller
         $sdgMap = [];
 
         foreach ($proposals as $proposal) {
-            // Determine endorsement status for this proposal
-            $hasApprovedEndorsement = $proposal->endorsements->contains(function ($endorsement) {
-                return $endorsement->endorsementStatus === 'approved';
-            });
-
-            if ($hasApprovedEndorsement) {
-                $totalCompleted++;
-                $status = 'completed';
-            } else {
-                $totalOngoing++;
-                $status = 'ongoing';
-            }
+            // All archived proposals are completed (RDD-endorsed)
+            $status = 'completed';
 
             // Aggregate by Research Agenda
             if ($proposal->researchAgenda && is_array($proposal->researchAgenda)) {
@@ -1179,5 +1255,40 @@ class ProposalController extends Controller
                 'sdg' => $sdg
             ]
         ]);
+    }
+
+    /**
+     * Clear proposal cache for all users
+     * 
+     * @param int $proposalId
+     * @return void
+     */
+    private function clearProposalCache(int $proposalId): void
+    {
+        try {
+            // Clear cache with wildcard pattern for this proposal
+            $pattern = "proposal_{$proposalId}_user_*";
+            
+            try {
+                $store = Cache::getStore();
+                if ($store instanceof \Illuminate\Cache\RedisStore) {
+                    // Redis supports pattern matching
+                    $keys = Cache::getRedis()->keys($pattern);
+                    if (!empty($keys)) {
+                        Cache::getRedis()->del($keys);
+                    }
+                } else {
+                    // For non-Redis stores, we can't use wildcard patterns
+                    // Instead, we'll clear the cache entry for the current user if we have access to it
+                    // Note: This is a limitation - we can't clear all user-specific caches for this proposal
+                    // without knowing all user IDs. Consider using cache tags if your store supports them.
+                    Log::info("Cache wildcard pattern not supported for non-Redis store. Skipping cache clear for pattern: {$pattern}");
+                }
+            } catch (\Exception $e) {
+                Log::warning("Failed to clear proposal cache: " . $e->getMessage());
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to clear proposal cache: " . $e->getMessage());
+        }
     }
 }

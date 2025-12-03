@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Proposal extends Model
 {
@@ -30,7 +31,8 @@ class Proposal extends Model
         'matrixOfCompliance',
         'uploadedAt',
         'statusID',
-        'userID'
+        'userID',
+        'archivedByRDD'
     ];
 
     protected $casts = [
@@ -97,6 +99,16 @@ class Proposal extends Model
     public function progressReports(): HasMany
     {
         return $this->hasMany(ProgressReport::class, 'proposalID', 'proposalID');
+    }
+
+    /**
+     * Get the proponents for this proposal
+     */
+    public function proponents()
+    {
+        return $this->belongsToMany(User::class, 'proposal_proponents', 'proposalID', 'userID')
+            ->withPivot('projectRoleID')
+            ->withTimestamps();
     }
 
     /**

@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import apiService from "../services/api";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../Components/Layouts/AppLayout";
+import Breadcrumbs from "../Components/Breadcrumbs";
 
 const TrackerDetail = ({ id: propId }) => {
     const { user } = useAuth();
@@ -517,12 +518,8 @@ const TrackerDetail = ({ id: propId }) => {
                 <div className="flex items-center justify-center min-h-64">
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-                        <p className="text-gray-600">
-                            Loading proposal details...
-                        </p>
-                        <p className="text-sm text-gray-500 mt-2">
-                            ID: {id || "No ID provided"}
-                        </p>
+                        <p className="text-gray-600">Loading proposal details...</p>
+                        <p className="text-sm text-gray-500 mt-2">ID: {id || "No ID provided"}</p>
                     </div>
                 </div>
             </div>
@@ -605,6 +602,15 @@ const TrackerDetail = ({ id: propId }) => {
             className="w-full max-w-full mx-auto space-y-4 px-2 sm:px-4 md:px-6 lg:px-8 overflow-hidden"
             style={{ maxWidth: "100vw", width: "100%" }}
         >
+            {/* Breadcrumbs */}
+            <Breadcrumbs
+                items={[
+                    { label: "Dashboard", href: "/proponent" },
+                    { label: "Tracker", href: "/proponent/tracker" },
+                    { label: "View Details" },
+                ]}
+            />
+
             {/* Header */}
             <div className="">
                 <button
@@ -765,6 +771,45 @@ const TrackerDetail = ({ id: propId }) => {
                         </div>
                     </div>
                 </div>
+                {/* Authors / Proponents */}
+                {proposal?.proponents && proposal.proponents.length >= 1 && (
+                    <div className="mt-6 bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                        <h3 className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
+                            <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-3-3h-4M9 20H4v-2a3 3 0 013-3h4m4-6a4 4 0 11-8 0 4 4 0 018 0zm6 4a4 4 0 11-8 0 4 4 0 018 0z" />
+                            </svg>
+                            Authors
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-4">All proponents collaborating on this proposal.</p>
+                        {(() => {
+                            const submitterId = proposal.user?.userID;
+                            const submitter = proposal.proponents.find(p => p.userID === submitterId);
+                            const others = proposal.proponents.filter(p => p.userID !== submitterId);
+                            const allAuthors = submitter ? [submitter, ...others] : proposal.proponents;
+                            
+                            return (
+                                <div className="space-y-2">
+                                    {allAuthors.map(p => (
+                                        <div key={p.userID} className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-50 border border-red-200">
+                                            <div className="flex flex-col">
+                                                <span className="font-medium text-red-900">{p.firstName} {p.lastName}</span>
+                                                <div className="flex items-center gap-2 mt-0.5">
+                                                    {p.role && <span className="text-xs text-red-600/70">{p.role?.userRole || p.role}</span>}
+                                                    {p.projectRole && (
+                                                        <>
+                                                            {p.role && <span className="text-xs text-red-600/40">•</span>}
+                                                            <span className="text-xs font-medium text-red-700">{p.projectRole.roleName}</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                )}
             </div>
 
             {/* Project Timeline Section */}
@@ -1018,9 +1063,6 @@ const TrackerDetail = ({ id: propId }) => {
                                         <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-48">
                                             Action Details
                                         </th>
-                                        <th className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 text-left text-sm font-semibold text-gray-700 min-w-20">
-                                            Priority
-                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1071,16 +1113,6 @@ const TrackerDetail = ({ id: propId }) => {
                                                 <span className="text-sm text-gray-600 leading-relaxed break-words max-w-xs">
                                                     {entry.action ||
                                                         "No additional details"}
-                                                </span>
-                                            </td>
-                                            <td className="px-2 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6">
-                                                <span
-                                                    className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getPriorityColor(
-                                                        entry.priority
-                                                    )}`}
-                                                >
-                                                    {entry.priority?.toUpperCase() ||
-                                                        "NORMAL"}
                                                 </span>
                                             </td>
                                         </tr>

@@ -34,6 +34,7 @@ class AuthenticatedSessionController extends Controller
 
         // Load user relationships for redirect
         $user = Auth::user();
+        $user->load(['role', 'department']);
 
         $redirectPath = $this->getRoleBasedRedirect($user);
 

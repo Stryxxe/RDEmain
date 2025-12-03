@@ -1,20 +1,27 @@
 import React, { useRef, useState } from "react";
 import { Upload, Paperclip, X } from "lucide-react";
+import { useUploadSettings } from "../hooks/useUploadSettings";
 
 const MultiFileUpload = ({
     label = "Supporting Documents",
     description = "Attach supplementary files such as SETI Scorecard, GAD Certificate, Matrix of Compliance, and other approvals.",
     files = [],
     onChange,
-    accept = [".pdf", ".doc", ".docx"],
-    maxSizeMB = 5,
+    accept, // Optional override
+    maxSizeMB, // Optional override
     maxFiles = 10,
 }) => {
+    const uploadSettings = useUploadSettings();
+    
+    // Use props if provided, otherwise use settings from backend
+    const effectiveAccept = accept || uploadSettings.allowedFileTypes.map(type => `.${type}`);
+    const effectiveMaxSizeMB = maxSizeMB || uploadSettings.maxFileSizeMB;
+    
     const [isDragOver, setIsDragOver] = useState(false);
     const [feedback, setFeedback] = useState("");
     const inputRef = useRef(null);
 
-    const bytesLimit = maxSizeMB * 1024 * 1024;
+    const bytesLimit = effectiveMaxSizeMB * 1024 * 1024;
 
     const getFileKey = (file) =>
         [file.name, file.size, file.lastModified]
@@ -23,17 +30,17 @@ const MultiFileUpload = ({
 
     const isValidType = (file) => {
         const extension = "." + file.name.split(".").pop().toLowerCase();
-        return accept.includes(extension);
+        return effectiveAccept.includes(extension);
     };
 
     const validateFile = (file) => {
         if (!isValidType(file)) {
-            return `“${file.name}” is not an accepted format. Only ${accept
+            return `"${file.name}" is not an accepted format. Only ${effectiveAccept
                 .map((type) => type.replace(".", "").toUpperCase())
                 .join(", ")} are allowed.`;
         }
         if (file.size > bytesLimit) {
-            return `“${file.name}” exceeds the ${maxSizeMB}MB limit.`;
+            return `"${file.name}" exceeds the ${effectiveMaxSizeMB}MB limit.`;
         }
         if (file.size === 0) {
             return `“${file.name}” appears to be empty.`;
@@ -153,16 +160,16 @@ const MultiFileUpload = ({
                     </p>
                     <p className="text-xs text-gray-500">
                         Accepted formats:{" "}
-                        {accept
+                        {effectiveAccept
                             .map((ext) => ext.replace(".", "").toUpperCase())
                             .join(", ")}{" "}
-                        • Max {maxSizeMB}MB per file
+                        • Max {effectiveMaxSizeMB}MB per file
                     </p>
                     <input
                         ref={inputRef}
                         type="file"
                         multiple
-                        accept={accept.join(",")}
+                        accept={effectiveAccept.join(",")}
                         className="hidden"
                         onChange={handleInputChange}
                     />

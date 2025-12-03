@@ -4,6 +4,7 @@ import { useRouteParams } from "../../../Components/RoleBased/InertiaRoleRouter"
 import { useAuth } from "../../../contexts/AuthContext";
 import axios from "axios";
 import PDFViewer from "../../../Components/PDFViewer";
+import CoAuthorsCard from "../../../Components/CoAuthorsCard";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 
@@ -682,6 +683,7 @@ const CMProposalDetail = () => {
                             </div>
                         </div>
                     </div>
+                    <CoAuthorsCard proposal={proposal} />
                 </div>
 
                 {/* Status Timeline Section */}
@@ -834,9 +836,6 @@ const CMProposalDetail = () => {
                                     <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
                                         Action Details
                                     </th>
-                                    <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
-                                        Priority
-                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -892,16 +891,6 @@ const CMProposalDetail = () => {
                                             <span className="text-sm text-gray-600 leading-relaxed">
                                                 {entry.action ||
                                                     "No additional details"}
-                                            </span>
-                                        </td>
-                                        <td className="px-8 py-6">
-                                            <span
-                                                className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium border ${getPriorityColor(
-                                                    entry.priority
-                                                )}`}
-                                            >
-                                                {entry.priority?.toUpperCase() ||
-                                                    "NORMAL"}
                                             </span>
                                         </td>
                                     </tr>

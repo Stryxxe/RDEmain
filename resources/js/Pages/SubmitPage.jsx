@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
 import FormField from "../Components/FormField";
+import AsyncProponentSelect from "../Components/AsyncProponentSelect";
 import CheckboxGroup from "../Components/CheckboxGroup";
 import TextAreaField from "../Components/TextAreaField";
 import DragDropUpload from "../Components/DragDropUpload";
@@ -59,7 +60,11 @@ const SubmitPage = () => {
         sustainableDevelopmentGoals: [],
         proposedBudget: "",
         supportingDocuments: [],
+        proponents: [],
     });
+    const [submitterProjectRoleID, setSubmitterProjectRoleID] = useState("");
+    const [projectRoles, setProjectRoles] = useState([]);
+    const [rolesLoading, setRolesLoading] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
     const [submitSuccess, setSubmitSuccess] = useState(false);
@@ -163,6 +168,22 @@ const SubmitPage = () => {
             supportingDocuments: files,
         }));
     };
+
+    useEffect(() => {
+        const fetchRoles = async () => {
+            try {
+                setRolesLoading(true);
+                const data = await apiService.get('/project-roles/active');
+                const list = Array.isArray(data?.data) ? data.data : [];
+                setProjectRoles(list);
+            } catch (e) {
+                console.warn('Failed to load project roles');
+            } finally {
+                setRolesLoading(false);
+            }
+        };
+        fetchRoles();
+    }, []);
 
     const scrollToField = (ref) => {
         if (ref.current) {
@@ -302,6 +323,7 @@ const SubmitPage = () => {
                 researchCenter: researchCenter,
                 proposedBudget: parseNumber(formData.proposedBudget),
                 user: currentUser, // Pass user object for API service to use if needed
+                submitterProjectRoleID: submitterProjectRoleID || null,
             };
             const response = await apiService.createProposal(submissionData);
 
@@ -317,8 +339,10 @@ const SubmitPage = () => {
                     dostSPs: [],
                     sustainableDevelopmentGoals: [],
                     proposedBudget: "",
-                    supportingDocuments: [],
+                        supportingDocuments: [],
+                        proponents: [],
                 });
+                setSubmitterProjectRoleID("");
 
                 // Redirect to tracker page after 2 seconds
                 setTimeout(() => {
@@ -564,6 +588,40 @@ const SubmitPage = () => {
                         }
                         placeholder="Enter proposed budget amount"
                         hint="Enter the proposed budget amount in Philippine Peso (₱)"
+                    />
+                </div>
+
+                <div className="mb-8">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Submitting Researcher</label>
+                    <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <div>
+                            <div className="text-gray-900 font-medium">{currentUser?.fullName || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`}</div>
+                            <div className="text-xs text-gray-500">Proponent</div>
+                        </div>
+                        <div className="w-64">
+                            <label className="block text-xs text-gray-600 mb-1">Project Role</label>
+                            <select
+                                value={submitterProjectRoleID || ""}
+                                onChange={(e) => setSubmitterProjectRoleID(e.target.value)}
+                                disabled={rolesLoading}
+                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-red-500 focus:border-red-500"
+                            >
+                                <option value="">Select role...</option>
+                                {projectRoles.map(r => (
+                                    <option key={r.projectRoleID} value={r.projectRoleID}>{r.roleName}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div className="mb-8">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Additional Proponents <span className="text-gray-400 font-normal">(optional)</span>
+                    </label>
+                    <AsyncProponentSelect
+                        value={formData.proponents}
+                        onChange={(list) => setFormData(prev => ({ ...prev, proponents: list }))}
+                        placeholder="Type a name to add co-proponents"
                     />
                 </div>
 
