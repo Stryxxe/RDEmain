@@ -10,6 +10,8 @@ const MultiFileUpload = ({
     accept, // Optional override
     maxSizeMB, // Optional override
     maxFiles = 10,
+    existingFiles = [],
+    onRemoveExisting,
 }) => {
     const uploadSettings = useUploadSettings();
     
@@ -20,6 +22,9 @@ const MultiFileUpload = ({
     const [isDragOver, setIsDragOver] = useState(false);
     const [feedback, setFeedback] = useState("");
     const inputRef = useRef(null);
+
+    const existing = Array.isArray(existingFiles) ? existingFiles : [];
+    const totalFiles = (Array.isArray(files) ? files.length : 0) + existing.length;
 
     const bytesLimit = effectiveMaxSizeMB * 1024 * 1024;
 
@@ -58,7 +63,7 @@ const MultiFileUpload = ({
 
         incomingFiles.forEach((file) => {
             // Check if we've reached the limit
-            if (currentFiles.length + validFiles.length >= maxFiles) {
+            if (existing.length + currentFiles.length + validFiles.length >= maxFiles) {
                 errors.push(`Maximum of ${maxFiles} files reached.`);
                 return;
             }
@@ -117,6 +122,10 @@ const MultiFileUpload = ({
         onChange(nextFiles);
     };
 
+    const handleRemoveExisting = (index) => {
+        onRemoveExisting?.(index);
+    };
+
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -127,7 +136,7 @@ const MultiFileUpload = ({
                     <p className="text-sm text-gray-500">{description}</p>
                 </div>
                 <span className="text-sm text-gray-500">
-                    {files.length}/{maxFiles} files
+                    {totalFiles}/{maxFiles} files
                 </span>
             </div>
 
@@ -180,6 +189,53 @@ const MultiFileUpload = ({
                 <p className="text-sm text-red-500" role="alert">
                     {feedback}
                 </p>
+            )}
+
+            {existing.length > 0 && (
+                <div className="space-y-3">
+                    {existing.map((file, index) => (
+                        <div
+                            key={`${file.filePath || file.fileName || 'existing'}-${index}`}
+                            className="flex items-center justify-between border border-gray-200 rounded-xl p-4 bg-white shadow-sm"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="bg-red-50 p-2 rounded-lg">
+                                    <Paperclip className="w-5 h-5 text-red-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-900">
+                                        {file.fileName || file.fileType || 'Existing file'}
+                                    </p>
+                                    {file.fileSize && (
+                                        <p className="text-xs text-gray-500">{(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                                    )}
+                                    {file.filePath && (
+                                        <a
+                                            href={`/storage/${file.filePath}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-xs text-red-600 hover:underline inline-flex items-center gap-1"
+                                        >
+                                            <Paperclip className="w-3 h-3" />
+                                            Open current file
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveExisting(index);
+                                }}
+                                className="text-sm text-gray-500 hover:text-red-600 inline-flex items-center gap-1"
+                            >
+                                <X className="w-4 h-4" />
+                                Remove
+                            </button>
+                        </div>
+                    ))}
+                </div>
             )}
 
             {files.length > 0 && (

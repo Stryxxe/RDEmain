@@ -3,7 +3,6 @@ import { router } from '@inertiajs/react';
 import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
 import { useAuth } from '../../../contexts/AuthContext';
-import CMEditProposal from './CMEditProposal';
 import { updateProposal } from '../../../services/proposalService';
 import Breadcrumbs from '../../../Components/Breadcrumbs';
 
@@ -24,7 +23,9 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
   const [isEndorsed, setIsEndorsed] = useState(false);
   const [endorsementData, setEndorsementData] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [showEditProposal, setShowEditProposal] = useState(false);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionComments, setRevisionComments] = useState('');
+  const [isSendingForRevision, setIsSendingForRevision] = useState(false);
 
   const [fullProposal, setFullProposal] = useState(proposal);
 
@@ -281,6 +282,60 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     setEndorsementComments('');
   };
 
+  const handleForRevision = () => {
+    setShowRevisionModal(true);
+  };
+
+  const handleRevisionCancel = () => {
+    setShowRevisionModal(false);
+    setRevisionComments('');
+  };
+
+  const handleRevisionCommentsChange = (e) => {
+    setRevisionComments(e.target.value);
+  };
+
+  const handleSendForRevision = async () => {
+    if (isSendingForRevision) return;
+
+    try {
+      setIsSendingForRevision(true);
+      
+      const updateData = {
+        statusID: 4, // Revisions Required status
+        revisionComments: revisionComments
+      };
+
+      const response = await updateProposal(fullProposal.proposalID || fullProposal.id, updateData);
+      
+      if (response && response.success) {
+        setShowRevisionModal(false);
+        setRevisionComments('');
+        
+        await window.customAlert('', 'Proposal sent for revision successfully!', 3000);
+        
+        setTimeout(() => {
+          router.visit('/cm/review-proposal', { replace: true });
+        }, 3500);
+      } else {
+        await window.customAlert('Failed to send proposal for revision: ' + (response?.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error sending proposal for revision:', error);
+      let errorMessage = 'Unknown error';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      await window.customAlert('Error sending proposal for revision: ' + errorMessage);
+    } finally {
+      setIsSendingForRevision(false);
+    }
+  };
+
   const handleDocumentClick = (document) => {
     if (document && document.pdfPath) {
       setSelectedDocument(document);
@@ -443,9 +498,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         // Show success message
         alert('Proposal updated successfully!');
         
-        // Close edit view
-        setShowEditProposal(false);
-        
         // Refresh data
         handleRefresh();
       } else {
@@ -459,17 +511,6 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
       setIsEndorsing(false);
     }
   };
-
-  // Show edit proposal page if edit is clicked
-  if (showEditProposal) {
-    return (
-      <CMEditProposal 
-        proposal={fullProposal || proposal}
-        onBack={() => setShowEditProposal(false)}
-        onSave={handleSaveProposal}
-      />
-    );
-  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
@@ -499,11 +540,21 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           <div className="bg-gradient-to-r from-slate-50 to-gray-50 border-b border-gray-200 px-8 py-6">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
               <div className="flex-1">
-                <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
-                  {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
-                </h1>
+                <div className="flex flex-col gap-2">
+                  <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 leading-tight">
+                    {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                  </h1>
+                  {fullProposal?.resubmittedAfterRevision && (
+                    <span className="inline-flex items-center px-3 py-1 w-fit rounded-full text-sm font-semibold bg-amber-100 text-amber-800 border border-amber-300">
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                      </svg>
+                      For Resubmission
+                    </span>
+                  )}
+                </div>
 
-                <div className="flex flex-wrap gap-4 text-gray-600">
+                <div className="flex flex-wrap gap-4 text-gray-600 mt-4">
                   <div className="flex items-center">
                     <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -772,13 +823,14 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-8">
             {!isEndorsed && (
               <button 
-                onClick={() => setShowEditProposal(true)}
+                type="button"
+                onClick={handleForRevision}
                 className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-                Edit Proposal
+                For Revision
               </button>
             )}
             {!isEndorsed && (
@@ -845,35 +897,35 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         {/* Endorsement Modal */}
         {showEndorsementModal && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full animate-fadeIn">
+            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
               {/* Modal Header */}
-              <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-50">
-                <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-50">
+                <div className="flex items-center space-x-2">
+                  <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
-                  <h2 className="text-2xl font-bold text-gray-900">Endorse Proposal</h2>
+                  <h2 className="text-lg font-bold text-gray-900">Endorse Proposal</h2>
                 </div>
                 <button
                   onClick={handleEndorsementCancel}
-                  className="text-gray-400 hover:text-gray-600 hover:bg-white p-2 rounded-lg transition-all duration-200"
+                  className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
                 >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
               {/* Modal Content */}
-              <div className="p-8">
-                <div className="mb-8 bg-gradient-to-br from-gray-50 to-gray-100 p-6 rounded-xl border border-gray-200">
-                  <h3 className="text-xl font-bold text-gray-900 mb-3 leading-tight">
+              <div className="p-5">
+                <div className="mb-5 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
                     {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
                   </h3>
-                  <div className="flex items-center text-gray-700">
-                    <svg className="w-5 h-5 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex items-center text-sm text-gray-700">
+                    <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                     </svg>
                     <span className="font-medium">By:</span>
@@ -881,43 +933,40 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                   </div>
                 </div>
 
-                <div className="mb-8">
-                  <label htmlFor="endorsementComments" className="flex items-center text-base font-semibold text-gray-800 mb-3">
-                    <svg className="w-5 h-5 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <div className="mb-5">
+                  <label htmlFor="endorsementComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                    <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
                     </svg>
                     Endorsement Comments
-                    <span className="text-sm text-gray-500 font-normal ml-2">(Optional)</span>
+                    <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
                   </label>
                   <textarea
                     id="endorsementComments"
                     value={endorsementComments}
                     onChange={handleEndorsementCommentsChange}
-                    rows={5}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
-                    placeholder="Add any comments, recommendations, or notes about this endorsement..."
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
+                    placeholder="Add any comments or notes about this endorsement..."
                   />
-                  <p className="mt-2 text-sm text-gray-500">
-                    Your comments will be visible to other reviewers and administrators.
-                  </p>
                 </div>
 
-                <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                   <button
                     onClick={handleEndorsementCancel}
                     disabled={isEndorsing}
-                    className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 font-medium"
+                    className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleEndorsementSubmit}
                     disabled={isEndorsing}
-                    className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+                    className="px-6 py-2 text-sm bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
                   >
                     {isEndorsing ? (
                       <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
@@ -929,6 +978,99 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         Confirm Endorsement
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* For Revision Modal */}
+        {showRevisionModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+                <div className="flex items-center space-x-2">
+                  <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-900">Send for Revision</h2>
+                </div>
+                <button
+                  onClick={handleRevisionCancel}
+                  className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-5">
+                <div className="mb-5 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
+                    {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                  </h3>
+                  <div className="flex items-center text-sm text-gray-700">
+                    <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="font-medium">By:</span>
+                    <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <label htmlFor="revisionComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                    <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                    Revision Comments
+                    <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
+                  </label>
+                  <textarea
+                    id="revisionComments"
+                    value={revisionComments}
+                    onChange={handleRevisionCommentsChange}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                    placeholder="Add revision comments or notes for the proponent..."
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleRevisionCancel}
+                    disabled={isSendingForRevision}
+                    className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendForRevision}
+                    disabled={isSendingForRevision}
+                    className="px-6 py-2 text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+                  >
+                    {isSendingForRevision ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                        </svg>
+                        Send for Revision
                       </>
                     )}
                   </button>

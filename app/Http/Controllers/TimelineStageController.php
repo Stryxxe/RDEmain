@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\TimelineStage;
 use App\Models\Status;
+use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Inertia\Inertia;
@@ -59,6 +60,9 @@ class TimelineStageController extends Controller
         try {
             $stage = TimelineStage::create($request->all());
 
+            // Log activity
+            ActivityService::logTimelineStageCreate($stage->stageID, $stage->stageName);
+
             return back()->with('success', 'Timeline stage created successfully!');
         } catch (\Exception $e) {
             return back()->with('error', 'Failed to create timeline stage: ' . $e->getMessage());
@@ -86,7 +90,11 @@ class TimelineStageController extends Controller
 
         try {
             $stage = TimelineStage::findOrFail($id);
+            $oldData = $stage->toArray();
             $stage->update($request->all());
+
+            // Log activity
+            ActivityService::logTimelineStageUpdate($stage->stageID, $stage->stageName, $oldData, $stage->toArray());
 
             return back()->with('success', 'Timeline stage updated successfully!');
         } catch (\Exception $e) {
@@ -153,7 +161,11 @@ class TimelineStageController extends Controller
     {
         try {
             $stage = TimelineStage::findOrFail($id);
+            $stageName = $stage->stageName;
             $stage->delete();
+
+            // Log activity
+            ActivityService::logTimelineStageDelete($id, $stageName);
 
             return back()->with('success', 'Timeline stage deleted successfully!');
         } catch (\Exception $e) {

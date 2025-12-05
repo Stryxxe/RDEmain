@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Services\ActivityService;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\EndorsementController;
 use App\Http\Controllers\ReviewController;
@@ -116,6 +117,58 @@ Route::get('/users/search', function (Request $request) {
     return response()->json(['success' => true, 'data' => $users]);
 })->middleware('auth:web');
 
+// Search all users (for RDD and Admin roles to message anyone)
+Route::get('/users/search-all', function (Request $request) {
+    $validated = $request->validate([
+        'q' => 'nullable|string|max:100',
+        'limit' => 'nullable|integer|min:1|max:50',
+    ]);
+
+    $q = trim($validated['q'] ?? '');
+    $limit = (int)($validated['limit'] ?? 20);
+    $currentUser = $request->user();
+
+    // Only allow RDD and Admin to search all users
+    $userRole = $currentUser->role?->userRole;
+    if (!in_array($userRole, ['RDD', 'Admin'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
+    $users = \App\Models\User::query()
+        ->with('role')
+        ->select(['userID', 'firstName', 'lastName', 'email', 'userRolesID'])
+        // Exclude current user
+        ->where('userID', '!=', $currentUser->userID)
+        // Text search
+        ->when($q !== '', function ($query) use ($q) {
+            $like = "%{$q}%";
+            $query->where(function ($sub) use ($like) {
+                $sub->where('firstName', 'like', $like)
+                    ->orWhere('lastName', 'like', $like)
+                    ->orWhereRaw("CONCAT(firstName,' ',lastName) like ?", [$like])
+                    ->orWhere('email', 'like', $like);
+            });
+        })
+        ->orderBy('lastName')
+        ->orderBy('firstName')
+        ->limit($limit)
+        ->get()
+        ->map(function ($u) {
+            return [
+                'userID' => $u->userID,
+                'firstName' => $u->firstName,
+                'lastName' => $u->lastName,
+                'email' => $u->email,
+                'role' => $u->role?->userRole,
+            ];
+        });
+
+    return response()->json(['success' => true, 'data' => $users]);
+})->middleware('auth:web');
+
 // Admin: Research Centers list for user creation form
 Route::get('/admin/research-centers', function (Request $request) {
     try {
@@ -156,6 +209,9 @@ Route::post('/admin/research-centers', function (Request $request) {
         'departmentID' => $request->departmentID
     ]);
     
+    // Log activity
+    ActivityService::logResearchCenterCreate($center->researchCenterID, $center->name);
+    
     return response()->json(['success' => true, 'data' => $center]);
 })->middleware('auth:web');
 
@@ -178,7 +234,12 @@ Route::put('/admin/research-centers/{id}', function (Request $request, $id) {
 // Admin: Delete research center
 Route::delete('/admin/research-centers/{id}', function ($id) {
     $center = ResearchCenter::findOrFail($id);
+    $centerName = $center->name;
     $center->delete();
+    
+    // Log activity
+    ActivityService::logResearchCenterDelete($id, $centerName);
+    
     return response()->json(['success' => true]);
 })->middleware('auth:web');
 
@@ -849,6 +910,9 @@ Route::middleware(['auth:web'])->group(function () {
             ];
             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
             
+            // Log activity
+            ActivityService::log('create', 'Uploaded proponent template: ' . $templateName, 'Template', null);
+            
             // For now, return success - will be saved to database later
             return response()->json([
                 'success' => true,
@@ -883,13 +947,18 @@ Route::middleware(['auth:web'])->group(function () {
                     if (md5($filename) === $id) {
                         \Storage::disk('public')->delete('templates/proponent/' . $filename);
                         
-                        // Remove from metadata
+                        // Get template name before removing metadata
                         $metadataPath = storage_path('app/public/templates/proponent/.metadata.json');
+                        $templateName = $filename;
                         if (file_exists($metadataPath)) {
                             $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+                            $templateName = $metadata[$filename]['customName'] ?? $filename;
                             unset($metadata[$filename]);
                             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
                         }
+                        
+                        // Log activity
+                        ActivityService::log('delete', 'Deleted proponent template: ' . $templateName, 'Template', null);
                         
                         return response()->json([
                             'success' => true,
@@ -997,6 +1066,9 @@ Route::middleware(['auth:web'])->group(function () {
             ];
             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
             
+            // Log activity
+            ActivityService::log('create', 'Uploaded general template: ' . $templateName, 'Template', null);
+            
             // For now, return success - will be saved to database later
             return response()->json([
                 'success' => true,
@@ -1031,13 +1103,18 @@ Route::middleware(['auth:web'])->group(function () {
                     if (md5($filename) === $id) {
                         \Storage::disk('public')->delete('templates/general/' . $filename);
                         
-                        // Remove from metadata
+                        // Get template name before removing metadata
                         $metadataPath = storage_path('app/public/templates/general/.metadata.json');
+                        $templateName = $filename;
                         if (file_exists($metadataPath)) {
                             $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+                            $templateName = $metadata[$filename]['customName'] ?? $filename;
                             unset($metadata[$filename]);
                             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
                         }
+                        
+                        // Log activity
+                        ActivityService::log('delete', 'Deleted general template: ' . $templateName, 'Template', null);
                         
                         return response()->json([
                             'success' => true,

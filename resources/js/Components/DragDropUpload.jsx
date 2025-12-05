@@ -1,21 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Plus, X } from 'lucide-react';
+import { Upload, Plus, X, ExternalLink } from 'lucide-react';
 import FileIcon from './FileIcon';
 
-const DragDropUpload = ({ 
-  onFileSelect, 
-  acceptedTypes = 'PDF, DOC, DOCX', 
+const DragDropUpload = ({
+  onFileSelect,
+  acceptedTypes = 'PDF, DOC, DOCX',
   maxSize = '5MB',
-  selectedFile = null
+  selectedFile = null,
+  existingFile = null,
+  onRemoveExisting,
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [file, setFile] = useState(selectedFile);
+  const [currentExisting, setCurrentExisting] = useState(existingFile);
   const fileInputRef = useRef(null);
 
   // Sync with parent state
   useEffect(() => {
     setFile(selectedFile);
   }, [selectedFile]);
+
+  useEffect(() => {
+    setCurrentExisting(existingFile);
+  }, [existingFile]);
 
   const handleDragOver = (e) => {
     e.preventDefault();
@@ -55,6 +62,7 @@ const DragDropUpload = ({
     if (files.length > 0) {
       const selectedFile = files[0];
       if (validateFile(selectedFile)) {
+        setCurrentExisting(null);
         setFile(selectedFile);
         onFileSelect(selectedFile);
       }
@@ -65,6 +73,7 @@ const DragDropUpload = ({
     const selectedFile = e.target.files[0];
     if (selectedFile) {
       if (validateFile(selectedFile)) {
+        setCurrentExisting(null);
         setFile(selectedFile);
         onFileSelect(selectedFile);
       } else {
@@ -89,11 +98,17 @@ const DragDropUpload = ({
     }
   };
 
+  const handleRemoveExisting = (e) => {
+    e.stopPropagation();
+    setCurrentExisting(null);
+    onRemoveExisting?.();
+  };
+
   return (
     <div className="w-full">
       <div
         className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200 ${
-          file
+          file || currentExisting
             ? 'border-green-300 bg-green-50'
             : isDragOver
             ? 'border-red-600 bg-red-50'
@@ -127,6 +142,40 @@ const DragDropUpload = ({
             <p className="text-gray-400 text-xs mt-1">
               Click to change
             </p>
+          </div>
+        ) : currentExisting ? (
+          <div className="flex flex-col items-center">
+            <div className="relative mb-2">
+              <FileIcon fileName={currentExisting.fileName || 'existing-file'} size="w-10 h-10" />
+              <button
+                onClick={handleRemoveExisting}
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+            <p className="text-green-600 text-sm font-medium mb-1">Current File</p>
+            <p className="text-gray-600 text-xs font-medium mb-1 truncate max-w-full px-2">
+              {currentExisting.fileName || 'Existing file'}
+            </p>
+            {currentExisting.fileSize && (
+              <p className="text-gray-500 text-xs">{(currentExisting.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+            )}
+            <div className="flex items-center gap-2 text-xs text-red-600 mt-1">
+              <ExternalLink className="w-4 h-4" />
+              <a
+                href={currentExisting.filePath ? `/storage/${currentExisting.filePath}` : '#'}
+                target="_blank"
+                rel="noreferrer"
+                className="hover:underline"
+                onClick={(e) => {
+                  if (!currentExisting.filePath) e.preventDefault();
+                }}
+              >
+                Open current file
+              </a>
+            </div>
+            <p className="text-gray-400 text-xs mt-1">Remove to upload a different file</p>
           </div>
         ) : (
           <div>

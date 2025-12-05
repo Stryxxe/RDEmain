@@ -25,6 +25,7 @@ const CMProposalDetail = () => {
     const [isEndorsed, setIsEndorsed] = useState(false);
     const [endorsementData, setEndorsementData] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [activeTimelineStages, setActiveTimelineStages] = useState([]);
 
     console.log("CMProposalDetail rendered with ID:", id);
     console.log("Current user:", user);
@@ -34,6 +35,30 @@ const CMProposalDetail = () => {
             fetchProposal();
         }
     }, [id, user]);
+
+    // Fetch admin-configured timeline stages
+    useEffect(() => {
+        const fetchActiveStages = async () => {
+            try {
+                const response = await axiosInstance.get(
+                    "/timeline-stages/active",
+                    {
+                        headers: { Accept: "application/json" },
+                        withCredentials: true,
+                    }
+                );
+
+                if (response.data?.data) {
+                    setActiveTimelineStages(response.data.data);
+                }
+            } catch (err) {
+                console.error("Failed to load timeline stages:", err);
+                setActiveTimelineStages([]);
+            }
+        };
+
+        fetchActiveStages();
+    }, [user]);
 
     // Check endorsement status when proposal is loaded
     useEffect(() => {
@@ -169,96 +194,110 @@ const CMProposalDetail = () => {
 
         const statusId = proposal.statusID;
 
-        // Define all possible timeline stages (ordered from start to finish)
-        const allStages = [
-            { id: 0, name: "Proposal Submitted", status: "pending" },
-            { id: 1, name: "College Endorsement", status: "pending" },
-            { id: 2, name: "R&D Division", status: "pending" },
-            { id: 3, name: "Proposal Review", status: "pending" },
-            { id: 4, name: "Ethics Review", status: "pending" },
-            { id: 5, name: "OVPRDE", status: "pending" },
-            { id: 6, name: "President", status: "pending" },
-            { id: 7, name: "OSOURU", status: "pending" },
-            { id: 8, name: "Implementation", status: "pending" },
-            { id: 9, name: "Monitoring", status: "pending" },
-            { id: 10, name: "For Completion", status: "pending" },
-        ];
+        // Use admin-configured stages when available; fallback to legacy list
+        const baseStages = (activeTimelineStages?.length
+            ? [...activeTimelineStages]
+                  .filter((s) => s.isActive !== false)
+                  .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
+                  .map((s, idx) => ({
+                      id: s.stageID || idx,
+                      name: s.stageName || `Stage ${idx + 1}`,
+                      status: "pending",
+                      orderIndex: s.orderIndex || idx + 1,
+                      color: s.color || "gray",
+                  }))
+            : [
+                  { id: 0, name: "Proposal Submitted", status: "pending" },
+                  { id: 1, name: "College Endorsement", status: "pending" },
+                  { id: 2, name: "R&D Division", status: "pending" },
+                  { id: 3, name: "Proposal Review", status: "pending" },
+                  { id: 4, name: "Ethics Review", status: "pending" },
+                  { id: 5, name: "OVPRDE", status: "pending" },
+                  { id: 6, name: "President", status: "pending" },
+                  { id: 7, name: "OSOURU", status: "pending" },
+                  { id: 8, name: "Implementation", status: "pending" },
+                  { id: 9, name: "Monitoring", status: "pending" },
+                  { id: 10, name: "For Completion", status: "pending" },
+              ]
+        ).map((stage, idx) => ({
+            ...stage,
+            status: stage.status || "pending",
+            id: stage.id ?? idx,
+        }));
+
+        // Helper to set status safely by index
+        const setStatus = (idx, value) => {
+            if (baseStages[idx]) baseStages[idx].status = value;
+        };
 
         // Update stages based on actual proposal status (matching StatusSeeder IDs)
         switch (statusId) {
             case 1: // Under Review - Proposal submitted, waiting for College Endorsement
-                allStages[0].status = "completed"; // Proposal Submitted
-                // Check if endorsed to determine College Endorsement status
+                setStatus(0, "completed");
                 if (isEndorsed) {
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
+                    setStatus(1, "completed");
+                    setStatus(2, "current");
                 } else {
-                    allStages[1].status = "current"; // College Endorsement - current
+                    setStatus(1, "current");
                 }
                 break;
             case 2: // Approved - All stages up to Implementation completed, Implementation current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "current"; // Implementation
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "completed");
+                setStatus(3, "completed");
+                setStatus(4, "completed");
+                setStatus(5, "completed");
+                setStatus(6, "completed");
+                setStatus(7, "completed");
+                setStatus(8, "current");
                 break;
             case 3: // Rejected - College Endorsement completed, R&D Division rejected
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "rejected"; // R&D Division
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "rejected");
                 break;
             case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "current"; // Monitoring
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "completed");
+                setStatus(3, "completed");
+                setStatus(4, "completed");
+                setStatus(5, "completed");
+                setStatus(6, "completed");
+                setStatus(7, "completed");
+                setStatus(8, "completed");
+                setStatus(9, "current");
                 break;
             case 5: // Completed - All stages completed
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "completed"; // Monitoring
-                allStages[10].status = "completed"; // For Completion
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "completed");
+                setStatus(3, "completed");
+                setStatus(4, "completed");
+                setStatus(5, "completed");
+                setStatus(6, "completed");
+                setStatus(7, "completed");
+                setStatus(8, "completed");
+                setStatus(9, "completed");
+                setStatus(10, "completed");
                 break;
             default:
-                // Check if endorsed to determine College Endorsement status
-                if (isEndorsed) {
-                    allStages[0].status = "completed"; // Proposal Submitted
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
+                setStatus(0, "completed");
+                if (hasCmEndorsement) {
+                    setStatus(1, "completed");
+                    setStatus(2, hasRddEndorsement ? "completed" : "current");
+                    if (hasRddEndorsement) setStatus(3, "current");
                 } else {
-                    allStages[1].status = "current"; // College Endorsement - current
+                    setStatus(1, "current");
                 }
         }
 
-        return allStages;
+        return baseStages;
     };
 
-    // Dynamic status history based on actual proposal data
     const getStatusHistory = () => {
-        if (!proposal) return [];
-
-        const timelineStages = getTimelineStages();
-        const baseDate = new Date(proposal.created_at);
-
-        // Generate status history based on timeline stages
+        const baseDate = new Date(proposal?.created_at || Date.now());
         const statusHistory = [];
 
         // Get stages in chronological order

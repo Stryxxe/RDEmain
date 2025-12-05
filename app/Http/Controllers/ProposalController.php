@@ -476,6 +476,8 @@ class ProposalController extends Controller
             'sustainableDevelopmentGoals' => 'sometimes|array',
             'proposedBudget' => 'sometimes|numeric|min:0',
             'budgetBreakdown' => 'sometimes|array',
+            'statusID' => 'sometimes|integer',
+            'revisionComments' => 'sometimes|string|nullable',
             'updatedForm' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}"
         ]);
 
@@ -491,6 +493,7 @@ class ProposalController extends Controller
             if ($request->has('dostSPs')) $updateData['dostSPs'] = $request->dostSPs;
             if ($request->has('sustainableDevelopmentGoals')) $updateData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
             if ($request->has('proposedBudget')) $updateData['proposedBudget'] = $request->proposedBudget;
+            if ($request->has('statusID')) $updateData['statusID'] = $request->statusID;
 
             // Handle file upload if provided
             if ($request->hasFile('updatedForm')) {
@@ -521,8 +524,77 @@ class ProposalController extends Controller
                 $updateData['budgetBreakdown'] = $this->generateDefaultBudgetBreakdown($proposedBudget);
             }
 
+            // Track status change before updating
+            $wasRevisionStatusChange = $request->has('statusID')
+                && (int) $request->statusID === 4
+                && (int) $proposal->statusID !== 4;
+
+            // Track when resubmitting after revision
+            $isResubmitAfterRevision = $request->has('statusID') && $request->statusID == 1 && (int) $proposal->statusID === 4;
+
             $proposal->update($updateData);
-            $proposal->load(['status', 'files', 'user.department']);
+            $proposal->load([
+                'status',
+                'files',
+                'user.department',
+                'user.role',
+                'proponents',
+                'proponents.role'
+            ]);
+
+            // Load project roles for proponents
+            $proposal->proponents->each(function ($proponent) {
+                if ($proponent->pivot->projectRoleID) {
+                    $projectRole = \App\Models\ProjectRole::find($proponent->pivot->projectRoleID);
+                    $proponent->projectRole = $projectRole;
+                }
+            });
+
+            // Notify proponent when CM sets proposal to revision and include comments
+            if ($wasRevisionStatusChange) {
+                $revisionComments = $request->input('revisionComments');
+                $message = $revisionComments
+                    ? "For revision: {$revisionComments}"
+                    : 'Your proposal requires revision. Please check the details and resubmit.';
+
+                Notification::create([
+                    'userID' => $proposal->userID,
+                    'type' => 'revision',
+                    'title' => 'Proposal Sent for Revision',
+                    'message' => $message,
+                    'data' => [
+                        'proposal_id' => $proposal->proposalID,
+                        'proposal_title' => $proposal->researchTitle,
+                        'revision_comments' => $revisionComments,
+                        'event' => 'proposal.revision_required'
+                    ]
+                ]);
+            }
+
+            // Notify CM when proposal is resubmitted after revision
+            if ($isResubmitAfterRevision) {
+                $cmUsers = User::whereHas('role', function ($query) {
+                    $query->where('userRole', 'CM');
+                })
+                    ->where('researchCenterID', $proposal->user->researchCenterID)
+                    ->get();
+
+                foreach ($cmUsers as $cmUser) {
+                    Notification::create([
+                        'userID' => $cmUser->userID,
+                        'type' => 'proposal',
+                        'title' => 'Revised Proposal Resubmitted',
+                        'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" after revision. Please review the updated proposal.",
+                        'data' => [
+                            'proposal_id' => $proposal->proposalID,
+                            'proposal_title' => $proposal->researchTitle,
+                            'proponent_name' => $proposal->user->fullName,
+                            'event' => 'proposal.resubmitted_after_revision',
+                            'is_resubmission' => true
+                        ]
+                    ]);
+                }
+            }
 
             // Clear cache for this proposal for all users
             $this->clearProposalCache($id);

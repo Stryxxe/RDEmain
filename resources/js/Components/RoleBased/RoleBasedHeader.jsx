@@ -129,13 +129,17 @@ const RoleBasedHeader = ({ role }) => {
 
     const handleViewAllMessages = () => {
         setShowNotifications(false);
-        router.visit(`/${role.toLowerCase()}/messages`);
+        if (role) {
+            router.visit(`/${role.toLowerCase()}/messages`);
+        }
     };
 
     const handleNotificationClick = async (notificationId) => {
         await markAsRead(notificationId);
         setShowNotifications(false);
-        router.visit(`/${role.toLowerCase()}/notifications`);
+        if (role) {
+            router.visit(`/${role.toLowerCase()}/notifications`);
+        }
     };
 
     const handleViewAllNotifications = () => {
@@ -449,9 +453,11 @@ const RoleBasedHeader = ({ role }) => {
                             <button
                                 onClick={() => {
                                     setShowNotifications(false);
-                                    router.visit(
-                                        `/${role.toLowerCase()}/notifications`
-                                    );
+                                    if (role) {
+                                        router.visit(
+                                            `/${role.toLowerCase()}/notifications`
+                                        );
+                                    }
                                 }}
                                 className="w-full text-center text-sm text-blue-600 hover:text-blue-800 font-medium"
                             >
@@ -461,8 +467,8 @@ const RoleBasedHeader = ({ role }) => {
                     </div>
                 </div>
 
-                {/* Message Icon - Hidden for RDD and Admin */}
-                {role !== "RDD" && role !== "Admin" && (
+                {/* Message Icon - Hidden for Admin only */}
+                {role !== "Admin" && (
                     <div className="relative">
                         <button
                             onClick={() => handleViewAllMessages("messages")}
@@ -509,9 +515,11 @@ const RoleBasedHeader = ({ role }) => {
                             <button
                                 onClick={() => {
                                     setShowProfileDropdown(false);
-                                    router.visit(
-                                        `/${role.toLowerCase()}/account`
-                                    );
+                                    if (role) {
+                                        router.visit(
+                                            `/${role.toLowerCase()}/account`
+                                        );
+                                    }
                                 }}
                                 className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
                             >

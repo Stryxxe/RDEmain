@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProjectRole;
+use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
@@ -98,6 +99,9 @@ class ProjectRoleController extends Controller
                 'roleName' => $request->roleName,
                 'isActive' => $request->isActive ?? true,
             ]);
+
+            // Log activity
+            ActivityService::logRoleCreate($role->projectRoleID, $role->roleName);
 
             return response()->json([
                 'success' => true,
@@ -195,7 +199,11 @@ class ProjectRoleController extends Controller
                 ], 404);
             }
 
+            $roleName = $role->roleName;
             $role->delete();
+
+            // Log activity
+            ActivityService::logRoleDelete($id, $roleName);
 
             return response()->json([
                 'success' => true,

@@ -270,9 +270,11 @@ const RDDDashboard = () => {
                     {/* Total Funding Card */}
                     <div className="bg-white p-6 rounded-lg shadow-md text-center transition-transform duration-200 hover:-translate-y-1">
                         <div className="text-4xl font-bold text-red-900 mb-3">
-                            {isNaN(totalFunding) || totalFunding === 0
-                                ? "₱0.0M"
-                                : `₱${(totalFunding / 1000000).toFixed(1)}M`}
+                            {totalFunding === 0
+                                ? "₱0"
+                                : totalFunding >= 1000000
+                                ? `₱${(totalFunding / 1000000).toFixed(1)}M`
+                                : `₱${totalFunding.toLocaleString()}`}
                         </div>
                         <div className="text-gray-600 font-medium">
                             Total Funding

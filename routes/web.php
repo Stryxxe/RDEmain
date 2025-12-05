@@ -39,7 +39,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/account', fn() => Inertia::render('RoleViews/RDD/RDDAccount'))->name('account');
         Route::get('/proposal/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDProposalDetail', ['id' => $id]))->name('proposal.detail');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');
-        Route::get('/messages', fn() => Inertia::render('Messages'))->name('messages');
+        Route::get('/messages', fn() => Inertia::render('RoleViews/RDD/RDDMessages'))->name('messages');
     });
 
     // ============================================================================
@@ -49,6 +49,8 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('SubmitPage'))->name('dashboard');
         Route::get('/tracker', fn() => Inertia::render('Tracker'))->name('tracker');
         Route::get('/tracker/{id}', fn($id) => Inertia::render('TrackerDetail', ['id' => $id]))->name('tracker.detail');
+        Route::get('/revision', fn() => Inertia::render('ForRevision'))->name('revision');
+        Route::get('/revision/{id}', fn($id) => Inertia::render('RevisionDetail', ['id' => $id]))->name('revision.detail');
         Route::get('/resources', fn() => Inertia::render('Resources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('Account'))->name('account');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');

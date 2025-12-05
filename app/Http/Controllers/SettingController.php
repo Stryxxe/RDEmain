@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Setting;
+use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
@@ -76,21 +77,39 @@ class SettingController extends Controller
             }
 
             $settings = $request->input('settings');
+            $updatedSettings = [];
 
             foreach ($settings as $key => $value) {
+                // Get old value before updating
+                $oldValue = Setting::get($key);
+                
                 // Determine type
                 $type = 'string';
+                $newValue = $value;
                 if (is_int($value)) {
                     $type = 'integer';
                 } elseif (is_bool($value)) {
                     $type = 'boolean';
-                    $value = $value ? '1' : '0';
+                    $newValue = $value ? '1' : '0';
                 } elseif (is_array($value)) {
                     $type = 'json';
-                    $value = json_encode($value);
+                    $newValue = json_encode($value);
                 }
 
-                Setting::set($key, $value, $type);
+                // Only track if value actually changed
+                if ($oldValue != $newValue) {
+                    $updatedSettings[$key] = [
+                        'old' => $oldValue,
+                        'new' => $newValue
+                    ];
+                }
+
+                Setting::set($key, $newValue, $type);
+            }
+
+            // Log the settings change only if something changed
+            if (!empty($updatedSettings)) {
+                ActivityService::logSettingsChange($updatedSettings);
             }
 
             return response()->json([

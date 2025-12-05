@@ -32,7 +32,8 @@ class Proposal extends Model
         'uploadedAt',
         'statusID',
         'userID',
-        'archivedByRDD'
+        'archivedByRDD',
+        'resubmittedAfterRevision'
     ];
 
     protected $casts = [
@@ -42,7 +43,8 @@ class Proposal extends Model
         'matrixOfCompliance' => 'array',
         'budgetBreakdown' => 'array',
         'proposedBudget' => 'decimal:2',
-        'uploadedAt' => 'datetime'
+        'uploadedAt' => 'datetime',
+        'resubmittedAfterRevision' => 'datetime'
     ];
 
     /**

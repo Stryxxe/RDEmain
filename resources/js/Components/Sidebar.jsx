@@ -1,4 +1,4 @@
-import { Send, FileText, FolderOpen, Clock } from 'lucide-react';
+import { Send, FileText, FolderOpen, Clock, RefreshCcw } from 'lucide-react';
 import { Link, usePage } from '@inertiajs/react';
 
 const Sidebar = () => {
@@ -45,6 +45,19 @@ const Sidebar = () => {
             >
               <Clock size={20} />
               <span className="text-base">Tracker</span>
+            </Link>
+          </li>
+          <li>
+            <Link 
+              href="/proponent/revision" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                isActive('/proponent/revision') 
+                  ? 'bg-white text-red-800 font-semibold' 
+                  : 'text-white hover:bg-red-700'
+              }`}
+            >
+              <RefreshCcw size={20} />
+              <span className="text-base">For Revision</span>
             </Link>
           </li>
           <li>

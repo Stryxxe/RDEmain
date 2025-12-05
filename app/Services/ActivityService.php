@@ -31,9 +31,10 @@ class ActivityService
 
     public static function logUserCreate(array $userData, int $userId): void
     {
+        $name = ($userData['firstName'] ?? '') . ' ' . ($userData['lastName'] ?? '');
         self::log(
             'create',
-            'Created new user: ' . $userData['name'],
+            'Created new user: ' . trim($name),
             'User',
             $userId,
             null,
@@ -44,9 +45,10 @@ class ActivityService
     public static function logUserUpdate(int $userId, array $oldData, array $newData): void
     {
         $changes = self::getChangedFields($oldData, $newData);
+        $name = ($newData['firstName'] ?? '') . ' ' . ($newData['lastName'] ?? '');
         self::log(
             'update',
-            'Updated user: ' . ($newData['name'] ?? 'Unknown'),
+            'Updated user: ' . trim($name ?: 'Unknown'),
             'User',
             $userId,
             $oldData,
@@ -56,9 +58,10 @@ class ActivityService
 
     public static function logUserDelete(array $userData): void
     {
+        $name = ($userData['firstName'] ?? '') . ' ' . ($userData['lastName'] ?? '');
         self::log(
             'delete',
-            'Deleted user: ' . $userData['name'],
+            'Deleted user: ' . trim($name),
             'User',
             $userData['userID'] ?? null,
             $userData,
@@ -98,39 +101,66 @@ class ActivityService
         );
     }
 
-    public static function logSettingsChange(string $setting, $oldValue, $newValue): void
+    public static function logSettingsChange(array $settings): void
     {
+        $settingKeys = array_keys($settings);
+        $settingList = implode(', ', $settingKeys);
+        
+        $oldValues = [];
+        $newValues = [];
+        
+        foreach ($settings as $key => $values) {
+            $oldValues[$key] = $values['old'];
+            $newValues[$key] = $values['new'];
+        }
+        
+        $description = count($settingKeys) === 1 
+            ? "Changed setting: $settingList" 
+            : "Changed settings: $settingList";
+        
         self::log(
             'update',
-            "Changed setting: $setting",
+            $description,
             'Settings',
             null,
-            [$setting => $oldValue],
-            [$setting => $newValue]
+            $oldValues,
+            $newValues
         );
     }
 
-    public static function logTimelineStageCreate(int $proposalId, string $stageName): void
+    public static function logTimelineStageCreate(int $stageId, string $stageName): void
     {
         self::log(
             'create',
-            "Added timeline stage: $stageName to proposal ID $proposalId",
+            "Created timeline stage: $stageName",
             'TimelineStage',
-            $proposalId
+            $stageId
         );
     }
 
-    public static function logTimelineStageDelete(int $proposalId, string $stageName): void
+    public static function logTimelineStageUpdate(int $stageId, string $stageName, array $oldData, array $newData): void
+    {
+        self::log(
+            'update',
+            "Updated timeline stage: $stageName",
+            'TimelineStage',
+            $stageId,
+            $oldData,
+            $newData
+        );
+    }
+
+    public static function logTimelineStageDelete(int $stageId, string $stageName): void
     {
         self::log(
             'delete',
-            "Removed timeline stage: $stageName from proposal ID $proposalId",
+            "Deleted timeline stage: $stageName",
             'TimelineStage',
-            $proposalId
+            $stageId
         );
     }
 
-    public static function logDepartmentCreate(string $departmentName, int $departmentId): void
+    public static function logDepartmentCreate(int $departmentId, string $departmentName): void
     {
         self::log(
             'create',
@@ -140,28 +170,29 @@ class ActivityService
         );
     }
 
-    public static function logDepartmentUpdate(string $departmentName, int $departmentId, array $oldData, array $newData): void
+    public static function logDepartmentUpdate(int $departmentId, string $oldName, string $newName): void
     {
         self::log(
             'update',
-            'Updated department: ' . $departmentName,
+            'Updated department: ' . $oldName . ' to ' . $newName,
             'Department',
             $departmentId,
-            $oldData,
-            $newData
+            ['name' => $oldName],
+            ['name' => $newName]
         );
     }
 
-    public static function logDepartmentDelete(string $departmentName): void
+    public static function logDepartmentDelete(int $departmentId, string $departmentName): void
     {
         self::log(
             'delete',
             'Deleted department: ' . $departmentName,
-            'Department'
+            'Department',
+            $departmentId
         );
     }
 
-    public static function logResearchCenterCreate(string $centerName, int $centerId): void
+    public static function logResearchCenterCreate(int $centerId, string $centerName): void
     {
         self::log(
             'create',
@@ -171,31 +202,33 @@ class ActivityService
         );
     }
 
-    public static function logResearchCenterDelete(string $centerName): void
+    public static function logResearchCenterDelete(int $centerId, string $centerName): void
     {
         self::log(
             'delete',
             'Deleted research center: ' . $centerName,
-            'ResearchCenter'
+            'ResearchCenter',
+            $centerId
         );
     }
 
-    public static function logRoleCreate(string $roleName, int $roleId): void
+    public static function logRoleCreate(int $roleId, string $roleName): void
     {
         self::log(
             'create',
-            'Created role: ' . $roleName,
-            'Role',
+            'Created project role: ' . $roleName,
+            'ProjectRole',
             $roleId
         );
     }
 
-    public static function logRoleDelete(string $roleName): void
+    public static function logRoleDelete(int $roleId, string $roleName): void
     {
         self::log(
             'delete',
-            'Deleted role: ' . $roleName,
-            'Role'
+            'Deleted project role: ' . $roleName,
+            'ProjectRole',
+            $roleId
         );
     }
 

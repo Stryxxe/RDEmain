@@ -138,8 +138,11 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
       'supporting_document': 'Supporting Document'
     };
 
-    return fullProposal.files
-      .filter(file => file.filePath)
+    // Exclude SETI, GAD, and MOC from attached documents as they have their own section
+    const requiredDocTypes = ['seti_scorecard', 'gad_certificate', 'matrix_compliance'];
+
+    const filtered = fullProposal.files
+      .filter(file => file.filePath && !requiredDocTypes.includes(file.fileType))
       .map(file => {
         const fileType = file.fileType || '';
         const displayName = fileTypeMap[fileType] || file.fileName || 'Document';
@@ -154,6 +157,8 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
           fileSize: file.fileSize
         };
       });
+    
+    return filtered;
   };
 
   const attachedDocuments = getAttachedDocuments();
@@ -626,6 +631,122 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Required Documents Section */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-6">
+          <div className="flex items-center mb-6">
+            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900">Required Documents</h3>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* SETI Scorecard */}
+            {fullProposal?.files?.find(f => f.fileType === 'seti_scorecard') ? (
+              <div
+                className="flex flex-col p-5 rounded-xl border transition-all duration-200 cursor-pointer group bg-gradient-to-br from-green-50 to-emerald-50 hover:from-green-100 hover:to-emerald-100 border-green-200 shadow-sm hover:shadow-md"
+                onClick={() => handleDocumentClick({
+                  name: 'SETI Scorecard',
+                  fileName: fullProposal.files.find(f => f.fileType === 'seti_scorecard').fileName,
+                  pdfPath: `/storage/${fullProposal.files.find(f => f.fileType === 'seti_scorecard').filePath}`
+                })}
+              >
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-green-500 group-hover:bg-green-600 flex items-center justify-center transition-colors shadow-md">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-bold text-sm text-green-800 group-hover:text-green-900 ml-3">SETI Scorecard</span>
+                </div>
+                <span className="text-xs text-gray-600 truncate">{fullProposal.files.find(f => f.fileType === 'seti_scorecard').fileName}</span>
+              </div>
+            ) : (
+              <div className="flex flex-col p-5 rounded-xl border border-dashed border-gray-300 bg-gray-50">
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-gray-300 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <span className="font-bold text-sm text-gray-500 ml-3">SETI Scorecard</span>
+                </div>
+                <span className="text-xs text-gray-400">Not uploaded</span>
+              </div>
+            )}
+
+            {/* GAD Checklist */}
+            {fullProposal?.files?.find(f => f.fileType === 'gad_certificate') ? (
+              <div
+                className="flex flex-col p-5 rounded-xl border transition-all duration-200 cursor-pointer group bg-gradient-to-br from-blue-50 to-cyan-50 hover:from-blue-100 hover:to-cyan-100 border-blue-200 shadow-sm hover:shadow-md"
+                onClick={() => handleDocumentClick({
+                  name: 'GAD Checklist and Certificate',
+                  fileName: fullProposal.files.find(f => f.fileType === 'gad_certificate').fileName,
+                  pdfPath: `/storage/${fullProposal.files.find(f => f.fileType === 'gad_certificate').filePath}`
+                })}
+              >
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-blue-500 group-hover:bg-blue-600 flex items-center justify-center transition-colors shadow-md">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-bold text-sm text-blue-800 group-hover:text-blue-900 ml-3">GAD Checklist</span>
+                </div>
+                <span className="text-xs text-gray-600 truncate">{fullProposal.files.find(f => f.fileType === 'gad_certificate').fileName}</span>
+              </div>
+            ) : (
+              <div className="flex flex-col p-5 rounded-xl border border-dashed border-gray-300 bg-gray-50">
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-gray-300 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <span className="font-bold text-sm text-gray-500 ml-3">GAD Checklist</span>
+                </div>
+                <span className="text-xs text-gray-400">Not uploaded</span>
+              </div>
+            )}
+
+            {/* Matrix of Compliance */}
+            {fullProposal?.files?.find(f => f.fileType === 'matrix_compliance') ? (
+              <div
+                className="flex flex-col p-5 rounded-xl border transition-all duration-200 cursor-pointer group bg-gradient-to-br from-orange-50 to-amber-50 hover:from-orange-100 hover:to-amber-100 border-orange-200 shadow-sm hover:shadow-md"
+                onClick={() => handleDocumentClick({
+                  name: 'Matrix of Compliance',
+                  fileName: fullProposal.files.find(f => f.fileType === 'matrix_compliance').fileName,
+                  pdfPath: `/storage/${fullProposal.files.find(f => f.fileType === 'matrix_compliance').filePath}`
+                })}
+              >
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-orange-500 group-hover:bg-orange-600 flex items-center justify-center transition-colors shadow-md">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <span className="font-bold text-sm text-orange-800 group-hover:text-orange-900 ml-3">Matrix of Compliance</span>
+                </div>
+                <span className="text-xs text-gray-600 truncate">{fullProposal.files.find(f => f.fileType === 'matrix_compliance').fileName}</span>
+              </div>
+            ) : (
+              <div className="flex flex-col p-5 rounded-xl border border-dashed border-gray-300 bg-gray-50">
+                <div className="flex items-center mb-2">
+                  <div className="w-10 h-10 rounded-lg bg-gray-300 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </div>
+                  <span className="font-bold text-sm text-gray-500 ml-3">Matrix of Compliance</span>
+                </div>
+                <span className="text-xs text-gray-400">Not uploaded</span>
               </div>
             )}
           </div>

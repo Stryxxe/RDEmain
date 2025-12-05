@@ -351,6 +351,9 @@ class AdminUserController extends Controller
                 'name' => $validated['name'],
             ]);
 
+            // Log activity
+            ActivityService::logDepartmentCreate($department->departmentID, $department->name);
+
             return response()->json([
                 'success' => true,
                 'data' => [
@@ -377,9 +380,13 @@ class AdminUserController extends Controller
         ]);
 
         try {
+            $oldName = $department->name;
             $department->update([
                 'name' => $validated['name'],
             ]);
+
+            // Log activity
+            ActivityService::logDepartmentUpdate($department->departmentID, $oldName, $department->name);
 
             return response()->json([
                 'success' => true,
@@ -418,7 +425,11 @@ class AdminUserController extends Controller
                 ], 422);
             }
 
+            $departmentName = $department->name;
             $department->delete();
+
+            // Log activity
+            ActivityService::logDepartmentDelete($id, $departmentName);
 
             return response()->json([
                 'success' => true,
