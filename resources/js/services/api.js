@@ -146,22 +146,30 @@ class ApiService {
         console.warn('reportFile is missing or invalid');
       }
       
-      if (isValidFile(proposalData.setiScorecard)) {
-        formData.append('setiScorecard', proposalData.setiScorecard);
+      // Map new field names to backend expected names
+      console.log('DEBUG: Checking SETI file:', proposalData.setiFile, 'Type:', typeof proposalData.setiFile, 'Is File:', proposalData.setiFile instanceof File);
+      if (isValidFile(proposalData.setiFile || proposalData.setiScorecard)) {
+        formData.append('setiScorecard', proposalData.setiFile || proposalData.setiScorecard);
+        console.log('DEBUG: Appended setiScorecard');
       }
       
-      if (isValidFile(proposalData.gadCertificate)) {
-        formData.append('gadCertificate', proposalData.gadCertificate);
+      console.log('DEBUG: Checking GAD file:', proposalData.gadFile, 'Type:', typeof proposalData.gadFile, 'Is File:', proposalData.gadFile instanceof File);
+      if (isValidFile(proposalData.gadFile || proposalData.gadCertificate)) {
+        formData.append('gadCertificate', proposalData.gadFile || proposalData.gadCertificate);
+        console.log('DEBUG: Appended gadCertificate');
       }
       
-      if (isValidFile(proposalData.matrixOfCompliance)) {
-        formData.append('matrixOfCompliance', proposalData.matrixOfCompliance);
-      } else if (proposalData.matrixOfCompliance !== null && proposalData.matrixOfCompliance !== undefined) {
+      console.log('DEBUG: Checking MOC file:', proposalData.matrixFile, 'Type:', typeof proposalData.matrixFile, 'Is File:', proposalData.matrixFile instanceof File);
+      if (isValidFile(proposalData.matrixFile || proposalData.matrixOfCompliance)) {
+        formData.append('matrixOfCompliance', proposalData.matrixFile || proposalData.matrixOfCompliance);
+        console.log('DEBUG: Appended matrixOfCompliance');
+      } else if ((proposalData.matrixFile || proposalData.matrixOfCompliance) !== null && (proposalData.matrixFile || proposalData.matrixOfCompliance) !== undefined) {
+        const matrix = proposalData.matrixFile || proposalData.matrixOfCompliance;
         console.warn('matrixOfCompliance file is invalid and will not be sent:', {
-          type: typeof proposalData.matrixOfCompliance,
-          isFile: proposalData.matrixOfCompliance instanceof File,
-          size: proposalData.matrixOfCompliance?.size,
-          name: proposalData.matrixOfCompliance?.name
+          type: typeof matrix,
+          isFile: matrix instanceof File,
+          size: matrix?.size,
+          name: matrix?.name
         });
       }
 

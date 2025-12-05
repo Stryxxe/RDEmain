@@ -455,58 +455,96 @@ const ProposalDetail = () => {
           </div>
         </div>
 
-        {/* Enhanced Files Section */}
-        {proposal.files && proposal.files.length > 0 && (
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-                </svg>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900">Attached Files</h2>
-              <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
-                {proposal.files.length} file{proposal.files.length !== 1 ? 's' : ''}
-              </span>
-            </div>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {proposal.files.map((file) => (
-                <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
-                  <div className="flex items-start gap-4">
-                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-1 truncate">{file.fileName}</h3>
-                      <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleViewFile(file)}
-                          className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
-                          title="View file"
-                        >
-                          <Eye size={14} />
-                          View
-                        </button>
-                        <button
-                          onClick={() => handleDownloadFile(file)}
-                          className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
-                          title="Download file"
-                        >
-                          <Download size={14} />
-                          Download
-                        </button>
-                      </div>
-                    </div>
+        {/* Supporting Documents - SETI, GAD, MOC */}
+        {proposal.files && proposal.files.length > 0 && (() => {
+          const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
+          const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
+          const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
+          const otherFiles = proposal.files.filter(f => 
+            f.fileType !== 'seti_scorecard' && 
+            f.fileType !== 'gad_certificate' && 
+            f.fileType !== 'matrix_compliance'
+          );
+
+          const renderFileCard = (file) => (
+            <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
+              <div className="flex items-start gap-4">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm font-semibold text-gray-900 mb-1 truncate">{file.fileName}</h3>
+                  <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
+                  <div className="flex items-center gap-2">
+                    <button onClick={() => handleViewFile(file)} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200" title="View file">
+                      <Eye size={14} />
+                      View
+                    </button>
+                    <button onClick={() => handleDownloadFile(file)} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200" title="Download file">
+                      <Download size={14} />
+                      Download
+                    </button>
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
-          </div>
-        )}
+          );
+
+          return (
+            <>
+              {(setiFiles.length > 0 || gadFiles.length > 0 || mocFiles.length > 0) && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300">
+                  <h2 className="text-2xl font-bold text-gray-900 mb-6">Supporting Documents</h2>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {setiFiles.length > 0 && (
+                      <div>
+                        <div className="mb-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="font-bold text-blue-900">SETI</h3>
+                            <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{setiFiles.length} file{setiFiles.length !== 1 ? "s" : ""}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">Science and Engineering Technology Initiative</p>
+                        </div>
+                        <div className="space-y-2">{setiFiles.map(renderFileCard)}</div>
+                      </div>
+                    )}
+                    {gadFiles.length > 0 && (
+                      <div>
+                        <div className="mb-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="font-bold text-purple-900">GAD</h3>
+                            <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{gadFiles.length} file{gadFiles.length !== 1 ? "s" : ""}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">Gender and Development</p>
+                        </div>
+                        <div className="space-y-2">{gadFiles.map(renderFileCard)}</div>
+                      </div>
+                    )}
+                    {mocFiles.length > 0 && (
+                      <div>
+                        <div className="mb-4">
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="font-bold text-green-900">MOC</h3>
+                            <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{mocFiles.length} file{mocFiles.length !== 1 ? "s" : ""}</span>
+                          </div>
+                          <p className="text-xs text-gray-600">Matrix of Compliance</p>
+                        </div>
+                        <div className="space-y-2">{mocFiles.map(renderFileCard)}</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              {otherFiles.length > 0 && (
+                <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 hover:shadow-xl transition-shadow duration-300">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg></div>
+                    <div><h2 className="text-2xl font-bold text-gray-900">Other Supporting Documents</h2><p className="text-sm text-gray-600">Additional files and attachments</p></div>
+                    <span className="ml-auto bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">{otherFiles.length} file{otherFiles.length !== 1 ? "s" : ""}</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{otherFiles.map(renderFileCard)}</div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
         {/* Enhanced File Viewer Modal */}
         {fileViewerOpen && viewingFile && (

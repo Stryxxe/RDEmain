@@ -123,11 +123,6 @@ const UserFormFixed = ({ user, onClose }) => {
             newErrors.role = "Role is required";
         }
 
-        // Department is required
-        if (!formData.department || !formData.department.trim()) {
-            newErrors.department = "Department is required";
-        }
-
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
@@ -395,7 +390,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                        Department *
+                                        Department
                                     </label>
                                     <div className="relative">
                                         <FiHome

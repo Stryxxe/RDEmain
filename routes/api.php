@@ -26,6 +26,16 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->midd
 use App\Models\Department;
 use App\Models\ResearchCenter;
 use App\Models\Setting;
+use App\Models\Status;
+
+// Get all statuses
+Route::get('/statuses', function () {
+    return response()->json([
+        'success' => true,
+        'data' => Status::all()
+    ]);
+})->middleware('auth:web');
+
 // Get upload settings (max file size) - public endpoint for all authenticated users
 Route::get('/upload-settings', function () {
     $allowedTypes = Setting::get('allowed_file_types', '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg');
@@ -1057,3 +1067,21 @@ Route::middleware('auth:web')->group(function () {
     Route::put('/project-roles/{id}', [ProjectRoleController::class, 'update']);
     Route::delete('/project-roles/{id}', [ProjectRoleController::class, 'destroy']);
 });
+
+// Timeline Stages API
+use App\Http\Controllers\TimelineStageController;
+
+// Public endpoint for active timeline stages (used by all users)
+Route::middleware('auth:web')->get('/timeline-stages/active', [TimelineStageController::class, 'getActiveStages']);
+
+// Admin-only routes for managing timeline stages
+Route::middleware(['auth:web'])->prefix('timeline-stages')->group(function () {
+    Route::post('/update-order', [TimelineStageController::class, 'updateOrder']);
+    Route::post('/{id}/toggle', [TimelineStageController::class, 'toggleActive']);
+});
+
+// Activity Logging API
+use App\Http\Controllers\ActivityController;
+
+Route::middleware('auth:web')->get('/activities/recent', [ActivityController::class, 'getRecentActivities']);
+Route::middleware('auth:web')->get('/activities/dashboard', [ActivityController::class, 'getDashboardActivities']);

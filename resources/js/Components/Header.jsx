@@ -5,6 +5,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import { useMessages } from '../contexts/MessageContext';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import usepLogo from '../../assets/logo.png';
+import ConfirmLogout from './ConfirmLogout';
 
 const Header = () => {
   const { logout } = useAuth();
@@ -12,6 +13,7 @@ const Header = () => {
   const { unreadCount: messageUnreadCount } = useMessages();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
 
@@ -326,7 +328,7 @@ const Header = () => {
               <button
                 onClick={() => {
                   setShowProfileDropdown(false);
-                  logout();
+                  setShowLogoutConfirm(true);
                 }}
                 className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
               >
@@ -337,6 +339,16 @@ const Header = () => {
           )}
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmLogout
+        isOpen={showLogoutConfirm}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          logout();
+        }}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </header>
   );
 };

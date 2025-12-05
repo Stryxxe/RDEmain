@@ -92,7 +92,7 @@ const DragDropUpload = ({
   return (
     <div className="w-full">
       <div
-        className={`border-2 border-dashed rounded-lg p-10 text-center cursor-pointer transition-all duration-200 ${
+        className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer transition-all duration-200 ${
           file
             ? 'border-green-300 bg-green-50'
             : isDragOver
@@ -106,41 +106,41 @@ const DragDropUpload = ({
       >
         {file ? (
           <div className="flex flex-col items-center">
-            <div className="relative mb-4">
-              <FileIcon fileName={file.name} size="w-16 h-16" />
+            <div className="relative mb-2">
+              <FileIcon fileName={file.name} size="w-10 h-10" />
               <button
                 onClick={handleRemoveFile}
-                className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
               >
-                <X className="w-4 h-4" />
+                <X className="w-3 h-3" />
               </button>
             </div>
-            <p className="text-green-600 text-base font-medium mb-1">
+            <p className="text-green-600 text-sm font-medium mb-1">
               File Selected
             </p>
-            <p className="text-gray-600 text-sm font-medium mb-1">
+            <p className="text-gray-600 text-xs font-medium mb-1 truncate max-w-full px-2">
               {file.name}
             </p>
             <p className="text-gray-500 text-xs">
               {(file.size / 1024 / 1024).toFixed(2)} MB
             </p>
-            <p className="text-gray-400 text-xs mt-2">
-              Click to change file
+            <p className="text-gray-400 text-xs mt-1">
+              Click to change
             </p>
           </div>
         ) : (
           <div>
-            <div className="relative inline-block mb-4 text-gray-400">
-              <Upload className="w-12 h-12" />
-              <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white rounded-full flex items-center justify-center">
-                <Plus className="w-3 h-3" />
+            <div className="relative inline-block mb-2 text-gray-400">
+              <Upload className="w-8 h-8" />
+              <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 text-white rounded-full flex items-center justify-center">
+                <Plus className="w-2.5 h-2.5" />
               </div>
             </div>
             
-            <p className="text-red-600 text-base font-medium mb-2">
+            <p className="text-red-600 text-sm font-medium mb-1">
               Click to upload or drag and drop
             </p>
-            <p className="text-gray-500 text-sm">
+            <p className="text-gray-500 text-xs">
               {acceptedTypes} (Max size: {maxSize})
             </p>
           </div>

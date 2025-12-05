@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TimelineStageController;
 use Inertia\Inertia;
 
 // Expose CSRF helpers (Inertia handles CSRF automatically, but this can be useful for manual API calls)
@@ -76,6 +77,9 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('RoleViews/Dashboards/AdminDashboard'))->name('dashboard');
         Route::get('/user-management', fn() => Inertia::render('RoleViews/Admin/UserManagement'))->name('user-management');
         Route::get('/system-settings', fn() => Inertia::render('RoleViews/Admin/SystemSettings'))->name('system-settings');
+        Route::post('/timeline-stages', [TimelineStageController::class, 'store'])->name('timeline-stages.store');
+        Route::put('/timeline-stages/{id}', [TimelineStageController::class, 'update'])->name('timeline-stages.update');
+        Route::delete('/timeline-stages/{id}', [TimelineStageController::class, 'destroy'])->name('timeline-stages.destroy');
         Route::get('/profile', fn() => Inertia::render('RoleViews/Admin/Profile'))->name('profile');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');
         Route::get('/messages', fn() => Inertia::render('Messages'))->name('messages');

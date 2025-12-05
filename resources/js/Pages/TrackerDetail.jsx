@@ -21,9 +21,36 @@ const TrackerDetail = ({ id: propId }) => {
         terminalReport: null,
         evidence6Ps: null,
     });
+    const [timelineStages, setTimelineStages] = useState([]);
 
     // Get user from Inertia props (more reliable than context on initial load)
     const currentUser = user || props?.auth?.user;
+
+    // Fetch timeline stages from API
+    useEffect(() => {
+        const fetchTimelineStages = async () => {
+            try {
+                const response = await fetch('/api/timeline-stages/active', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.stages) {
+                        setTimelineStages(data.stages);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching timeline stages:', error);
+            }
+        };
+
+        fetchTimelineStages();
+    }, []);
 
     // Validate authentication on mount
     useEffect(() => {
@@ -110,7 +137,7 @@ const TrackerDetail = ({ id: propId }) => {
     };
 
     const getTimelineStages = () => {
-        if (!proposal) return [];
+        if (!proposal || timelineStages.length === 0) return [];
 
         const statusId = proposal.statusID;
 
@@ -122,84 +149,44 @@ const TrackerDetail = ({ id: propId }) => {
             (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
         );
 
-        // Define all possible timeline stages (matching other components)
-        const allStages = [
-            { id: 0, name: "Proposal Submitted", status: "pending" },
-            { id: 1, name: "College Endorsement", status: "pending" },
-            { id: 2, name: "R&D Division", status: "pending" },
-            { id: 3, name: "Proposal Review", status: "pending" },
-            { id: 4, name: "Ethics Review", status: "pending" },
-            { id: 5, name: "OVPRDE", status: "pending" },
-            { id: 6, name: "President", status: "pending" },
-            { id: 7, name: "OSOURU", status: "pending" },
-            { id: 8, name: "Implementation", status: "pending" },
-            { id: 9, name: "Monitoring", status: "pending" },
-            { id: 10, name: "For Completion", status: "pending" },
-        ];
+        // Map database timeline stages to display format
+        const allStages = timelineStages.map((stage, index) => ({
+            id: stage.timelineStageID,
+            name: stage.stageName,
+            description: stage.stageDescription,
+            status: "pending",
+            color: stage.color || 'blue',
+            statusName: stage.status?.statusName || null,
+            statusID: stage.statusID
+        }));
 
-        // Update stages based on actual proposal status (matching StatusSeeder IDs)
-        switch (statusId) {
-            case 1: // Under Review - Proposal submitted, waiting for College Endorsement
-                allStages[0].status = "completed"; // Proposal Submitted
-                // Check if CM has endorsed to determine College Endorsement status
-                if (cmEndorsement) {
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
-                } else {
-                    allStages[1].status = "current"; // College Endorsement - current
+        if (allStages.length === 0) return [];
+
+        // Determine which stage is current based on proposal's status
+        const currentStageIndex = allStages.findIndex(
+            (stage) => stage.statusID === statusId
+        );
+
+        // Update stages based on current proposal status
+        allStages.forEach((stage, index) => {
+            if (currentStageIndex === -1) {
+                // No matching status, mark first stage as current
+                if (index === 0) {
+                    stage.status = "current";
                 }
-                break;
-            case 2: // Approved - All stages up to Implementation completed, Implementation current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "current"; // Implementation
-                break;
-            case 3: // Rejected - College Endorsement completed, R&D Division rejected
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "rejected"; // R&D Division
-                break;
-            case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "current"; // Monitoring
-                break;
-            case 5: // Completed - All stages completed
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "completed"; // Monitoring
-                allStages[10].status = "completed"; // For Completion
-                break;
-            default:
-                // Check if CM has endorsed to determine College Endorsement status
-                if (cmEndorsement) {
-                    allStages[0].status = "completed"; // Proposal Submitted
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
-                } else {
-                    allStages[1].status = "current"; // College Endorsement
+            } else if (index < currentStageIndex) {
+                // Stages before current are completed
+                stage.status = "completed";
+            } else if (index === currentStageIndex) {
+                // Current stage
+                stage.status = "current";
+                // Check if proposal is rejected
+                if (proposal.status?.statusName?.toLowerCase().includes('reject')) {
+                    stage.status = "rejected";
                 }
-        }
+            }
+            // Remaining stages stay as "pending"
+        });
 
         return allStages;
     };
@@ -788,7 +775,7 @@ const TrackerDetail = ({ id: propId }) => {
                             const allAuthors = submitter ? [submitter, ...others] : proposal.proponents;
                             
                             return (
-                                <div className="space-y-2">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {allAuthors.map(p => (
                                         <div key={p.userID} className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-50 border border-red-200">
                                             <div className="flex flex-col">
@@ -1124,142 +1111,97 @@ const TrackerDetail = ({ id: propId }) => {
                 })()}
             </div>
 
-            {/* Attached Files Section */}
-            {proposal.files && proposal.files.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                            <svg
-                                className="w-5 h-5 text-orange-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                />
-                            </svg>
-                        </div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                            Attached Files
-                        </h2>
-                        <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
-                            {proposal.files.length} file
-                            {proposal.files.length !== 1 ? "s" : ""}
-                        </span>
-                    </div>
+            {/* Supporting Documents - SETI, GAD, MOC */}
+            {proposal.files && proposal.files.length > 0 && (() => {
+                const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
+                const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
+                const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
+                // Other files exclude only SETI/GAD/MOC - include report and supporting_document
+                const otherFiles = proposal.files.filter(f => 
+                  f.fileType !== 'seti_scorecard' && 
+                  f.fileType !== 'gad_certificate' && 
+                  f.fileType !== 'matrix_compliance'
+                );
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {proposal.files.map((file) => (
-                            <div
-                                key={file.fileID}
-                                className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
-                            >
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                        <svg
-                                            className="w-6 h-6 text-red-600"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">
-                                            {file.fileName}
-                                        </h3>
-                                        <p className="text-xs text-gray-500 mb-3">
-                                            {file.formattedSize ||
-                                                `${Math.round(
-                                                    file.fileSize / 1024
-                                                )} KB`}
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() =>
-                                                    window.open(
-                                                        `/storage/${file.filePath}`,
-                                                        "_blank"
-                                                    )
-                                                }
-                                                className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
-                                                title="View file"
-                                            >
-                                                <svg
-                                                    className="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                    />
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                                    />
-                                                </svg>
-                                                View
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    const link =
-                                                        document.createElement(
-                                                            "a"
-                                                        );
-                                                    link.href = `/storage/${file.filePath}`;
-                                                    link.download =
-                                                        file.fileName;
-                                                    link.target = "_blank";
-                                                    document.body.appendChild(
-                                                        link
-                                                    );
-                                                    link.click();
-                                                    document.body.removeChild(
-                                                        link
-                                                    );
-                                                }}
-                                                className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
-                                                title="Download file"
-                                            >
-                                                <svg
-                                                    className="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                    />
-                                                </svg>
-                                                Download
-                                            </button>
-                                        </div>
-                                    </div>
+                const renderFileCard = (file) => (
+                    <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
+                        <div className="flex items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">{file.fileName}</h3>
+                                <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => window.open(`/storage/${file.filePath}`, "_blank")} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200" title="View file">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        View
+                                    </button>
+                                    <button onClick={() => { const link = document.createElement("a"); link.href = `/storage/${file.filePath}`; link.download = file.fileName; link.target = "_blank"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200" title="Download file">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        Download
+                                    </button>
                                 </div>
                             </div>
-                        ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+
+                return (
+                    <>
+                        {(setiFiles.length > 0 || gadFiles.length > 0 || mocFiles.length > 0) && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
+                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Supporting Documents</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {setiFiles.length > 0 && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h3 className="font-bold text-blue-900">SETI</h3>
+                                                    <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{setiFiles.length} file{setiFiles.length !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-600">Science and Engineering Technology Initiative</p>
+                                            </div>
+                                            <div className="space-y-2">{setiFiles.map(renderFileCard)}</div>
+                                        </div>
+                                    )}
+                                    {gadFiles.length > 0 && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h3 className="font-bold text-purple-900">GAD</h3>
+                                                    <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{gadFiles.length} file{gadFiles.length !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-600">Gender and Development</p>
+                                            </div>
+                                            <div className="space-y-2">{gadFiles.map(renderFileCard)}</div>
+                                        </div>
+                                    )}
+                                    {mocFiles.length > 0 && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h3 className="font-bold text-green-900">MOC</h3>
+                                                    <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{mocFiles.length} file{mocFiles.length !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-600">Matrix of Compliance</p>
+                                            </div>
+                                            <div className="space-y-2">{mocFiles.map(renderFileCard)}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {otherFiles.length > 0 && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg></div>
+                                    <div><h2 className="text-xl sm:text-2xl font-bold text-gray-900">Other Supporting Documents</h2><p className="text-sm text-gray-600">Additional files and attachments</p></div>
+                                    <span className="ml-auto bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">{otherFiles.length} file{otherFiles.length !== 1 ? "s" : ""}</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{otherFiles.map(renderFileCard)}</div>
+                            </div>
+                        )}
+                    </>
+                );
+            })()}
 
             {/* Upload Modal */}
             {showUploadModal && (

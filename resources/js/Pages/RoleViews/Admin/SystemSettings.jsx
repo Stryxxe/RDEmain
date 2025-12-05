@@ -14,6 +14,7 @@ import {
 } from "react-icons/fi";
 import AdminLayout from "../../../Components/Layouts/AdminLayout";
 import SimpleAlert from "../../../Components/SimpleAlert";
+import ConfirmDeleteDialog from "../../../Components/ConfirmDeleteDialog";
 import axios from "axios";
 
 const SystemSettings = () => {
@@ -76,8 +77,27 @@ const SystemSettings = () => {
     const [roleForm, setRoleForm] = useState({ id: null, roleName: "", isActive: true });
     const [roleErrors, setRoleErrors] = useState("");
     const [editingRole, setEditingRole] = useState(null);
+    
+    // Timeline Stages
+    const [timelineStages, setTimelineStages] = useState([]);
+    const [stagesLoading, setStagesLoading] = useState(false);
+    const [showStageModal, setShowStageModal] = useState(false);
+    const [editingStage, setEditingStage] = useState(null);
+    const [stageForm, setStageForm] = useState({
+        stageName: '',
+        stageDescription: '',
+        orderIndex: 1,
+        statusID: '',
+        isActive: true,
+        color: 'blue'
+    });
+    const [statuses, setStatuses] = useState([]);
+    
     // UI feedback
     const [alertState, setAlertState] = useState({ visible: false, type: 'success', title: '', message: '' });
+    const [savingStatus, setSavingStatus] = useState(''); // '', 'saving', 'saved'
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [deleteStageId, setDeleteStageId] = useState(null);
 
     // Auto-hide alerts after 3 seconds
     useEffect(() => {
@@ -87,6 +107,54 @@ const SystemSettings = () => {
         }, 3000);
         return () => clearTimeout(t);
     }, [alertState.visible]);
+
+    // Auto-save settings with debounce
+    useEffect(() => {
+        const autoSave = async () => {
+            if (!settings.sessionTimeout || !settings.maxFileSize) return;
+            
+            setSavingStatus('saving');
+            try {
+                const sessionTimeoutNum = parseInt(settings.sessionTimeout, 10);
+                const logRetentionNum = parseInt(settings.logRetention, 10);
+                const maxFileSizeNum = parseInt(settings.maxFileSize, 10);
+                
+                if (isNaN(sessionTimeoutNum) || sessionTimeoutNum < 5 ||
+                    isNaN(logRetentionNum) || logRetentionNum < 7 ||
+                    isNaN(maxFileSizeNum) || maxFileSizeNum < 1 || maxFileSizeNum > 20) {
+                    setSavingStatus('');
+                    return;
+                }
+                
+                await axiosInstance.put('/settings', {
+                    settings: {
+                        systemName: settings.systemName,
+                        systemVersion: settings.systemVersion,
+                        sessionTimeout: sessionTimeoutNum,
+                        logRetention: logRetentionNum,
+                        maxFileSize: maxFileSizeNum,
+                        backupFrequency: settings.backupFrequency,
+                        allowDepartmentCreation: !!settings.allowDepartmentCreation,
+                        requireDepartmentAssignment: !!settings.requireDepartmentAssignment,
+                        allowed_file_types: settings.allowedFileTypes,
+                        max_file_size: maxFileSizeNum,
+                    }
+                }, {
+                    headers: { Accept: 'application/json' },
+                    withCredentials: true,
+                });
+                
+                setSavingStatus('saved');
+                setTimeout(() => setSavingStatus(''), 2000);
+            } catch (error) {
+                console.error('Auto-save failed:', error);
+                setSavingStatus('');
+            }
+        };
+
+        const timer = setTimeout(autoSave, 1000);
+        return () => clearTimeout(timer);
+    }, [settings.sessionTimeout, settings.logRetention, settings.maxFileSize, settings.allowedFileTypes, settings.backupFrequency, settings.systemName, settings.systemVersion, settings.allowDepartmentCreation, settings.requireDepartmentAssignment]);
 
     const FILE_TYPE_PRESETS = [
         { key: 'docs', label: 'Documents (PDF, DOC, DOCX)', value: '.pdf,.doc,.docx' },
@@ -655,40 +723,191 @@ const SystemSettings = () => {
         }
     };
 
+    // Timeline Stages CRUD handlers
+    const fetchTimelineStages = async () => {
+        try {
+            setStagesLoading(true);
+            const [stagesRes, statusesRes] = await Promise.all([
+                axiosInstance.get("/timeline-stages/active", {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }),
+                axiosInstance.get("/statuses", {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                })
+            ]);
+            const stagesList = stagesRes?.data?.stages || [];
+            const statusesList = statusesRes?.data?.data || statusesRes?.data || [];
+            setTimelineStages(Array.isArray(stagesList) ? stagesList : []);
+            setStatuses(Array.isArray(statusesList) ? statusesList : []);
+        } catch (e) {
+            console.error("Failed to load timeline stages", e);
+            setTimelineStages([]);
+            setStatuses([]);
+        } finally {
+            setStagesLoading(false);
+        }
+    };
+
+    const resetStageForm = () => {
+        setStageForm({
+            stageName: '',
+            stageDescription: '',
+            orderIndex: timelineStages.length + 1,
+            statusID: '',
+            isActive: true,
+            color: 'blue'
+        });
+        setEditingStage(null);
+    };
+
+    const handleEditStage = (stage) => {
+        setEditingStage(stage.stageID);
+        setStageForm({
+            stageName: stage.stageName,
+            stageDescription: stage.stageDescription || '',
+            orderIndex: stage.orderIndex,
+            statusID: stage.statusID || '',
+            isActive: stage.isActive,
+            color: stage.color || 'blue'
+        });
+        setShowStageModal(true);
+    };
+
+    const handleSubmitStage = async (e) => {
+        e.preventDefault();
+        if (!stageForm.stageName.trim()) {
+            setAlertState({ visible: true, type: 'error', title: 'Error', message: 'Stage name is required' });
+            return;
+        }
+
+        try {
+            setStagesLoading(true);
+            if (editingStage) {
+                router.put(`/admin/timeline-stages/${editingStage}`, stageForm, {
+                    onSuccess: () => {
+                        fetchTimelineStages();
+                        setShowStageModal(false);
+                        resetStageForm();
+                        setAlertState({ visible: true, type: 'success', title: 'Updated', message: 'Timeline stage updated successfully' });
+                    }
+                });
+            } else {
+                router.post('/admin/timeline-stages', stageForm, {
+                    onSuccess: () => {
+                        fetchTimelineStages();
+                        setShowStageModal(false);
+                        resetStageForm();
+                        setAlertState({ visible: true, type: 'success', title: 'Created', message: 'Timeline stage created successfully' });
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Failed to save timeline stage", e);
+            setAlertState({ visible: true, type: 'error', title: 'Error', message: 'Failed to save timeline stage' });
+        } finally {
+            setStagesLoading(false);
+        }
+    };
+
+    const moveStage = async (index, direction) => {
+        const newIndex = direction === 'up' ? index - 1 : index + 1;
+        if (newIndex < 0 || newIndex >= timelineStages.length) return;
+
+        const items = Array.from(timelineStages);
+        const [movedItem] = items.splice(index, 1);
+        items.splice(newIndex, 0, movedItem);
+
+        const updatedStages = items.map((stage, idx) => ({
+            ...stage,
+            orderIndex: idx + 1
+        }));
+
+        setTimelineStages(updatedStages);
+
+        try {
+            await axiosInstance.post('/timeline-stages/update-order', {
+                stages: updatedStages.map(s => ({
+                    stageID: s.stageID,
+                    orderIndex: s.orderIndex
+                }))
+            });
+        } catch (error) {
+            console.error('Failed to update order:', error);
+            fetchTimelineStages();
+        }
+    };
+
+    const handleToggleStageActive = async (stageID) => {
+        try {
+            await axiosInstance.post(`/timeline-stages/${stageID}/toggle`);
+            await fetchTimelineStages();
+        } catch (error) {
+            console.error('Failed to toggle stage:', error);
+        }
+    };
+
+    const handleDeleteStage = async (stageID) => {
+        setDeleteStageId(stageID);
+        setShowDeleteConfirm(true);
+    };
+
+    const confirmDeleteStage = async () => {
+        if (!deleteStageId) return;
+        
+        try {
+            router.delete(`/admin/timeline-stages/${deleteStageId}`, {
+                onSuccess: () => {
+                    setShowDeleteConfirm(false);
+                    setDeleteStageId(null);
+                    fetchTimelineStages();
+                }
+            });
+        } catch (error) {
+            console.error('Failed to delete stage:', error);
+            setShowDeleteConfirm(false);
+            setDeleteStageId(null);
+        }
+    };
+
     useEffect(() => {
         fetchProjectRoles();
+        fetchTimelineStages();
     }, []);
+
+    const colors = ['gray', 'blue', 'green', 'red', 'yellow', 'purple', 'indigo', 'pink', 'orange', 'cyan'];
 
     return (
         <AdminLayout>
             <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">
-                            System Settings
-                        </h1>
-                        <p className="mt-1 text-sm text-gray-600">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        System Settings
+                    </h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-gray-600">
                             Configure system-wide settings and preferences
                         </p>
+                        {savingStatus === 'saving' && (
+                            <span className="text-xs text-blue-600 flex items-center gap-1">
+                                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Saving...
+                            </span>
+                        )}
+                        {savingStatus === 'saved' && (
+                            <span className="text-xs text-green-600 flex items-center gap-1">
+                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                Saved
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div className="flex space-x-3">
-                    <button
-                        onClick={handleReset}
-                        className="admin-button-secondary flex items-center space-x-2"
-                    >
-                        <FiRefreshCw className="w-4 h-4" />
-                        <span>Reset</span>
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={loading}
-                        className="admin-button-primary flex items-center space-x-2"
-                    >
-                        <FiSave className="w-4 h-4" />
-                        <span>{loading ? "Saving..." : "Save Changes"}</span>
-                    </button>
-                </div>
-            </div>
 
                 <div className="admin-card">
                                 <div className="admin-card">
@@ -987,6 +1206,127 @@ const SystemSettings = () => {
                                 <p className="text-sm text-blue-700 mt-1">
                                     When proponents add team members to their proposals, they can assign these roles to define each member's contribution (e.g., Principal Investigator, Co-Investigator, Research Assistant).
                                 </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Timeline Stages */}
+                <div className="admin-card lg:col-span-2" data-timeline-stages>
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-lg font-medium text-gray-900 flex items-center">
+                            <svg className="w-5 h-5 mr-2 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            Timeline Stages
+                        </h3>
+                        <button
+                            onClick={() => {
+                                resetStageForm();
+                                setShowStageModal(true);
+                            }}
+                            className="admin-button-primary text-sm"
+                        >
+                            + Add Stage
+                        </button>
+                    </div>
+
+                    <div className="space-y-6">
+                        <p className="text-sm text-gray-600">
+                            Manage the project timeline stages displayed to users. Stages show the progress flow from submission to completion.
+                        </p>
+
+                        {stagesLoading ? (
+                            <div className="text-center py-8">
+                                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+                                <p className="text-sm text-gray-500 mt-2">Loading stages...</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {timelineStages.map((stage, index) => (
+                                    <div key={stage.stageID} className="p-4 border rounded-lg bg-gray-50 border-gray-200">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-4 flex-1">
+                                                <div className="flex flex-col gap-1">
+                                                    <button
+                                                        onClick={() => moveStage(index, 'up')}
+                                                        disabled={index === 0}
+                                                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        title="Move up"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveStage(index, 'down')}
+                                                        disabled={index === timelineStages.length - 1}
+                                                        className="text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                        title="Move down"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                                        </svg>
+                                                    </button>
+                                                </div>
+                                                
+                                                <span className="font-mono text-sm text-gray-500 w-8">#{stage.orderIndex}</span>
+                                                
+                                                <div className={`w-4 h-4 rounded-full bg-${stage.color}-500`} title={stage.color}></div>
+                                                
+                                                <div className="flex-1">
+                                                    <h4 className="font-semibold text-gray-900">{stage.stageName}</h4>
+                                                    <p className="text-sm text-gray-600">{stage.stageDescription}</p>
+                                                    {stage.status && (
+                                                        <span className="inline-block mt-1 text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                                                            {stage.status.statusName}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleToggleStageActive(stage.stageID)}
+                                                    className={`px-3 py-1 rounded text-xs font-medium ${
+                                                        stage.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'
+                                                    }`}
+                                                >
+                                                    {stage.isActive ? 'Active' : 'Inactive'}
+                                                </button>
+                                                <button
+                                                    onClick={() => handleEditStage(stage)}
+                                                    className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-sm hover:bg-blue-200"
+                                                >
+                                                    Edit
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteStage(stage.stageID)}
+                                                    className="px-3 py-1 bg-red-100 text-red-700 rounded text-sm hover:bg-red-200"
+                                                >
+                                                    Delete
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {timelineStages.length === 0 && (
+                                    <div className="text-center py-8 text-gray-500">
+                                        No timeline stages yet. Add one above.
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                            <div className="flex">
+                                <FiBell className="w-5 h-5 text-blue-400" />
+                                <div className="ml-3">
+                                    <h4 className="text-sm font-medium text-blue-800">How Timeline Stages Work</h4>
+                                    <p className="text-sm text-blue-700 mt-1">
+                                        Timeline stages show users the progression of their proposals from submission to completion. You can add, reorder, and customize stages. Changes appear immediately in user views with automatic progress calculations.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1450,6 +1790,134 @@ const SystemSettings = () => {
                 </div>
             </div>
         )}
+
+        {/* Timeline Stage Modal */}
+        {showStageModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-lg shadow-xl p-6 max-w-2xl w-full">
+                    <h3 className="text-xl font-bold mb-4">
+                        {editingStage ? 'Edit Timeline Stage' : 'Add New Timeline Stage'}
+                    </h3>
+                    <form onSubmit={handleSubmitStage} className="space-y-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Stage Name *
+                            </label>
+                            <input
+                                type="text"
+                                value={stageForm.stageName}
+                                onChange={(e) => setStageForm({ ...stageForm, stageName: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                                placeholder="e.g., College Endorsement"
+                                required
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Description
+                            </label>
+                            <textarea
+                                value={stageForm.stageDescription}
+                                onChange={(e) => setStageForm({ ...stageForm, stageDescription: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                                rows={3}
+                                placeholder="Brief description of this stage"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Order Index *
+                                </label>
+                                <input
+                                    type="number"
+                                    value={stageForm.orderIndex}
+                                    onChange={(e) => setStageForm({ ...stageForm, orderIndex: parseInt(e.target.value) })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                                    required
+                                    min="1"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Associated Status
+                                </label>
+                                <select
+                                    value={stageForm.statusID}
+                                    onChange={(e) => setStageForm({ ...stageForm, statusID: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
+                                >
+                                    <option value="">None</option>
+                                    {statuses.map(status => (
+                                        <option key={status.statusID} value={status.statusID}>
+                                            {status.statusName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                Color Theme
+                            </label>
+                            <div className="flex flex-wrap gap-2">
+                                {colors.map(color => (
+                                    <button
+                                        key={color}
+                                        type="button"
+                                        onClick={() => setStageForm({ ...stageForm, color })}
+                                        className={`w-8 h-8 rounded-full bg-${color}-500 ${
+                                            stageForm.color === color ? 'ring-4 ring-offset-2 ring-red-500' : ''
+                                        }`}
+                                        title={color}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={stageForm.isActive}
+                                onChange={(e) => setStageForm({ ...stageForm, isActive: e.target.checked })}
+                                className="rounded"
+                            />
+                            <label className="text-sm text-gray-700">Active (visible to users)</label>
+                        </div>
+                        <div className="flex gap-2 justify-end pt-4">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setShowStageModal(false);
+                                    resetStageForm();
+                                }}
+                                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={stagesLoading}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                            >
+                                {stagesLoading ? 'Saving...' : (editingStage ? 'Update' : 'Create')} Stage
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        )}
+
+        {/* Delete Confirmation Dialog */}
+        <ConfirmDeleteDialog
+            isOpen={showDeleteConfirm}
+            title="Delete Timeline Stage?"
+            message="Are you sure you want to delete this timeline stage? This action cannot be undone."
+            onConfirm={confirmDeleteStage}
+            onCancel={() => {
+                setShowDeleteConfirm(false);
+                setDeleteStageId(null);
+            }}
+        />
         </AdminLayout>
     );
 };

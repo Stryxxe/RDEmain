@@ -59,6 +59,9 @@ const SubmitPage = () => {
         dostSPs: [],
         sustainableDevelopmentGoals: [],
         proposedBudget: "",
+        setiFile: null,
+        gadFile: null,
+        matrixFile: null,
         supportingDocuments: [],
         proponents: [],
     });
@@ -339,8 +342,11 @@ const SubmitPage = () => {
                     dostSPs: [],
                     sustainableDevelopmentGoals: [],
                     proposedBudget: "",
-                        supportingDocuments: [],
-                        proponents: [],
+                    setiFile: null,
+                    gadFile: null,
+                    matrixFile: null,
+                    supportingDocuments: [],
+                    proponents: [],
                 });
                 setSubmitterProjectRoleID("");
 
@@ -625,14 +631,57 @@ const SubmitPage = () => {
                     />
                 </div>
 
+                {/* Required Documents - Horizontal Layout */}
+                <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* SETI Scorecard */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            SETI Scorecard
+                        </label>
+                        <DragDropUpload
+                            selectedFile={formData.setiFile}
+                            onFileSelect={(file) => setFormData(prev => ({ ...prev, setiFile: file }))}
+                            maxSize={`${maxFileSizeMB}MB`}
+                            acceptedTypes="PDF, DOC, DOCX"
+                        />
+                    </div>
+
+                    {/* GAD Certificate */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            GAD Certificate
+                        </label>
+                        <DragDropUpload
+                            selectedFile={formData.gadFile}
+                            onFileSelect={(file) => setFormData(prev => ({ ...prev, gadFile: file }))}
+                            maxSize={`${maxFileSizeMB}MB`}
+                            acceptedTypes="PDF, DOC, DOCX"
+                        />
+                    </div>
+
+                    {/* Matrix of Compliance */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Matrix of Compliance
+                        </label>
+                        <DragDropUpload
+                            selectedFile={formData.matrixFile}
+                            onFileSelect={(file) => setFormData(prev => ({ ...prev, matrixFile: file }))}
+                            maxSize={`${maxFileSizeMB}MB`}
+                            acceptedTypes="PDF, DOC, DOCX"
+                        />
+                    </div>
+                </div>
+
+                {/* Other Supporting Documents */}
                 <div className="mb-8">
                     <MultiFileUpload
                         files={formData.supportingDocuments}
                         onChange={handleSupportingDocsChange}
                         maxFiles={10}
                         maxSizeMB={maxFileSizeMB}
-                        label="Supporting Documents"
-                        description="Attach SETI Scorecards, GAD Certificates, matrices, and any other approvals in one place. Accepted formats: PDF, DOC, DOCX."
+                        label="Other Supporting Documents (Optional)"
+                        description="Attach any other approvals or supporting files. Accepted formats: PDF, DOC, DOCX."
                     />
                 </div>
 

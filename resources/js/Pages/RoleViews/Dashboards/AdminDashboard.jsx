@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { usePage } from '@inertiajs/react';
-import { FiUsers, FiUserCheck, FiUserX, FiClock, FiFileText, FiSettings } from 'react-icons/fi';
+import { FiUsers, FiUserCheck, FiUserX, FiClock, FiFileText, FiSettings, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
 import AdminLayout from '../../../Components/Layouts/AdminLayout';
+import axios from 'axios';
 
 const StatCard = ({ title, value, change, icon: Icon, color = 'blue' }) => {
   const colorClasses = {
@@ -31,26 +32,89 @@ const StatCard = ({ title, value, change, icon: Icon, color = 'blue' }) => {
   );
 };
 
-const RecentActivity = ({ activities }) => (
-  <div className="admin-card">
-    <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
-    <div className="space-y-4">
-      {activities.map((activity, index) => (
-        <div key={index} className="flex items-start space-x-3">
-          <div className="flex-shrink-0">
-            <div className={`w-2 h-2 rounded-full mt-2 ${
-              activity.type === 'user' ? 'bg-blue-500' : activity.type === 'system' ? 'bg-green-500' : 'bg-yellow-500'
-            }`} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-900">{activity.description}</p>
-            <p className="text-xs text-gray-500">{activity.time}</p>
+const RecentActivity = ({ activities, loading, currentPage, totalPages, onPageChange }) => {
+  const getActionColor = (action) => {
+    switch (action) {
+      case 'create':
+        return 'bg-green-100 text-green-700';
+      case 'update':
+        return 'bg-blue-100 text-blue-700';
+      case 'delete':
+        return 'bg-red-100 text-red-700';
+      default:
+        return 'bg-gray-100 text-gray-700';
+    }
+  };
+
+  return (
+    <div className="admin-card">
+      <h3 className="text-lg font-medium text-gray-900 mb-4">Recent Activity</h3>
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="w-6 h-6 border-3 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-2"></div>
+            <p className="text-sm text-gray-500">Loading activities...</p>
           </div>
         </div>
-      ))}
+      ) : activities.length === 0 ? (
+        <div className="text-center py-8">
+          <p className="text-sm text-gray-500">No activities recorded yet</p>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-3 mb-4">
+            {activities.map((activity) => (
+              <div key={activity.activityID} className="pb-3 border-b border-gray-100 last:border-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getActionColor(activity.action)}`}>
+                    {activity.action.charAt(0).toUpperCase() + activity.action.slice(1)}
+                  </span>
+                  {activity.model_type && (
+                    <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                      {activity.model_type}
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-gray-900">{activity.description}</p>
+                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                  <span>{activity.userName}</span>
+                  <span>{activity.formatted_date}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+              <span className="text-xs text-gray-600">
+                Page <span className="font-semibold">{currentPage}</span> of <span className="font-semibold">{totalPages}</span>
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1 || loading}
+                  className="p-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Previous page"
+                >
+                  <FiChevronLeft className="w-4 h-4 text-gray-600" />
+                </button>
+                <button
+                  onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages || loading}
+                  className="p-1.5 border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  title="Next page"
+                >
+                  <FiChevronRight className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
     </div>
-  </div>
-);
+  );
+};
 
 const UserRoleChart = ({ users }) => {
   const roleCounts = users.reduce((acc, user) => {
@@ -98,6 +162,17 @@ const AdminDashboard = () => {
   const currentUser = auth?.user;
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activities, setActivities] = useState([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const itemsPerPage = 5;
+
+  const axiosInstance = window.axios || axios;
+  if (!window.axios) {
+    axiosInstance.defaults.withCredentials = true;
+    axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+  }
 
   // Fetch users from API
   useEffect(() => {
@@ -130,6 +205,33 @@ const AdminDashboard = () => {
     fetchUsers();
   }, []);
 
+  // Fetch activities with pagination
+  const fetchActivities = async (page = 1) => {
+    try {
+      setActivitiesLoading(true);
+      const response = await axiosInstance.get("/activities/recent", {
+        params: {
+          page: page,
+          per_page: itemsPerPage
+        }
+      });
+      setActivities(response.data.data);
+      setCurrentPage(response.data.current_page);
+      setTotalPages(response.data.last_page);
+    } catch (error) {
+      console.error("Error fetching activities:", error);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  };
+
+  // Initial fetch and auto-refresh
+  useEffect(() => {
+    fetchActivities(currentPage);
+    const interval = setInterval(() => fetchActivities(currentPage), 30000);
+    return () => clearInterval(interval);
+  }, [currentPage]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -147,13 +249,6 @@ const AdminDashboard = () => {
   const activePct = pct(activeUsers, totalUsers);
   const pendingPct = pct(pendingUsers, totalUsers);
   const inactivePct = pct(inactiveUsers, totalUsers);
-
-  const recentActivities = [
-    { type: 'user', description: 'New user registered as Proponent', time: '2 minutes ago' },
-    { type: 'system', description: 'System backup completed successfully', time: '1 hour ago' },
-    { type: 'user', description: 'User updated profile', time: '3 hours ago' },
-    { type: 'system', description: 'Database maintenance completed', time: '6 hours ago' }
-  ];
 
   return (
     <AdminLayout>
@@ -176,7 +271,13 @@ const AdminDashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <UserRoleChart users={users} />
-        <RecentActivity activities={recentActivities} />
+        <RecentActivity 
+          activities={activities} 
+          loading={activitiesLoading}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={(page) => setCurrentPage(page)}
+        />
       </div>
       </div>
     </AdminLayout>
