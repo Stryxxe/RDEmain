@@ -291,19 +291,43 @@ const ProposalDetail = () => {
                   </div>
                 )}
                 {/* Progress Card */}
-                <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-2xl p-4 w-full lg:min-w-[240px] xl:min-w-[280px] lg:w-auto flex-shrink-0">
+                <div className={`bg-gradient-to-r rounded-2xl p-4 w-full lg:min-w-[240px] xl:min-w-[280px] lg:w-auto flex-shrink-0 transition-colors duration-300 ${
+                  getCompletionPercentage() === 100
+                    ? 'from-green-50 to-green-100'
+                    : 'from-red-50 to-red-100'
+                }`}>
                   <div className="text-center">
-                    <div className="text-2xl sm:text-3xl font-bold text-red-600 mb-1">
+                    <div className={`text-2xl sm:text-3xl font-bold mb-1 transition-colors duration-300 ${
+                      getCompletionPercentage() === 100
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`}>
                       {getCompletionPercentage()}%
                     </div>
-                    <div className="text-sm text-red-700 font-medium mb-3">Project Progress</div>
-                    <div className="w-full bg-red-200 rounded-full h-2">
+                    <div className={`text-sm font-medium mb-3 transition-colors duration-300 ${
+                      getCompletionPercentage() === 100
+                        ? 'text-green-700'
+                        : 'text-red-700'
+                    }`}>Project Progress</div>
+                    <div className={`w-full rounded-full h-2 transition-colors duration-300 ${
+                      getCompletionPercentage() === 100
+                        ? 'bg-green-200'
+                        : 'bg-red-200'
+                    }`}>
                       <div
-                        className="bg-red-600 h-2 rounded-full transition-all duration-500"
+                        className={`h-2 rounded-full transition-all duration-500 ${
+                          getCompletionPercentage() === 100
+                            ? 'bg-green-600'
+                            : 'bg-red-600'
+                        }`}
                         style={{ width: `${getCompletionPercentage()}%` }}
                       ></div>
                     </div>
-                    <div className="text-xs text-red-600 mt-2">
+                    <div className={`text-xs mt-2 transition-colors duration-300 ${
+                      getCompletionPercentage() === 100
+                        ? 'text-green-600'
+                        : 'text-red-600'
+                    }`}>
                       3 of 10 stages completed
                     </div>
                   </div>

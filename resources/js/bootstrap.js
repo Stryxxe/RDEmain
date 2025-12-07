@@ -43,6 +43,11 @@ window.axios.interceptors.request.use((config) => {
     // This must be set both in defaults and in each request config
     config.withCredentials = true;
     
+    // Disable caching for all requests to ensure fresh data
+    config.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+    config.headers['Pragma'] = 'no-cache';
+    config.headers['Expires'] = '0';
+    
     // Debug: Log if cookies are being sent (only in development)
     if (!import.meta.env.PROD) {
         console.debug('Axios request config:', {

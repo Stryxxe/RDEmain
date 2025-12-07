@@ -35,7 +35,10 @@ class ProposalController extends Controller
             'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
             'user.department:departmentID,departmentName',
             'user.role:userRoleID,userRole',
-            'proponents:userID,firstName,lastName,email'
+            'proponents:userID,firstName,lastName,email',
+            'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsementDate',
+            'endorsements.endorser:userID,firstName,lastName,userRolesID',
+            'endorsements.endorser.role:userRoleID,userRole'
         ]);
 
         // Apply role-specific filtering

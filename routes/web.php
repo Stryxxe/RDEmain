@@ -51,6 +51,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/tracker/{id}', fn($id) => Inertia::render('TrackerDetail', ['id' => $id]))->name('tracker.detail');
         Route::get('/revision', fn() => Inertia::render('ForRevision'))->name('revision');
         Route::get('/revision/{id}', fn($id) => Inertia::render('RevisionDetail', ['id' => $id]))->name('revision.detail');
+            Route::get('/submit-report', fn() => Inertia::render('SubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('Resources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('Account'))->name('account');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');

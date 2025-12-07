@@ -801,6 +801,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     Route::put('/messages/mark-all-read', [SimpleOptimizedMessageController::class, 'markAllAsRead']);
     Route::delete('/messages/{id}', [SimpleOptimizedMessageController::class, 'destroy']);
     Route::delete('/messages/clear-all', [SimpleOptimizedMessageController::class, 'clearAll']);
+    Route::delete('/messages/conversation/{otherUserId}', [SimpleOptimizedMessageController::class, 'deleteConversation']);
 
 });
 
@@ -811,6 +812,11 @@ Route::middleware(['auth:web'])->group(function () {
     Route::get('/settings', [SettingController::class, 'index']);
     Route::get('/settings/{key}', [SettingController::class, 'show']);
     Route::put('/settings', [SettingController::class, 'update']);
+
+    // Backup management
+    Route::post('/backup/trigger', [SettingController::class, 'triggerBackup']);
+    Route::post('/backup/scan', [SettingController::class, 'scanBackupFolder']);
+    Route::get('/backup/status', [SettingController::class, 'getBackupStatus']);
     
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);

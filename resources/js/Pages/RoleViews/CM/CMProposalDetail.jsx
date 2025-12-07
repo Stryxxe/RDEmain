@@ -665,25 +665,6 @@ const CMProposalDetail = () => {
                                             strokeLinecap="round"
                                             strokeLinejoin="round"
                                             strokeWidth={2}
-                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                        />
-                                    </svg>
-                                    <span className="font-medium">Author:</span>
-                                    <span className="ml-1">
-                                        {proposal.user?.fullName || "Unknown"}
-                                    </span>
-                                </div>
-                                <div className="flex items-center">
-                                    <svg
-                                        className="w-5 h-5 mr-2 text-gray-400"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
                                             d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
                                         />
                                     </svg>
@@ -708,55 +689,52 @@ const CMProposalDetail = () => {
                                             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                                         />
                                     </svg>
-                                    <span className="font-medium">Status:</span>
-                                    <span
-                                        className={`ml-1 px-2 py-1 rounded-full text-xs font-medium border ${
-                                            proposal.status?.statusName ===
-                                            "Completed"
-                                                ? "bg-green-100 text-green-800 border-green-300"
-                                                : proposal.status
-                                                      ?.statusName ===
-                                                  "Under Review"
-                                                ? "bg-blue-100 text-blue-800 border-blue-300"
-                                                : proposal.status
-                                                      ?.statusName === "Ongoing"
-                                                ? "bg-orange-100 text-orange-800 border-orange-300"
-                                                : proposal.status
-                                                      ?.statusName ===
-                                                  "Approved"
-                                                ? "bg-green-100 text-green-800 border-green-300"
-                                                : proposal.status
-                                                      ?.statusName ===
-                                                  "Rejected"
-                                                ? "bg-red-100 text-red-800 border-red-300"
-                                                : "bg-gray-100 text-gray-800 border-gray-300"
-                                        }`}
-                                    >
-                                        {proposal.status?.statusName ||
-                                            "Unknown"}
-                                    </span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Progress Card */}
-                        <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-2xl p-6 min-w-[280px]">
+                        <div className={`bg-gradient-to-r rounded-2xl p-6 min-w-[280px] transition-colors duration-300 ${
+                            getCompletionPercentage() === 100
+                                ? 'from-green-50 to-green-100'
+                                : 'from-red-50 to-red-100'
+                        }`}>
                             <div className="text-center">
-                                <div className="text-3xl font-bold text-red-600 mb-1">
+                                <div className={`text-3xl font-bold mb-1 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}>
                                     {getCompletionPercentage()}%
                                 </div>
-                                <div className="text-sm text-red-700 font-medium mb-3">
+                                <div className={`text-sm font-medium mb-3 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-700'
+                                        : 'text-red-700'
+                                }`}>
                                     Project Progress
                                 </div>
-                                <div className="w-full bg-red-200 rounded-full h-2">
+                                <div className={`w-full rounded-full h-2 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'bg-green-200'
+                                        : 'bg-red-200'
+                                }`}>
                                     <div
-                                        className="bg-red-600 h-2 rounded-full transition-all duration-500"
+                                        className={`h-2 rounded-full transition-all duration-500 ${
+                                            getCompletionPercentage() === 100
+                                                ? 'bg-green-600'
+                                                : 'bg-red-600'
+                                        }`}
                                         style={{
                                             width: `${getCompletionPercentage()}%`,
                                         }}
                                     ></div>
                                 </div>
-                                <div className="text-xs text-red-600 mt-2">
+                                <div className={`text-xs mt-2 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}>
                                     {
                                         timelineStages.filter(
                                             (s) => s.status === "completed"

@@ -126,7 +126,12 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
       });
       
       if (researchPaper && researchPaper.filePath) {
-        return `/storage/${researchPaper.filePath}`;
+        // Only return path if it's a PDF file
+        const isPDF = researchPaper.fileName?.toLowerCase().endsWith('.pdf') ||
+                      researchPaper.filePath?.toLowerCase().endsWith('.pdf');
+        if (isPDF) {
+          return `/storage/${researchPaper.filePath}`;
+        }
       }
     }
     // Return null if no research paper found - don't show fallback
@@ -338,8 +343,18 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
 
   const handleDocumentClick = (document) => {
     if (document && document.pdfPath) {
-      setSelectedDocument(document);
-      setShowDocumentModal(true);
+      // Check if file is PDF by extension
+      const isPDF = document.fileName?.toLowerCase().endsWith('.pdf') || 
+                    document.pdfPath?.toLowerCase().endsWith('.pdf');
+      
+      if (isPDF) {
+        // Open PDF in modal
+        setSelectedDocument(document);
+        setShowDocumentModal(true);
+      } else {
+        // For non-PDF files, open in new tab (browser will handle download)
+        window.open(document.pdfPath, '_blank', 'noopener');
+      }
     }
   };
 
@@ -408,16 +423,22 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
               Close
             </button>
             {selectedDocument.pdfPath && (
-              <a
-                href={selectedDocument.pdfPath}
-                download={selectedDocument.fileName || selectedDocument.name}
+              <button
+                onClick={() => {
+                  const link = document.createElement('a');
+                  link.href = selectedDocument.pdfPath;
+                  link.download = selectedDocument.fileName || selectedDocument.name;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                }}
                 className="flex items-center px-6 py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors font-medium shadow-lg hover:shadow-xl"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 Download PDF
-              </a>
+              </button>
             )}
           </div>
         </div>
@@ -514,6 +535,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      <>
       <div className="max-w-7xl mx-auto px-6 pt-6">
         <Breadcrumbs items={[
           { label: 'Dashboard', href: '/cm/dashboard' },
@@ -560,14 +582,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                     <span className="font-medium">ID:</span>
-                    <span className="ml-1">PRO-{(fullProposal?.proposalID || fullProposal?.id || proposal?.proposalID || proposal?.id).toString().padStart(6, '0')}</span>
-                  </div>
-                  <div className="flex items-center">
-                    <svg className="w-5 h-5 mr-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span className="font-medium">Author:</span>
-                    <span className="ml-1">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
+                    <span className="ml-1">{fullProposal?.custom_proposal_id || proposal?.custom_proposal_id || `PRO-${String(fullProposal?.proposalID || fullProposal?.id || proposal?.proposalID || proposal?.id || '0').padStart(6, '0')}`}</span>
                   </div>
                 </div>
               </div>
@@ -772,55 +787,249 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
         </div>
 
-        {/* Attached Documents Section */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-          <div className="flex items-center mb-6">
-            <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
-              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="text-2xl font-bold text-gray-900">Attached Documents</h3>
-          </div>
-          
-          {attachedDocuments.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {attachedDocuments.map((document, index) => (
-                <div 
-                  key={index} 
-                  className="flex items-center p-5 rounded-xl border transition-all duration-200 cursor-pointer group bg-gradient-to-br from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200 shadow-sm hover:shadow-md"
-                  onClick={() => handleDocumentClick(document)}
-                >
-                  <div className="w-10 h-10 rounded-lg bg-blue-500 group-hover:bg-blue-600 flex items-center justify-center mr-4 transition-colors shadow-md">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
-                    </svg>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="font-semibold text-sm text-blue-800 group-hover:text-blue-900 block truncate">
-                      {document.name}
-                    </span>
-                    {document.fileName && (
-                      <span className="text-xs text-gray-600 block mt-1 truncate">{document.fileName}</span>
-                    )}
-                  </div>
-                  <svg className="w-5 h-5 text-blue-600 group-hover:text-blue-700 transition-colors ml-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+        {/* Research Paper Section */}
+        {(() => {
+          const researchPaper = fullProposal?.files?.find(f => {
+            const fileName = f.fileName?.toLowerCase() || '';
+            return f.fileType === 'concept_paper' || 
+                   f.fileType === 'report' ||
+                   fileName.includes('concept') ||
+                   fileName.includes('research') ||
+                   fileName.includes('paper');
+          });
+
+          if (!researchPaper || !researchPaper.filePath) {
+            return null;
+          }
+
+          const fileUrl = `/storage/${researchPaper.filePath}`;
+
+          return (
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-8">
+              <div className="flex items-center mb-8">
+                <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8 place-items-center">
+                <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2 md:col-start-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-base font-bold text-red-900">Main Document</h4>
+                    <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                      1 file
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">Primary research document</p>
+                  <div className="p-4 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{researchPaper.fileName}</p>
+                    {researchPaper.fileSize && <p className="text-xs text-gray-500 mt-1">{(researchPaper.fileSize / 1024).toFixed(0)} KB</p>}
+                    <div className="mt-3">
+                      <button
+                        onClick={() => handleDocumentClick({...researchPaper, pdfPath: fileUrl})}
+                        className="w-full flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Supporting Documents (SETI, GAD, MOC) */}
+        {attachedDocuments.filter(d => ['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <div className="flex items-center mb-8">
+              <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-gray-900">Supporting Documents</h3>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+              {/* SETI */}
+              <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-base font-bold text-blue-900">SETI</h4>
+                  <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                    {attachedDocuments.filter(d => d.fileType === 'seti_scorecard').length} file
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">Science and Engineering Technology Initiative</p>
+                {attachedDocuments.filter(d => d.fileType === 'seti_scorecard').map((doc, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-lg mb-3">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{doc.fileName}</p>
+                    {doc.fileSize && <p className="text-xs text-gray-500 mt-1">{(doc.fileSize / 1024).toFixed(0)} KB</p>}
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleDocumentClick(doc)}
+                        className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View
+                      </button>
+                      <button
+                        onClick={() => window.open(doc.pdfPath, '_blank', 'noopener')}
+                        className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* GAD */}
+              <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-base font-bold text-green-900">GAD</h4>
+                  <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                    {attachedDocuments.filter(d => d.fileType === 'gad_certificate').length} file
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">Gender and Development</p>
+                {attachedDocuments.filter(d => d.fileType === 'gad_certificate').map((doc, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-lg mb-3">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{doc.fileName}</p>
+                    {doc.fileSize && <p className="text-xs text-gray-500 mt-1">{(doc.fileSize / 1024).toFixed(0)} KB</p>}
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleDocumentClick(doc)}
+                        className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View
+                      </button>
+                      <button
+                        onClick={() => window.open(doc.pdfPath, '_blank', 'noopener')}
+                        className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* MOC */}
+              <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-base font-bold text-amber-900">MOC</h4>
+                  <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                    {attachedDocuments.filter(d => d.fileType === 'matrix_compliance').length} file
+                  </span>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">Matrix of Compliance</p>
+                {attachedDocuments.filter(d => d.fileType === 'matrix_compliance').map((doc, idx) => (
+                  <div key={idx} className="p-4 bg-gray-50 rounded-lg mb-3">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{doc.fileName}</p>
+                    {doc.fileSize && <p className="text-xs text-gray-500 mt-1">{(doc.fileSize / 1024).toFixed(0)} KB</p>}
+                    <div className="flex gap-2 mt-3">
+                      <button
+                        onClick={() => handleDocumentClick(doc)}
+                        className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        View
+                      </button>
+                      <button
+                        onClick={() => window.open(doc.pdfPath, '_blank', 'noopener')}
+                        className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                      >
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                        </svg>
+                        Download
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Other Supporting Documents */}
+        {attachedDocuments.filter(d => !['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).length > 0 && (
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center mr-4">
+                  <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-gray-900">Other Supporting Documents</h3>
+                  <p className="text-sm text-gray-600">Additional files and attachments</p>
+                </div>
+              </div>
+              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                {attachedDocuments.filter(d => !['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).length} files
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {attachedDocuments.filter(d => !['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).map((document, index) => (
+                <div key={index} className="p-6 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
+                  <p className="text-sm font-semibold text-gray-900 mb-1">{document.fileName}</p>
+                  {document.fileSize && <p className="text-xs text-gray-500 mb-4">{(document.fileSize / 1024).toFixed(0)} KB</p>}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleDocumentClick(document)}
+                      className="flex items-center justify-center px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium text-sm transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                      View
+                    </button>
+                    <button
+                      onClick={() => window.open(document.pdfPath, '_blank', 'noopener')}
+                      className="flex items-center justify-center px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium text-sm transition-colors"
+                    >
+                      <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                      </svg>
+                      Download
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
-          ) : (
-            <div className="text-center py-12 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-gray-600 font-medium">No documents attached to this proposal.</p>
-            </div>
-          )}
+          </div>
+        )}
 
           {/* Action Buttons */}
-          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-8">
+          <div className="flex justify-end space-x-4 pt-8 border-t border-gray-200 mt-8">
             {!isEndorsed && (
               <button 
                 type="button"
@@ -848,259 +1057,196 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
         </div>
 
-        {/* Research Paper Section - Show preview button instead of auto-loading PDF */}
-        {researchPaperPath ? (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center">
-                <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
-                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
-              </div>
-              <button
-                onClick={() => {
-                  const researchPaper = fullProposal?.files?.find(f => {
-                    const fileName = f.fileName?.toLowerCase() || '';
-                    return f.fileType === 'concept_paper' || 
-                           f.fileType === 'report' ||
-                           fileName.includes('concept') ||
-                           fileName.includes('research') ||
-                           fileName.includes('paper');
-                  });
-                  handleViewDocument({
-                    name: researchPaper?.fileName || 'Research Paper',
-                    fileName: researchPaper?.fileName,
-                    pdfPath: researchPaperPath
-                  });
-                }}
-                className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                </svg>
-                View Research Paper
-              </button>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-6 text-center">
-              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-gray-600">Click "View Research Paper" button above to preview the document</p>
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <div className="flex items-center mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
-            </div>
-            <div className="text-center py-16 bg-gray-50 rounded-xl border-2 border-dashed border-gray-300">
-              <svg className="w-20 h-20 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-gray-600 font-medium text-lg">No research paper available for this proposal.</p>
-              <p className="text-gray-500 text-sm mt-2">The main research document has not been uploaded yet.</p>
-            </div>
-          </div>
-        )}
-
       {/* Document Modal */}
       {showDocumentModal && <DocumentModal />}
-      
-        {/* Endorsement Modal */}
-        {showEndorsementModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-50">
-                <div className="flex items-center space-x-2">
-                  <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg font-bold text-gray-900">Endorse Proposal</h2>
+
+      {/* Endorsement Modal */}
+      {showEndorsementModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-emerald-50 to-green-50">
+              <div className="flex items-center space-x-2">
+                <div className="w-9 h-9 bg-emerald-600 rounded-lg flex items-center justify-center shadow-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
                 </div>
+                <h2 className="text-lg font-bold text-gray-900">Endorse Proposal</h2>
+              </div>
+              <button
+                onClick={handleEndorsementCancel}
+                className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
+                <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
+                  {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                </h3>
+                <div className="flex items-center text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  <span className="font-medium">ID:</span>
+                  <span className="ml-2">{fullProposal?.custom_proposal_id || proposal?.custom_proposal_id || `PRO-${String(fullProposal?.proposalID || fullProposal?.id || proposal?.proposalID || proposal?.id || '0').padStart(6, '0')}`}</span>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label htmlFor="endorsementComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                  <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  Endorsement Comments
+                  <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
+                </label>
+                <textarea
+                  id="endorsementComments"
+                  value={endorsementComments}
+                  onChange={handleEndorsementCommentsChange}
+                  rows={5}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
+                  placeholder="Add any comments, recommendations, or notes about this endorsement..."
+                />
+                <p className="mt-2 text-sm text-gray-500">
+                  Your comments will be visible to other reviewers and administrators.
+                </p>
+              </div>
+
+              <div className="flex justify-end space-x-4 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleEndorsementCancel}
-                  className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
+                  disabled={isEndorsing}
+                  className="px-6 py-3 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors disabled:opacity-50 font-medium"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  Cancel
                 </button>
-              </div>
-
-              {/* Modal Content */}
-              <div className="p-5">
-                <div className="mb-5 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
-                  <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
-                    {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
-                  </h3>
-                  <div className="flex items-center text-sm text-gray-700">
-                    <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span className="font-medium">By:</span>
-                    <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
-                  </div>
-                </div>
-
-                <div className="mb-5">
-                  <label htmlFor="endorsementComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
-                    <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                    </svg>
-                    Endorsement Comments
-                    <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
-                  </label>
-                  <textarea
-                    id="endorsementComments"
-                    value={endorsementComments}
-                    onChange={handleEndorsementCommentsChange}
-                    rows={3}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all resize-none"
-                    placeholder="Add any comments or notes about this endorsement..."
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleEndorsementCancel}
-                    disabled={isEndorsing}
-                    className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleEndorsementSubmit}
-                    disabled={isEndorsing}
-                    className="px-6 py-2 text-sm bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-lg transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
-                  >
-                    {isEndorsing ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Endorsing...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        Confirm Endorsement
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={handleEndorsementSubmit}
+                  disabled={isEndorsing}
+                  className="px-8 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+                >
+                  {isEndorsing ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Endorsing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      Confirm Endorsement
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* For Revision Modal */}
-        {showRevisionModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50">
-                <div className="flex items-center space-x-2">
-                  <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
-                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </div>
-                  <h2 className="text-lg font-bold text-gray-900">Send for Revision</h2>
+      {/* For Revision Modal */}
+      {showRevisionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+              <div className="flex items-center space-x-2">
+                <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
                 </div>
+                <h2 className="text-lg font-bold text-gray-900">Send for Revision</h2>
+              </div>
+              <button
+                onClick={handleRevisionCancel}
+                className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-5">
+              <div className="mb-5 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
+                <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
+                  {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                </h3>
+                <div className="flex items-center text-sm text-gray-700">
+                  <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
+                  <span className="font-medium">By:</span>
+                  <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
+                </div>
+              </div>
+
+              <div className="mb-5">
+                <label htmlFor="revisionComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                  <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  Revision Comments
+                  <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
+                </label>
+                <textarea
+                  id="revisionComments"
+                  value={revisionComments}
+                  onChange={handleRevisionCommentsChange}
+                  rows={3}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                  placeholder="Add revision comments or notes for the proponent..."
+                />
+              </div>
+
+              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
                 <button
                   onClick={handleRevisionCancel}
-                  className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
+                  disabled={isSendingForRevision}
+                  className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 font-medium"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
+                  Cancel
                 </button>
-              </div>
-
-              {/* Modal Content */}
-              <div className="p-5">
-                <div className="mb-5 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
-                  <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
-                    {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
-                  </h3>
-                  <div className="flex items-center text-sm text-gray-700">
-                    <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                    </svg>
-                    <span className="font-medium">By:</span>
-                    <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
-                  </div>
-                </div>
-
-                <div className="mb-5">
-                  <label htmlFor="revisionComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
-                    <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
-                    </svg>
-                    Revision Comments
-                    <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
-                  </label>
-                  <textarea
-                    id="revisionComments"
-                    value={revisionComments}
-                    onChange={handleRevisionCommentsChange}
-                    rows={3}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
-                    placeholder="Add revision comments or notes for the proponent..."
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleRevisionCancel}
-                    disabled={isSendingForRevision}
-                    className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 font-medium"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSendForRevision}
-                    disabled={isSendingForRevision}
-                    className="px-6 py-2 text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
-                  >
-                    {isSendingForRevision ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Sending...
-                      </>
-                    ) : (
-                      <>
-                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                        </svg>
-                        Send for Revision
-                      </>
-                    )}
-                  </button>
-                </div>
+                <button
+                  onClick={handleSendForRevision}
+                  disabled={isSendingForRevision}
+                  className="px-6 py-2 text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+                >
+                  {isSendingForRevision ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d={"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"}></path>
+                      </svg>
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
+                      </svg>
+                      Send for Revision
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+      </>
     </div>
   );
 };

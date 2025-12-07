@@ -218,8 +218,13 @@ const Notification = () => {
             markAsReadContext(notification.id);
         }
 
-        // Show revision details inline instead of navigation
+        // Show details for revision and endorsement notifications
         if (notification.type === "revision" || notification.data?.revision_comments) {
+            setDetailNotification(notification);
+            return;
+        }
+
+        if (notification.data?.endorsement_comments) {
             setDetailNotification(notification);
             return;
         }
@@ -503,7 +508,7 @@ const Notification = () => {
                                         <p className="text-sm text-gray-600 mb-2">
                                             {notification.message}
                                         </p>
-                                        {notification.data?.revision_comments && (
+                                        {(notification.data?.revision_comments || notification.data?.endorsement_comments) && (
                                             <p className="text-xs font-semibold text-red-600">Click to see more details</p>
                                         )}
                                         <p className="text-xs text-gray-400">
@@ -624,8 +629,12 @@ const Notification = () => {
                             </button>
                         </div>
                         <div className="border border-gray-200 rounded-xl bg-gray-50 p-4">
-                            <p className="text-sm font-semibold text-gray-800 mb-2">Revision Details</p>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap">{detailNotification.data?.revision_comments || detailNotification.message}</p>
+                            <p className="text-sm font-semibold text-gray-800 mb-2">
+                                {detailNotification.data?.endorsement_comments ? 'Endorsement Comments' : 'Revision Details'}
+                            </p>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                {detailNotification.data?.endorsement_comments || detailNotification.data?.revision_comments || detailNotification.message}
+                            </p>
                         </div>
                         <div className="flex justify-between gap-3">
                             <button
@@ -642,7 +651,7 @@ const Notification = () => {
                                     }}
                                     className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
                                 >
-                                    Edit Proposal
+                                    {detailNotification.data?.endorsement_comments ? 'View Proposal' : 'Edit Proposal'}
                                 </button>
                             )}
                         </div>

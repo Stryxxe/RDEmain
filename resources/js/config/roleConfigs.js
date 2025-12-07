@@ -88,6 +88,7 @@ export const roleConfigs = {
       { path: 'tracker', component: 'Tracker', label: 'Tracker' },
       { path: 'tracker/:id', component: 'TrackerDetail', label: 'Tracker Detail' },
       { path: 'revision', component: 'ForRevision', label: 'For Revision' },
+        { path: 'submit-report', component: 'SubmitReport', label: 'Submit Report' },
       { path: 'resources', component: 'ResourcesPage', label: 'Resources' },
       { path: 'account', component: 'AccountPage', label: 'Account' },
       { path: 'notification', component: 'NotificationsPage', label: 'Notifications', hidden: true },

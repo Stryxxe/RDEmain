@@ -705,7 +705,11 @@ const SubmitPage = () => {
 
 SubmitPage.layout = (page) => (
     <AppLayout>
-        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+        <RoleBasedLayout roleName="Proponent">
+            <div className="flex justify-center">
+                {page}
+            </div>
+        </RoleBasedLayout>
     </AppLayout>
 );
 

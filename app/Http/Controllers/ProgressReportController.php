@@ -103,15 +103,15 @@ class ProgressReportController extends Controller
         
         $validator = Validator::make($request->all(), [
             'proposalID' => 'required|exists:proposals,proposalID',
-            'reportType' => 'required|string|in:Quarterly,Annual,Final,Interim',
-            'reportPeriod' => 'required|string',
-            'progressPercentage' => 'required|integer|min:0|max:100',
+            'reportType' => 'nullable|string|in:Quarterly,Annual,Final,Interim,General',
+            'reportPeriod' => 'nullable|string',
+            'progressPercentage' => 'nullable|integer|min:0|max:100',
             'budgetUtilized' => 'nullable|numeric|min:0',
             'achievements' => 'required|string',
             'challenges' => 'nullable|string',
-            'nextMilestone' => 'required|string',
+            'nextMilestone' => 'nullable|string',
             'additionalNotes' => 'nullable|string',
-            'files' => 'nullable|array',
+            'files' => 'nullable|array|max:10',
             'files.*' => "file|mimes:pdf,doc,docx,xls,xlsx,ppt,pptx|max:{$maxFileSizeKB}"
         ]);
 
@@ -178,13 +178,13 @@ class ProgressReportController extends Controller
             $report = ProgressReport::create([
                 'proposalID' => $request->proposalID,
                 'userID' => $user->userID,
-                'reportType' => $request->reportType,
-                'reportPeriod' => $request->reportPeriod,
-                'progressPercentage' => $request->progressPercentage,
+                'reportType' => $request->reportType ?: 'General',
+                'reportPeriod' => $request->reportPeriod ?: 'N/A',
+                'progressPercentage' => $request->progressPercentage ?? 0,
                 'budgetUtilized' => $request->budgetUtilized,
                 'achievements' => $request->achievements,
                 'challenges' => $request->challenges,
-                'nextMilestone' => $request->nextMilestone,
+                'nextMilestone' => $request->nextMilestone ?: 'N/A',
                 'additionalNotes' => $request->additionalNotes,
                 'submittedAt' => now()
             ]);
