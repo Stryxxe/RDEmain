@@ -848,28 +848,49 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
           </div>
         </div>
 
-        {/* Research Paper PDF Viewer */}
+        {/* Research Paper Section - Show preview button instead of auto-loading PDF */}
         {researchPaperPath ? (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-            <div className="flex items-center mb-6">
-              <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
-                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center">
+                <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
               </div>
-              <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
+              <button
+                onClick={() => {
+                  const researchPaper = fullProposal?.files?.find(f => {
+                    const fileName = f.fileName?.toLowerCase() || '';
+                    return f.fileType === 'concept_paper' || 
+                           f.fileType === 'report' ||
+                           fileName.includes('concept') ||
+                           fileName.includes('research') ||
+                           fileName.includes('paper');
+                  });
+                  handleViewDocument({
+                    name: researchPaper?.fileName || 'Research Paper',
+                    fileName: researchPaper?.fileName,
+                    pdfPath: researchPaperPath
+                  });
+                }}
+                className="flex items-center px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+                View Research Paper
+              </button>
             </div>
-            <PDFViewer 
-              pdfPath={researchPaperPath} 
-              title={fullProposal?.files?.find(f => {
-                const fileName = f.fileName?.toLowerCase() || '';
-                return f.fileType === 'concept_paper' || 
-                       f.fileType === 'report' ||
-                       fileName.includes('concept') ||
-                       fileName.includes('research') ||
-                       fileName.includes('paper');
-              })?.fileName || "Research Paper"} 
-            />
+            <div className="bg-gray-50 rounded-lg p-6 text-center">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-gray-600">Click "View Research Paper" button above to preview the document</p>
+            </div>
           </div>
         ) : (
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">

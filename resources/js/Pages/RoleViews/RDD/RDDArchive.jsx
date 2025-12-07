@@ -181,7 +181,7 @@ const RDDArchive = () => {
                           {p.researchTitle || p.title || "Untitled"}
                         </div>
                         <div className="text-xs text-gray-500">
-                          ID: {p.proposalID || p.id}
+                          ID: {p.custom_proposal_id || p.proposalID || p.id}
                         </div>
                       </td>
                       <td className="text-sm text-gray-900">

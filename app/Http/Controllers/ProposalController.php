@@ -212,8 +212,12 @@ class ProposalController extends Controller
             // Use researchCenter from request (already set in validation if not provided)
             $researchCenter = $request->input('researchCenter', $defaultResearchCenter);
 
+            // Generate custom proposal ID
+            $customProposalId = Proposal::generateCustomProposalId($user->userID, $researchCenter);
+
             // Create the proposal
             $proposal = Proposal::create([
+                'custom_proposal_id' => $customProposalId,
                 'researchTitle' => $request->researchTitle,
                 'description' => $request->description,
                 'objectives' => $request->objectives,

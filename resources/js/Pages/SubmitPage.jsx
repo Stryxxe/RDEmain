@@ -156,12 +156,10 @@ const SubmitPage = () => {
         }));
     };
 
-    const handleCheckboxChange = (field, value, checked) => {
+    const handleCheckboxChange = (field, values) => {
         setFormData((prev) => ({
             ...prev,
-            [field]: checked
-                ? [...prev[field], value]
-                : prev[field].filter((item) => item !== value),
+            [field]: Array.isArray(values) ? values : [],
         }));
     };
 
@@ -538,13 +536,9 @@ const SubmitPage = () => {
                         label="Research Agenda"
                         required
                         options={researchAgendaOptions}
-                        selectedValues={formData.researchAgenda}
-                        onChange={(value, checked) =>
-                            handleCheckboxChange(
-                                "researchAgenda",
-                                value,
-                                checked
-                            )
+                        selectedOptions={formData.researchAgenda}
+                        onChange={(values) =>
+                            handleCheckboxChange("researchAgenda", values)
                         }
                         hint="Select the RDE Agenda that aligns best with your study."
                         columns={2}
@@ -556,9 +550,9 @@ const SubmitPage = () => {
                         label="DOST 6P's"
                         required
                         options={dostSPsOptions}
-                        selectedValues={formData.dostSPs}
-                        onChange={(value, checked) =>
-                            handleCheckboxChange("dostSPs", value, checked)
+                        selectedOptions={formData.dostSPs}
+                        onChange={(values) =>
+                            handleCheckboxChange("dostSPs", values)
                         }
                         hint="Select the most applicable category from the DOST 6Ps that best aligns with your study"
                         columns={1}
@@ -570,12 +564,11 @@ const SubmitPage = () => {
                         label="Sustainable Development Goal"
                         required
                         options={sdgOptions}
-                        selectedValues={formData.sustainableDevelopmentGoals}
-                        onChange={(value, checked) =>
+                        selectedOptions={formData.sustainableDevelopmentGoals}
+                        onChange={(values) =>
                             handleCheckboxChange(
                                 "sustainableDevelopmentGoals",
-                                value,
-                                checked
+                                values
                             )
                         }
                         hint="Select the SDG that best aligns with your study"

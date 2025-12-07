@@ -815,6 +815,7 @@ Route::middleware(['auth:web'])->group(function () {
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
+    Route::post('/admin/users/{user:userID}/reset-password', [AdminUserController::class, 'resetPassword']);
     Route::delete('/admin/users/{userId}', [AdminUserController::class, 'destroy']);
     
     // Department management
@@ -1152,6 +1153,13 @@ use App\Http\Controllers\TimelineStageController;
 Route::middleware('auth:web')->get('/timeline-stages/active', [TimelineStageController::class, 'getActiveStages']);
 
 // Admin-only routes for managing timeline stages
+Route::middleware(['auth:web'])->prefix('admin/timeline-stages')->group(function () {
+    Route::get('/', [TimelineStageController::class, 'getAllStages']);
+    Route::post('/', [TimelineStageController::class, 'store']);
+    Route::put('/{id}', [TimelineStageController::class, 'update']);
+    Route::delete('/{id}', [TimelineStageController::class, 'destroy']);
+});
+
 Route::middleware(['auth:web'])->prefix('timeline-stages')->group(function () {
     Route::post('/update-order', [TimelineStageController::class, 'updateOrder']);
     Route::post('/{id}/toggle', [TimelineStageController::class, 'toggleActive']);

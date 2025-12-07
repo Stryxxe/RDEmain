@@ -266,7 +266,7 @@ const ProposalDetail = () => {
                   </div>
                   <div>
                     <p className="text-sm font-medium text-red-600">Research Proposal</p>
-                    <p className="text-xs text-gray-500">ID: {proposal.proposalID}</p>
+                    <p className="text-xs text-gray-500">ID: {proposal.custom_proposal_id || proposal.proposalID}</p>
                   </div>
                 </div>
                 <h1 className="text-4xl font-bold text-gray-900 mb-3 leading-tight">

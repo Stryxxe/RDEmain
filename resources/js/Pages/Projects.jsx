@@ -309,7 +309,7 @@ const Projects = () => {
                           <h3 className="text-sm font-semibold text-gray-900 mb-1">
                             {project.researchTitle || 'Untitled Project'}
                           </h3>
-                          <p className="text-xs text-gray-500">ID: {project.proposalID}</p>
+                          <p className="text-xs text-gray-500">ID: {project.custom_proposal_id || project.proposalID}</p>
                           <p className="text-xs text-gray-500">
                             Submitted: {new Date(project.created_at).toLocaleDateString()}
                           </p>

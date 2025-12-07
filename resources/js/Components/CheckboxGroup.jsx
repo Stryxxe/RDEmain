@@ -4,15 +4,18 @@ const CheckboxGroup = ({
   label, 
   options, 
   selectedValues = [],
-  selectedOptions = [],
+  selectedOptions,
   onChange, 
   required = false, 
   hint = '', 
   columns = 1 
 }) => {
-  // Support both selectedValues and selectedOptions prop names
-  // Ensure we use the prop that was actually passed
-  const selected = (selectedOptions && selectedOptions.length >= 0) ? selectedOptions : selectedValues;
+  // Prefer selectedOptions when provided, otherwise fall back to selectedValues
+  const selected = Array.isArray(selectedOptions)
+    ? selectedOptions
+    : Array.isArray(selectedValues)
+      ? selectedValues
+      : [];
   
   console.log('CheckboxGroup render:', { label, selected, selectedOptions, selectedValues });
   

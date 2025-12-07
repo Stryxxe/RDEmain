@@ -646,7 +646,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                     <span className="font-medium">ID:</span>
                                     <span className="ml-1">
                                         PRO-
-                                        {proposal.proposalID
+                                        {proposal.custom_proposal_id || proposal.proposalID
                                             .toString()
                                             .padStart(6, "0")}
                                     </span>

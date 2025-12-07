@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Upload, Paperclip, X } from "lucide-react";
+import { Upload, Paperclip, X, AlertTriangle } from "lucide-react";
 import { useUploadSettings } from "../hooks/useUploadSettings";
 
 const MultiFileUpload = ({
@@ -126,6 +126,8 @@ const MultiFileUpload = ({
         onRemoveExisting?.(index);
     };
 
+    const closeFeedback = () => setFeedback("");
+
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -186,9 +188,40 @@ const MultiFileUpload = ({
             </div>
 
             {feedback && (
-                <p className="text-sm text-red-500" role="alert">
-                    {feedback}
-                </p>
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+                    onClick={closeFeedback}
+                >
+                    <div
+                        className="w-full max-w-md rounded-lg bg-white shadow-xl border border-red-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-2 border-b border-red-100 px-5 py-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
+                                <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-red-700">Upload issue</p>
+                                <p className="text-xs text-gray-500">
+                                    Max {effectiveMaxSizeMB}MB per file · Allowed: {effectiveAccept.map((ext) => ext.replace('.', '').toUpperCase()).join(', ')}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-4 text-sm text-gray-800 space-y-2">
+                            <p>{feedback}</p>
+                            <p className="text-xs text-gray-600">Try another file within the limits, then upload again.</p>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
+                            <button
+                                type="button"
+                                onClick={closeFeedback}
+                                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {existing.length > 0 && (

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Upload, Plus, X, ExternalLink } from 'lucide-react';
+import { Upload, Plus, X, ExternalLink, AlertTriangle } from 'lucide-react';
 import FileIcon from './FileIcon';
 
 const DragDropUpload = ({
@@ -13,6 +13,7 @@ const DragDropUpload = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const [file, setFile] = useState(selectedFile);
   const [currentExisting, setCurrentExisting] = useState(existingFile);
+  const [error, setError] = useState('');
   const fileInputRef = useRef(null);
 
   // Sync with parent state
@@ -48,9 +49,10 @@ const DragDropUpload = ({
   const validateFile = (file) => {
     const maxSizeBytes = parseMaxSize(maxSize);
     if (file.size > maxSizeBytes) {
-      alert(`File size exceeds the maximum allowed size of ${maxSize}. Please select a smaller file.`);
+      setError(`File is too large (${(file.size / 1024 / 1024).toFixed(2)} MB). Max allowed: ${maxSize}. Choose a smaller file.`);
       return false;
     }
+    setError('');
     return true;
   };
 
@@ -103,6 +105,8 @@ const DragDropUpload = ({
     setCurrentExisting(null);
     onRemoveExisting?.();
   };
+
+  const closeError = () => setError('');
 
   return (
     <div className="w-full">
@@ -203,6 +207,38 @@ const DragDropUpload = ({
           accept=".pdf,.doc,.docx"
         />
       </div>
+
+      {error && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={closeError}>
+          <div
+            className="w-full max-w-md rounded-lg bg-white shadow-xl border border-red-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-red-100 px-5 py-4">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-red-700">File too large</p>
+                <p className="text-xs text-gray-500">Max allowed: {maxSize}. Allowed types: {acceptedTypes}.</p>
+              </div>
+            </div>
+            <div className="px-5 py-4 text-sm text-gray-800 space-y-2">
+              <p>{error}</p>
+              <p className="text-xs text-gray-600">Try compressing the file or choose another under {maxSize}.</p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
+              <button
+                type="button"
+                onClick={closeError}
+                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

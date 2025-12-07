@@ -328,8 +328,8 @@ const ForRevision = () => {
                     >
                       {proposal.researchTitle || proposal.title || "Untitled Proposal"}
                     </div>
-                    <div className="text-sm text-gray-600">
-                      ID: PRO-{(proposal.proposalID || proposal.id || 0).toString().padStart(6, "0")}
+                    <div className="text-sm text-gray-500 mt-1">
+                      ID: {proposal.custom_proposal_id || `PRO-${(proposal.proposalID || proposal.id || 0).toString().padStart(6, "0")}`}
                     </div>
                     <div className="text-sm text-gray-600">
                       Sent back: {formatDate(proposal.updated_at || proposal.created_at)}

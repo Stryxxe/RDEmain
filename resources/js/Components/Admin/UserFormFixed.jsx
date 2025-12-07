@@ -23,6 +23,7 @@ const UserFormFixed = ({ user, onClose }) => {
         researchCenter: "",
     });
     const [errors, setErrors] = useState({});
+    const [resetting, setResetting] = useState(false);
 
     // Fetch departments and research centers on mount
     useEffect(() => {
@@ -263,6 +264,28 @@ const UserFormFixed = ({ user, onClose }) => {
 
         setFormData((prev) => ({ ...prev, [name]: value }));
         if (errors[name]) setErrors((prev) => ({ ...prev, [name]: "" }));
+    };
+
+    const handleResetPassword = async () => {
+        if (!user) return;
+        setResetting(true);
+        try {
+            const response = await axiosInstance.post(
+                `/admin/users/${user.id || user.userID}/reset-password`,
+                {},
+                { headers: { Accept: "application/json" }, withCredentials: true }
+            );
+            const tempPassword = response?.data?.temporaryPassword;
+            const message = tempPassword
+                ? `Password reset. Temporary password: ${tempPassword}`
+                : "Password reset successfully.";
+            await window.customAlert(message);
+        } catch (error) {
+            console.error("Password reset failed:", error?.response?.data || error?.message || error);
+            await window.customAlert("Failed to reset password. Please try again.", "Error");
+        } finally {
+            setResetting(false);
+        }
     };
 
     return (
@@ -558,6 +581,16 @@ const UserFormFixed = ({ user, onClose }) => {
                             >
                                 Cancel
                             </button>
+                            {user && (
+                                <button
+                                    type="button"
+                                    onClick={handleResetPassword}
+                                    disabled={resetting}
+                                    className="admin-button-secondary w-full sm:w-auto mt-3 sm:mt-0 sm:mr-auto"
+                                >
+                                    {resetting ? "Resetting..." : "Reset Password to Default"}
+                                </button>
+                            )}
                         </div>
                     </form>
                 </div>

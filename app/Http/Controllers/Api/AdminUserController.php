@@ -228,6 +228,27 @@ class AdminUserController extends Controller
         ]);
     }
 
+    public function resetPassword(Request $request, User $user)
+    {
+        // Generate or use configured default password
+        $defaultPassword = config('auth.default_reset_password')
+            ?? env('DEFAULT_RESET_PASSWORD', 'ChangeMe123!');
+
+        $user->password = $defaultPassword;
+        $user->save();
+
+        ActivityService::logUserUpdate(
+            $user->userID,
+            ['password' => 'reset'],
+            ['password' => 'reset']
+        );
+
+        return response()->json([
+            'message' => 'Password reset successfully.',
+            'temporaryPassword' => $defaultPassword,
+        ]);
+    }
+
     protected function formatUserResponse(User $user, array $overrides = []): array
     {
         return [
@@ -323,7 +344,8 @@ class AdminUserController extends Controller
                 return [
                     'departmentID' => $dept->departmentID,
                     'name' => $dept->departmentName ?? $dept->name ?? 'Unknown',
-                    'departmentName' => $dept->departmentName ?? $dept->name ?? 'Unknown'
+                    'departmentName' => $dept->departmentName ?? $dept->name ?? 'Unknown',
+                    'college_idNo' => $dept->college_idNo
                 ];
             })->unique('name')->values();
 
@@ -344,11 +366,13 @@ class AdminUserController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:departments,name'],
+            'college_idNo' => ['nullable', 'string', 'max:50'],
         ]);
 
         try {
             $department = Department::create([
                 'name' => $validated['name'],
+                'college_idNo' => $validated['college_idNo'] ?? null,
             ]);
 
             // Log activity
@@ -360,6 +384,7 @@ class AdminUserController extends Controller
                     'departmentID' => $department->departmentID,
                     'name' => $department->name,
                     'departmentName' => $department->name,
+                    'college_idNo' => $department->college_idNo,
                 ]
             ], 201);
         } catch (\Exception $e) {
@@ -377,12 +402,14 @@ class AdminUserController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:departments,name,' . $id . ',departmentID'],
+            'college_idNo' => ['nullable', 'string', 'max:50'],
         ]);
 
         try {
             $oldName = $department->name;
             $department->update([
                 'name' => $validated['name'],
+                'college_idNo' => $validated['college_idNo'] ?? null,
             ]);
 
             // Log activity
@@ -394,6 +421,7 @@ class AdminUserController extends Controller
                     'departmentID' => $department->departmentID,
                     'name' => $department->name,
                     'departmentName' => $department->name,
+                    'college_idNo' => $department->college_idNo,
                 ]
             ]);
         } catch (\Exception $e) {

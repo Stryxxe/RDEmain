@@ -39,11 +39,30 @@ class TimelineStageController extends Controller
     }
 
     /**
+     * Get all timeline stages for admin (including inactive)
+     */
+    public function getAllStages()
+    {
+        $stages = TimelineStage::ordered()->with('status')->get();
+        
+        return response()->json([
+            'success' => true,
+            'stages' => $stages
+        ]);
+    }
+
+    /**
      * Store a newly created timeline stage
      */
     public function store(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        // Prepare data - convert empty statusID to null
+        $data = $request->all();
+        if (empty($data['statusID'])) {
+            $data['statusID'] = null;
+        }
+        
+        $validator = Validator::make($data, [
             'stageName' => 'required|string|max:100',
             'stageDescription' => 'nullable|string',
             'orderIndex' => 'required|integer|min:0',
@@ -54,18 +73,29 @@ class TimelineStageController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         try {
-            $stage = TimelineStage::create($request->all());
+            $stage = TimelineStage::create($data);
 
             // Log activity
             ActivityService::logTimelineStageCreate($stage->stageID, $stage->stageName);
 
-            return back()->with('success', 'Timeline stage created successfully!');
+            return response()->json([
+                'success' => true,
+                'message' => 'Timeline stage created successfully!',
+                'stage' => $stage
+            ], 201);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to create timeline stage: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create timeline stage: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -74,7 +104,13 @@ class TimelineStageController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $validator = Validator::make($request->all(), [
+        // Prepare data - convert empty statusID to null
+        $data = $request->all();
+        if (empty($data['statusID'])) {
+            $data['statusID'] = null;
+        }
+        
+        $validator = Validator::make($data, [
             'stageName' => 'required|string|max:100',
             'stageDescription' => 'nullable|string',
             'orderIndex' => 'required|integer|min:0',
@@ -85,20 +121,31 @@ class TimelineStageController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return back()->withErrors($validator)->withInput();
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
         }
 
         try {
             $stage = TimelineStage::findOrFail($id);
             $oldData = $stage->toArray();
-            $stage->update($request->all());
+            $stage->update($data);
 
             // Log activity
             ActivityService::logTimelineStageUpdate($stage->stageID, $stage->stageName, $oldData, $stage->toArray());
 
-            return back()->with('success', 'Timeline stage updated successfully!');
+            return response()->json([
+                'success' => true,
+                'message' => 'Timeline stage updated successfully!',
+                'stage' => $stage
+            ], 200);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to update timeline stage: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update timeline stage: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -148,9 +195,16 @@ class TimelineStageController extends Controller
             $stage->isActive = !$stage->isActive;
             $stage->save();
 
-            return back()->with('success', 'Timeline stage status updated successfully!');
+            return response()->json([
+                'success' => true,
+                'message' => 'Timeline stage status updated successfully!',
+                'stage' => $stage
+            ]);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to update stage status: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update stage status: ' . $e->getMessage()
+            ], 500);
         }
     }
 
@@ -167,9 +221,15 @@ class TimelineStageController extends Controller
             // Log activity
             ActivityService::logTimelineStageDelete($id, $stageName);
 
-            return back()->with('success', 'Timeline stage deleted successfully!');
+            return response()->json([
+                'success' => true,
+                'message' => 'Timeline stage deleted successfully!'
+            ]);
         } catch (\Exception $e) {
-            return back()->with('error', 'Failed to delete timeline stage: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete timeline stage: ' . $e->getMessage()
+            ], 500);
         }
     }
 }

@@ -506,7 +506,6 @@ const TrackerDetail = ({ id: propId }) => {
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
                         <p className="text-gray-600">Loading proposal details...</p>
-                        <p className="text-sm text-gray-500 mt-2">ID: {id || "No ID provided"}</p>
                     </div>
                 </div>
             </div>
@@ -635,7 +634,7 @@ const TrackerDetail = ({ id: propId }) => {
                                         Research Project
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        ID: {proposal.proposalID}
+                                        ID: {proposal.custom_proposal_id || proposal.proposalID}
                                     </p>
                                 </div>
                             </div>
@@ -863,10 +862,16 @@ const TrackerDetail = ({ id: propId }) => {
 
                     return (
                         <div className="relative">
-                            {/* Scrollable Timeline Container */}
-                            <div className="overflow-x-auto pb-4">
-                                <div className="flex justify-between items-start relative min-w-max px-4">
-                                    {timelineStages.map((stage, index) => {
+                            {timelineStages.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <p className="text-gray-500">No timeline stages configured. Please contact the administrator.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Scrollable Timeline Container */}
+                                    <div className="overflow-x-auto pb-4">
+                                        <div className="flex justify-between items-start relative min-w-max px-4">
+                                            {timelineStages.map((stage, index) => {
                                         // Get date for this stage from status history
                                         const stageEntry = statusHistory.find(
                                             (e) => e.status === stage.name
@@ -987,6 +992,8 @@ const TrackerDetail = ({ id: propId }) => {
                                     })}
                                 </div>
                             </div>
+                                </>
+                            )}
                         </div>
                     );
                 })()}

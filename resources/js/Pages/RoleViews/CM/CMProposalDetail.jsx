@@ -40,19 +40,22 @@ const CMProposalDetail = () => {
     useEffect(() => {
         const fetchActiveStages = async () => {
             try {
-                const response = await axiosInstance.get(
-                    "/timeline-stages/active",
-                    {
-                        headers: { Accept: "application/json" },
-                        withCredentials: true,
+                const response = await fetch('/api/timeline-stages/active', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.stages) {
+                        setActiveTimelineStages(data.stages);
                     }
-                );
-
-                if (response.data?.data) {
-                    setActiveTimelineStages(response.data.data);
                 }
-            } catch (err) {
-                console.error("Failed to load timeline stages:", err);
+            } catch (error) {
+                console.error('Error fetching timeline stages:', error);
                 setActiveTimelineStages([]);
             }
         };
@@ -190,40 +193,79 @@ const CMProposalDetail = () => {
 
     // Dynamic timeline based on actual proposal status and endorsement status
     const getTimelineStages = () => {
+        if (!proposal || activeTimelineStages.length === 0) return [];
+
+        const statusId = proposal.statusID;
+
+        // Check for actual endorsements from the database
+        const cmEndorsement = proposal.endorsements?.find(
+            (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
+        );
+        const rddEndorsement = proposal.endorsements?.find(
+            (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+        );
+
+        // Map database timeline stages to display format
+        const allStages = activeTimelineStages.map((stage, index) => ({
+            id: stage.timelineStageID,
+            name: stage.stageName,
+            description: stage.stageDescription,
+            status: "pending",
+            color: stage.color || 'blue',
+            statusName: stage.status?.statusName || null,
+            statusID: stage.statusID
+        }));
+
+        if (allStages.length === 0) return [];
+
+        // Determine which stage is current based on proposal's status
+        const currentStageIndex = allStages.findIndex(
+            (stage) => stage.statusID === statusId
+        );
+
+        // Update stages based on current proposal status
+        allStages.forEach((stage, index) => {
+            if (currentStageIndex === -1) {
+                // No matching status, mark first stage as current
+                if (index === 0) {
+                    stage.status = "current";
+                }
+            } else if (index < currentStageIndex) {
+                // Stages before current are completed
+                stage.status = "completed";
+            } else if (index === currentStageIndex) {
+                // Current stage
+                stage.status = "current";
+                // Check if proposal is rejected
+                if (proposal.status?.statusName?.toLowerCase().includes('reject')) {
+                    stage.status = "rejected";
+                }
+            }
+            // Remaining stages stay as "pending"
+        });
+
+        return allStages;
+    };
+
+    // Legacy fallback function for compatibility
+    const getLegacyTimelineStages = () => {
         if (!proposal) return [];
 
         const statusId = proposal.statusID;
 
-        // Use admin-configured stages when available; fallback to legacy list
-        const baseStages = (activeTimelineStages?.length
-            ? [...activeTimelineStages]
-                  .filter((s) => s.isActive !== false)
-                  .sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0))
-                  .map((s, idx) => ({
-                      id: s.stageID || idx,
-                      name: s.stageName || `Stage ${idx + 1}`,
-                      status: "pending",
-                      orderIndex: s.orderIndex || idx + 1,
-                      color: s.color || "gray",
-                  }))
-            : [
-                  { id: 0, name: "Proposal Submitted", status: "pending" },
-                  { id: 1, name: "College Endorsement", status: "pending" },
-                  { id: 2, name: "R&D Division", status: "pending" },
-                  { id: 3, name: "Proposal Review", status: "pending" },
-                  { id: 4, name: "Ethics Review", status: "pending" },
-                  { id: 5, name: "OVPRDE", status: "pending" },
-                  { id: 6, name: "President", status: "pending" },
-                  { id: 7, name: "OSOURU", status: "pending" },
-                  { id: 8, name: "Implementation", status: "pending" },
-                  { id: 9, name: "Monitoring", status: "pending" },
-                  { id: 10, name: "For Completion", status: "pending" },
-              ]
-        ).map((stage, idx) => ({
-            ...stage,
-            status: stage.status || "pending",
-            id: stage.id ?? idx,
-        }));
+        const baseStages = [
+            { id: 0, name: "Proposal Submitted", status: "pending" },
+            { id: 1, name: "College Endorsement", status: "pending" },
+            { id: 2, name: "R&D Division", status: "pending" },
+            { id: 3, name: "Proposal Review", status: "pending" },
+            { id: 4, name: "Ethics Review", status: "pending" },
+            { id: 5, name: "OVPRDE", status: "pending" },
+            { id: 6, name: "President", status: "pending" },
+            { id: 7, name: "OSOURU", status: "pending" },
+            { id: 8, name: "Implementation", status: "pending" },
+            { id: 9, name: "Monitoring", status: "pending" },
+            { id: 10, name: "For Completion", status: "pending" },
+        ];
 
         // Helper to set status safely by index
         const setStatus = (idx, value) => {
@@ -284,10 +326,9 @@ const CMProposalDetail = () => {
                 break;
             default:
                 setStatus(0, "completed");
-                if (hasCmEndorsement) {
+                if (isEndorsed) {
                     setStatus(1, "completed");
-                    setStatus(2, hasRddEndorsement ? "completed" : "current");
-                    if (hasRddEndorsement) setStatus(3, "current");
+                    setStatus(2, "current");
                 } else {
                     setStatus(1, "current");
                 }
@@ -300,14 +341,16 @@ const CMProposalDetail = () => {
         const baseDate = new Date(proposal?.created_at || Date.now());
         const statusHistory = [];
 
+        const allTimelineStages = getTimelineStages();
+
         // Get stages in chronological order
-        const completedStages = timelineStages.filter(
+        const completedStages = allTimelineStages.filter(
             (stage) => stage.status === "completed"
         );
-        const currentStage = timelineStages.find(
+        const currentStage = allTimelineStages.find(
             (stage) => stage.status === "current"
         );
-        const rejectedStage = timelineStages.find(
+        const rejectedStage = allTimelineStages.find(
             (stage) => stage.status === "rejected"
         );
 
@@ -405,6 +448,7 @@ const CMProposalDetail = () => {
                     minute: "2-digit",
                     hour12: true,
                 }),
+                dateObj: entry.date, // Add date object for timeline display
                 status: entry.status,
                 action: entry.action,
                 priority: entry.priority,
@@ -518,10 +562,14 @@ const CMProposalDetail = () => {
                         {(() => {
                             const timelineStages = getTimelineStages();
                             const collegeEndorsementStage = timelineStages.find(
-                                (stage) => stage.name === "College Endorsement"
+                                (stage) => stage.name === "College Endorsement" || 
+                                           stage.name?.toLowerCase().includes("college") ||
+                                           stage.name?.toLowerCase().includes("endorsement")
                             );
+                            // Show button if College Endorsement stage is current, or if proposal is Under Review (statusID 1) and not endorsed
                             const isCurrentStage =
-                                collegeEndorsementStage?.status === "current";
+                                collegeEndorsementStage?.status === "current" ||
+                                (proposal.statusID === 1 && !isEndorsed);
 
                             if (isEndorsed) {
                                 return (
@@ -603,10 +651,7 @@ const CMProposalDetail = () => {
                                     </svg>
                                     <span className="font-medium">ID:</span>
                                     <span className="ml-1">
-                                        PRO-
-                                        {proposal.proposalID
-                                            .toString()
-                                            .padStart(6, "0")}
+                                        {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
                                     </span>
                                 </div>
                                 <div className="flex items-center">
@@ -750,85 +795,153 @@ const CMProposalDetail = () => {
                             <p className="text-gray-600">
                                 Track your project's progress through each stage
                             </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                ← Scroll horizontally to view all stages →
+                            </p>
                         </div>
                     </div>
 
-                    {/* Horizontal Timeline */}
-                    <div className="relative">
-                        {/* Scrollable Timeline Container */}
-                        <div className="overflow-x-auto pb-4">
-                            <div className="flex justify-between items-start relative min-w-max px-4">
-                                {timelineStages.map((stage, index) => (
-                                    <div
-                                        key={stage.id}
-                                        className="flex flex-col items-center relative mx-8"
-                                    >
-                                        {/* Stage Dot */}
-                                        <div
-                                            className={`w-12 h-12 rounded-full ${getStatusColor(
-                                                stage.status
-                                            )} mb-4 relative z-10`}
-                                        >
-                                            {stage.status === "completed" && (
-                                                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
-                                                    <svg
-                                                        className="w-6 h-6 text-green-500"
-                                                        fill="currentColor"
-                                                        viewBox="0 0 20 20"
-                                                    >
-                                                        <path
-                                                            fillRule="evenodd"
-                                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                                            clipRule="evenodd"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                            )}
-                                        </div>
+                    {/* Timeline stages data */}
+                    {(() => {
+                        const timelineStages = getTimelineStages();
+                        const statusHistory = getStatusHistory(); // Compute once to get dates
 
-                                        {/* Connecting Line */}
-                                        {index < timelineStages.length - 1 && (
-                                            <div className="absolute top-3 left-full w-16 h-0.5 bg-gray-300 z-0">
-                                                <div
-                                                    className="h-full bg-green-500 transition-all duration-500"
-                                                    style={{
-                                                        width:
-                                                            stage.status ===
-                                                            "completed"
-                                                                ? "100%"
-                                                                : "0%",
-                                                    }}
-                                                ></div>
-                                            </div>
-                                        )}
+                        const getStatusColor = (status) => {
+                            switch (status) {
+                                case "completed":
+                                    return "bg-green-500";
+                                case "current":
+                                    return "bg-blue-500";
+                                case "rejected":
+                                    return "bg-red-500";
+                                default:
+                                    return "bg-gray-300";
+                            }
+                        };
 
-                                        {/* Stage Label */}
-                                        <div
-                                            className={`px-4 py-2 rounded-lg text-center min-w-32 ${
-                                                stage.status === "current"
-                                                    ? "bg-red-50 border border-red-200"
-                                                    : stage.status ===
-                                                      "completed"
-                                                    ? "bg-green-50 border border-green-200"
-                                                    : stage.status ===
-                                                      "rejected"
-                                                    ? "bg-red-50 border border-red-200"
-                                                    : "bg-gray-50 border border-gray-200"
-                                            }`}
-                                        >
-                                            <span
-                                                className={`text-sm font-medium ${getStatusTextColor(
-                                                    stage.status
-                                                )} leading-tight`}
-                                            >
-                                                {stage.name}
-                                            </span>
-                                        </div>
+                        const getStatusTextColor = (status) => {
+                            switch (status) {
+                                case "completed":
+                                    return "text-green-700";
+                                case "current":
+                                    return "text-blue-700";
+                                case "rejected":
+                                    return "text-red-700";
+                                default:
+                                    return "text-gray-600";
+                            }
+                        };
+
+                        return (
+                            <div className="relative">
+                                {timelineStages.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <p className="text-gray-500">No timeline stages configured. Please contact the administrator.</p>
                                     </div>
-                                ))}
+                                ) : (
+                                    <>
+                                        {/* Scrollable Timeline Container */}
+                                        <div className="overflow-x-auto pb-4">
+                                            <div className="flex justify-between items-start relative min-w-max px-4">
+                                                {timelineStages.map((stage, index) => {
+                                            // Get date for this stage from status history
+                                            const stageEntry = statusHistory.find(
+                                                (e) => e.status === stage.name
+                                            );
+                                            const stageDate =
+                                                stageEntry?.dateObj || null;
+
+                                            return (
+                                                <div
+                                                    key={`timeline-stage-${stage.id}-${index}`}
+                                                    className="flex flex-col items-center relative mx-4 sm:mx-8"
+                                                >
+                                                    {/* Stage Dot */}
+                                                    <div
+                                                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(
+                                                            stage.status
+                                                        )} mb-4 relative z-10`}
+                                                    >
+                                                        {stage.status ===
+                                                            "completed" && (
+                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
+                                                                <svg
+                                                                    className="w-5 h-5 sm:w-6 sm:h-6 text-green-500"
+                                                                    fill="currentColor"
+                                                                    viewBox="0 0 20 20"
+                                                                >
+                                                                    <path
+                                                                        fillRule="evenodd"
+                                                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                                        clipRule="evenodd"
+                                                                    />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Connecting Line */}
+                                                    {index <
+                                                        timelineStages.length -
+                                                            1 && (
+                                                        <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
+                                                            <div
+                                                                className="h-full bg-green-500 transition-all duration-500"
+                                                                style={{
+                                                                    width:
+                                                                        stage.status ===
+                                                                        "completed"
+                                                                            ? "100%"
+                                                                            : "0%",
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Stage Label with Date */}
+                                                    <div
+                                                        className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
+                                                            stage.status ===
+                                                            "current"
+                                                                ? "bg-blue-50 border border-blue-200"
+                                                                : stage.status ===
+                                                                  "completed"
+                                                                ? "bg-green-50 border border-green-200"
+                                                                : stage.status ===
+                                                                  "rejected"
+                                                                ? "bg-red-50 border border-red-200"
+                                                                : "bg-gray-50 border border-gray-200"
+                                                        }`}
+                                                    >
+                                                        <span
+                                                            className={`text-xs sm:text-sm font-medium ${getStatusTextColor(
+                                                                stage.status
+                                                            )} leading-tight block mb-1`}
+                                                        >
+                                                            {stage.name}
+                                                        </span>
+                                                        {stageDate && (
+                                                            <span className="text-xs text-gray-500 block">
+                                                                {stageDate.toLocaleDateString(
+                                                                    "en-US",
+                                                                    {
+                                                                        month: "short",
+                                                                        day: "numeric",
+                                                                    }
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                    </>
+                                )}
                             </div>
-                        </div>
-                    </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Status History Section */}

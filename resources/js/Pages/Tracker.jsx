@@ -453,10 +453,7 @@ const Tracker = () => {
                                             )}
                                         </div>
                                         <div className="text-sm text-gray-600">
-                                            ID: PRO-
-                                            {proposal.proposalID
-                                                .toString()
-                                                .padStart(6, "0")}
+                                            ID: {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
                                         </div>
                                         <div className="text-sm text-gray-600">
                                             Submitted:{" "}
