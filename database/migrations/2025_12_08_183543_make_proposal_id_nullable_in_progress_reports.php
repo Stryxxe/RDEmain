@@ -3,8 +3,6 @@
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use App\Models\Activity;
-use App\Models\User;
 
 return new class extends Migration
 {
@@ -13,7 +11,9 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Skip - no users exist to seed activities for
+        Schema::table('progress_reports', function (Blueprint $table) {
+            $table->unsignedBigInteger('proposalID')->nullable()->change();
+        });
     }
 
     /**
@@ -21,6 +21,8 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Activity::whereIn('action', ['create', 'update', 'delete'])->delete();
+        Schema::table('progress_reports', function (Blueprint $table) {
+            $table->unsignedBigInteger('proposalID')->nullable(false)->change();
+        });
     }
 };

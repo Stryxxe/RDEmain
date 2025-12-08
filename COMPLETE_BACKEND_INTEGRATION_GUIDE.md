@@ -291,6 +291,7 @@ if (showEditProposal) {
 ✅ CM can edit proposals from their department
 ✅ RDD can edit all proposals
 ✅ Proponent can edit their own proposals
+✅ Proponents submit proposals and progress reports; CMs receive the submissions only when they share the same research center as the proponent
 ✅ Research Agenda editing
 ✅ DOST Strategic Programs editing
 ✅ Sustainable Development Goals editing

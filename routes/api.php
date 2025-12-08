@@ -181,7 +181,7 @@ Route::get('/admin/research-centers', function (Request $request) {
                 'centerID' => $center->centerID,
                 'centerName' => $center->name,
                 'departmentID' => $center->departmentID,
-                'departmentName' => $center->department->name ?? $center->department->departmentName ?? null,
+                'departmentName' => $center->department ? ($center->department->name ?? $center->department->departmentName ?? null) : null,
             ];
         });
 
@@ -190,9 +190,10 @@ Route::get('/admin/research-centers', function (Request $request) {
             'data' => $centers,
         ]);
     } catch (\Throwable $e) {
+        \Log::error('Research centers endpoint error: ' . $e->getMessage());
         return response()->json([
             'success' => false,
-            'message' => 'Failed to load research centers',
+            'message' => 'Failed to load research centers: ' . $e->getMessage(),
         ], 500);
     }
 })->middleware('auth:web');

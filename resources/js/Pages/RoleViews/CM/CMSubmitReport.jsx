@@ -1,9 +1,27 @@
-import React from "react";
+import React, { useMemo } from "react";
+import { usePage } from "@inertiajs/react";
 import SubmitProgressReport from "../../../Components/SubmitProgressReport";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 
 const CMSubmitReport = () => {
+    const { url } = usePage();
+
+    // Auto-read proposalID from query string if provided (no UI field shown)
+    const proposalIdFromQuery = useMemo(() => {
+        try {
+            const search = url?.split("?")[1];
+            if (!search) return null;
+            const params = new URLSearchParams(search);
+            const value = params.get("proposalID") || params.get("proposalId");
+            if (!value) return null;
+            const num = Number(value);
+            return Number.isNaN(num) ? null : num;
+        } catch (e) {
+            return null;
+        }
+    }, [url]);
+
     return (
         <div className="min-h-screen bg-gray-50 p-6">
             <div className="max-w-4xl mx-auto">
@@ -18,17 +36,19 @@ const CMSubmitReport = () => {
                 </div>
 
                 {/* Important Notice */}
-                <div className="bg-gray-100 border-l-4 border-blue-500 p-4 mb-8">
+                <div className="bg-gray-100 border-l-4 border-blue-500 p-4 mb-6">
                     <h3 className="font-semibold text-gray-800 mb-2">
                         Important Notice
                     </h3>
-                    <p className="text-gray-700 text-sm">
-                        Fields marked with an asterisk (*) are mandatory and
-                        must be filled out before submission.
+                    <p className="text-gray-700 text-sm mb-3">
+                        Fields marked with an asterisk (*) are mandatory and must be filled out before submission.
                     </p>
                 </div>
 
-                <SubmitProgressReport />
+                <SubmitProgressReport
+                    proposalID={proposalIdFromQuery}
+                    redirectUrl="/cm/progress-report"
+                />
             </div>
         </div>
     );

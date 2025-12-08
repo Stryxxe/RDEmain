@@ -41,24 +41,58 @@ class ProgressReportController extends Controller
             // Use eager loading with null-safe relationships
             $query = ProgressReport::with([
                 'proposal' => function($q) {
-                    $q->with(['user' => function($q2) {
-                        $q2->with('department');
-                    }]);
+                    $q->with([
+                        'user' => function($q2) {
+                            $q2->with(['department', 'researchCenter']);
+                        },
+                        'proponents'
+                    ]);
                 },
-                'user',
+                'researchCenter',
+                'department',
+                'user.role',
                 'files'
             ]);
 
-            // For RDD users, show all reports
-            if ($user->role && $user->role->userRole === 'RDD') {
-                // RDD users can see all reports - no filtering needed
-            } 
-            // For CM users, show only reports they submitted themselves
-            else if ($user->role && $user->role->userRole === 'CM') {
-                // CM users see only their own submitted reports
-                $query->where('userID', $user->userID);
-            } 
-            // For other users, show only their own reports
+            $userRole = $user->role?->userRole;
+
+            // For RDD users, show only reports submitted by CMs
+            if ($userRole === 'RDD') {
+                $query->whereHas('user.role', function ($q) {
+                    $q->where('userRole', 'CM');
+                });
+            }
+            // CM users: show reports submitted by proponents in the same research center
+            else if ($userRole === 'CM') {
+                if (!$user->researchCenterID) {
+                    // If CM lacks a research center assignment, return empty without error
+                    return response()->json([
+                        'success' => true,
+                        'data' => collect(),
+                        'message' => 'CM user has no research center assigned; no reports available'
+                    ]);
+                }
+
+                // Show reports submitted by proponents (not by CMs) in the same research center
+                // Also include reports where proposalID is null but researchCenterID matches (CM submitted)
+                $query->where(function ($q) use ($user) {
+                    // Case 1: Reports from proponents in same research center
+                    $q->where(function ($q2) use ($user) {
+                        $q2->whereHas('user.role', function ($q3) {
+                            $q3->where('userRole', '!=', 'CM')
+                              ->where('userRole', '!=', 'RDD');
+                        })->whereHas('proposal.user', function ($q3) use ($user) {
+                            $q3->where('researchCenterID', $user->researchCenterID);
+                        });
+                    })
+                    // Case 2: Reports with no proposal but same research center (CM submitted)
+                    ->orWhere(function ($q2) use ($user) {
+                        $q2->whereNull('proposalID')
+                           ->where('researchCenterID', $user->researchCenterID);
+                    });
+                });
+            }
+            // Other users: only their own reports
             else {
                 $query->where('userID', $user->userID);
             }
@@ -102,7 +136,7 @@ class ProgressReportController extends Controller
         $maxFileSizeKB = SettingsHelper::getMaxFileSizeKB();
         
         $validator = Validator::make($request->all(), [
-            'proposalID' => 'required|exists:proposals,proposalID',
+            'proposalID' => 'nullable|exists:proposals,proposalID',
             'reportType' => 'nullable|string|in:Quarterly,Annual,Final,Interim,General',
             'reportPeriod' => 'nullable|string',
             'progressPercentage' => 'nullable|integer|min:0|max:100',
@@ -126,58 +160,77 @@ class ProgressReportController extends Controller
         try {
             $user = Auth::user();
 
-            // Verify the proposal belongs to the user (unless they're RDD)
-            $proposal = Proposal::find($request->proposalID);
-            if (!$proposal) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Proposal not found'
-                ], 404);
-            }
-
-            // Check if user has permission to submit report for this proposal
+            // Load user role
             if (!$user->relationLoaded('role')) {
                 $user->load('role');
             }
+            $userRole = $user->role ? $user->role->userRole : null;
 
-            // Load proposal user and department relationships
-            if (!$proposal->relationLoaded('user')) {
-                $proposal->load('user');
+            // For non-CM users, proposalID is required
+            if (!$request->proposalID && $userRole !== 'CM') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Proposal ID is required'
+                ], 400);
             }
-            if (!$proposal->user->relationLoaded('department')) {
-                $proposal->user->load('department');
+
+            $proposal = null;
+            $proposalID = null;
+
+            // If proposalID is provided, verify it exists and user has permission
+            if ($request->proposalID) {
+                $proposalID = $request->proposalID;
+                $proposal = Proposal::find($proposalID);
+                
+                if (!$proposal) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Proposal not found'
+                    ], 404);
+                }
+
+                // Load proposal user and department relationships
+                if (!$proposal->relationLoaded('user')) {
+                    $proposal->load('user');
+                }
+                if (!$proposal->user->relationLoaded('department')) {
+                    $proposal->user->load('department');
+                }
+
+                // Check if user has permission to submit report for this proposal
+                // RDD users can submit reports for any proposal
+                if ($userRole === 'RDD') {
+                    // Allow
+                }
+                // CM users can submit reports for any proposal in their department (for monitoring)
+                else if ($userRole === 'CM') {
+                    if ($proposal->user->departmentID !== $user->departmentID) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'You can only submit reports for proposals in your department'
+                        ], 403);
+                    }
+                }
+                // Other users can only submit reports for their own proposals
+                else if ($proposal->userID !== $user->userID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'You can only submit reports for your own proposals'
+                    ], 403);
+                }
             }
+
+            // Load user department if needed
             if (!$user->relationLoaded('department')) {
                 $user->load('department');
             }
 
-            $userRole = $user->role ? $user->role->userRole : null;
-            
-            // RDD users can submit reports for any proposal
-            if ($userRole === 'RDD') {
-                // Allow
-            }
-            // CM users can submit reports for any proposal in their department (for monitoring)
-            else if ($userRole === 'CM') {
-                if ($proposal->user->departmentID !== $user->departmentID) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'You can only submit reports for proposals in your department'
-                    ], 403);
-                }
-            }
-            // Other users can only submit reports for their own proposals
-            else if ($proposal->userID !== $user->userID) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You can only submit reports for your own proposals'
-                ], 403);
-            }
-
             // Create the progress report
             $report = ProgressReport::create([
-                'proposalID' => $request->proposalID,
+                'proposalID' => $proposalID,
                 'userID' => $user->userID,
+                'researchCenterID' => $user->researchCenterID,
+                'departmentID' => $user->departmentID,
                 'reportType' => $request->reportType ?: 'General',
                 'reportPeriod' => $request->reportPeriod ?: 'N/A',
                 'progressPercentage' => $request->progressPercentage ?? 0,
@@ -195,14 +248,20 @@ class ProgressReportController extends Controller
                     $filename = time() . '_' . $file->getClientOriginalName();
                     $path = $file->storeAs('progress_reports/' . $report->reportID, $filename, 'public');
                     
-                    File::create([
-                        'proposalID' => $request->proposalID,
+                    $fileData = [
                         'reportID' => $report->reportID,
                         'fileName' => $filename,
                         'filePath' => $path,
                         'fileType' => 'progress_report',
                         'fileSize' => $file->getSize()
-                    ]);
+                    ];
+                    
+                    // Only include proposalID if it's provided (not null)
+                    if ($proposalID) {
+                        $fileData['proposalID'] = $proposalID;
+                    }
+                    
+                    File::create($fileData);
                 }
             }
 
@@ -238,8 +297,23 @@ class ProgressReportController extends Controller
             $query = ProgressReport::with(['proposal.user.department', 'user', 'files'])
                 ->where('reportID', $id);
 
-            // For non-RDD users, only show their own reports
-            if ($user->role && $user->role->userRole !== 'RDD') {
+            $userRole = $user->role?->userRole;
+
+            if ($userRole === 'RDD') {
+                // RDD can view any report
+            } else if ($userRole === 'CM') {
+                if (!$user->researchCenterID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'CM user has no research center assigned'
+                    ], 403);
+                }
+
+                $query->whereHas('proposal.user', function ($q) use ($user) {
+                    $q->where('researchCenterID', $user->researchCenterID);
+                });
+            } else {
+                // Other users: only their own reports
                 $query->where('userID', $user->userID);
             }
 

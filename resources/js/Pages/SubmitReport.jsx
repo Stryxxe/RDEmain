@@ -139,7 +139,8 @@ const SubmitReport = () => {
             if (response.success) {
                 setSuccess(true);
                 setTimeout(() => {
-                    router.visit("/proponent/tracker");
+                    // Stay on the submit report page so proponents can submit another report
+                    router.visit(window.location.pathname);
                 }, 2000);
             } else {
                 setError(response.message || "Failed to submit report");

@@ -480,10 +480,18 @@ class ApiService {
 
   async post(url, data = null) {
     try {
+      const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+      const headers = this.getHeaders(true);
+
+      // Let the browser set the multipart boundary for FormData
+      if (isFormData) {
+        delete headers['Content-Type'];
+      }
+
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'POST',
-        headers: this.getHeaders(true), // POST requests need CSRF
-        body: data ? JSON.stringify(data) : null,
+        headers,
+        body: isFormData ? data : data ? JSON.stringify(data) : null,
         credentials: 'include'
       });
       
@@ -495,10 +503,17 @@ class ApiService {
 
   async put(url, data = null) {
     try {
+      const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+      const headers = this.getHeaders(true);
+
+      if (isFormData) {
+        delete headers['Content-Type'];
+      }
+
       const response = await fetch(`${this.baseURL}${url}`, {
         method: 'PUT',
-        headers: this.getHeaders(true), // PUT requests need CSRF
-        body: data ? JSON.stringify(data) : null,
+        headers,
+        body: isFormData ? data : data ? JSON.stringify(data) : null,
         credentials: 'include'
       });
       
