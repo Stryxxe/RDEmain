@@ -38,7 +38,7 @@ class ProposalController extends Controller
                 'user.role:userRoleID,userRole',
                 // Don't use column selection for many-to-many relationships - it can cause issues
                 'proponents',
-                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsementDate',
+                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt',
                 'endorsements.endorser:userID,firstName,lastName,userRolesID',
                 'endorsements.endorser.role:userRoleID,userRole'
             ]);

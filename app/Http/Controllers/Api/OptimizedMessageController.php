@@ -297,8 +297,8 @@ class OptimizedMessageController extends Controller
                 return response()->json(['error' => 'Proponents can only message Center Managers'], 403);
             }
             
-            if ($user->departmentID !== $recipient->departmentID) {
-                return response()->json(['error' => 'You can only message Center Managers from your department'], 403);
+            if ($user->researchCenterID !== $recipient->researchCenterID) {
+                return response()->json(['error' => 'You can only message Center Managers from your research center'], 403);
             }
         }
         

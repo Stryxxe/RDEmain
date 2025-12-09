@@ -166,7 +166,13 @@ class EndorsementController extends Controller
                 // Get department name
                 $departmentName = $proposal->user->department ? $proposal->user->department->name : 'Unknown Department';
 
-                // Notify the CM user about their successful endorsement action
+                // Ensure user role is loaded
+                if (!$user->relationLoaded('role')) {
+                    $user->load('role');
+                }
+                $endorserRole = $user->role ? $user->role->userRole : 'Unknown';
+
+                // Notify the endorser about their successful endorsement action
                 Notification::create([
                     'userID' => $user->userID,
                     'type' => 'success',
@@ -182,11 +188,19 @@ class EndorsementController extends Controller
                 ]);
 
                 // Notify the proponent that their proposal has been endorsed
+                // Message varies based on endorser role
+                $proponentMessage = match($endorserRole) {
+                    'CM' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and forwarded to RDD.",
+                    'RDD' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and archived.",
+                    'RDE' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName}.",
+                    default => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName}.",
+                };
+
                 Notification::create([
                     'userID' => $proposal->userID,
                     'type' => 'success',
                     'title' => 'Proposal Endorsed',
-                    'message' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and forwarded to RDD.",
+                    'message' => $proponentMessage,
                     'data' => [
                         'proposal_id' => $proposal->proposalID,
                         'proposal_title' => $proposal->researchTitle,

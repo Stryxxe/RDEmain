@@ -235,15 +235,25 @@ const RDDProgressReport = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
-                                    {sortedRows.map(({ report, proposal }) => (
+                                    {sortedRows.map(({ report, proposal }) => {
+                                        // For reports with proposals, show proposal's user's research center/department
+                                        // For reports without proposals, show report's research center/department
+                                        const researchCenter = proposal?.user?.researchCenter?.name 
+                                            || report.researchCenter?.name 
+                                            || "Unknown Center";
+                                        const department = proposal?.user?.department?.name 
+                                            || report.department?.name 
+                                            || "Unknown Department";
+                                        
+                                        return (
                                         <tr key={report.reportID} className="hover:bg-gray-50">
                                             <td className="px-6 py-4 align-top">
                                                 <div className="text-sm font-semibold text-gray-900">
-                                                    {report.researchCenter?.name || "Unknown Center"}
+                                                    {researchCenter}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4 align-top text-sm text-gray-900">
-                                                {report.department?.name || "Unknown Department"}
+                                                {department}
                                             </td>
                                             <td className="px-6 py-4 align-top text-sm text-gray-900">
                                                 {new Date(report.submittedAt || report.created_at).toLocaleString()}
@@ -260,7 +270,8 @@ const RDDProgressReport = () => {
                                                 </button>
                                             </td>
                                         </tr>
-                                    ))}
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>
