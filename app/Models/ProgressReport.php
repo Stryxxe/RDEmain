@@ -19,6 +19,8 @@ class ProgressReport extends Model
     protected $fillable = [
         'proposalID',
         'userID',
+        'researchCenterID',
+        'departmentID',
         'reportType',
         'reportPeriod',
         'progressPercentage',
@@ -58,6 +60,22 @@ class ProgressReport extends Model
     public function files(): HasMany
     {
         return $this->hasMany(File::class, 'reportID', 'reportID');
+    }
+
+    /**
+     * Get the research center for this report
+     */
+    public function researchCenter(): BelongsTo
+    {
+        return $this->belongsTo(ResearchCenter::class, 'researchCenterID', 'centerID');
+    }
+
+    /**
+     * Get the department for this report
+     */
+    public function department(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'departmentID', 'departmentID');
     }
 }
 

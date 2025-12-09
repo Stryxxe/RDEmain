@@ -16,6 +16,7 @@ import {
     Settings,
     BarChart,
     UserCircle,
+    RefreshCw,
 } from "lucide-react";
 
 const RoleBasedNavigation = ({ role: propRole, className = "" }) => {
@@ -64,6 +65,8 @@ const RoleBasedNavigation = ({ role: propRole, className = "" }) => {
                 return <Upload className="w-6 h-6" />;
             case "Tracker":
                 return <Search className="w-6 h-6" />;
+            case "For Revision":
+                return <RefreshCw className="w-6 h-6" />;
             case "Projects":
                 return <FileCheck className="w-6 h-6" />;
             case "Endorsement":

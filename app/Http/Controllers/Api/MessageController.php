@@ -267,12 +267,25 @@ class MessageController extends Controller
     {
         $user = $request->user();
         
-        // For CM users, verify the other user is from the same department
-        if ($user->role && $user->role->userRole === 'CM') {
-            $otherUser = User::find($otherUserId);
-            if (!$otherUser || $otherUser->departmentID !== $user->departmentID) {
-                return response()->json(['error' => 'Access denied - user not in same department'], 403);
-            }
+        // Ensure user has role loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // Verify the other user exists
+        $otherUser = User::with('role')->find($otherUserId);
+        if (!$otherUser) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+        
+        // Authorization: For CM and Proponent users, verify they can access this user
+        // But allow viewing existing conversation history regardless
+        // Only enforce department restrictions when starting NEW conversations (in store method)
+        if ($user->role) {
+            $userRole = $user->role->userRole;
+            
+            // For now, allow all authenticated users to view existing conversations
+            // Authorization is enforced at message creation time via the store() method
         }
         
         $messages = Message::where(function ($query) use ($user, $otherUserId) {

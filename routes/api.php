@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Services\ActivityService;
 use App\Http\Controllers\ProposalController;
 use App\Http\Controllers\EndorsementController;
 use App\Http\Controllers\ReviewController;
@@ -26,6 +27,16 @@ Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->midd
 use App\Models\Department;
 use App\Models\ResearchCenter;
 use App\Models\Setting;
+use App\Models\Status;
+
+// Get all statuses
+Route::get('/statuses', function () {
+    return response()->json([
+        'success' => true,
+        'data' => Status::all()
+    ]);
+})->middleware('auth:web');
+
 // Get upload settings (max file size) - public endpoint for all authenticated users
 Route::get('/upload-settings', function () {
     try {
@@ -115,6 +126,58 @@ Route::get('/users/search', function (Request $request) {
     return response()->json(['success' => true, 'data' => $users]);
 })->middleware('auth:web');
 
+// Search all users (for RDD and Admin roles to message anyone)
+Route::get('/users/search-all', function (Request $request) {
+    $validated = $request->validate([
+        'q' => 'nullable|string|max:100',
+        'limit' => 'nullable|integer|min:1|max:50',
+    ]);
+
+    $q = trim($validated['q'] ?? '');
+    $limit = (int)($validated['limit'] ?? 20);
+    $currentUser = $request->user();
+
+    // Only allow RDD and Admin to search all users
+    $userRole = $currentUser->role?->userRole;
+    if (!in_array($userRole, ['RDD', 'Admin'])) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Unauthorized'
+        ], 403);
+    }
+
+    $users = \App\Models\User::query()
+        ->with('role')
+        ->select(['userID', 'firstName', 'lastName', 'email', 'userRolesID'])
+        // Exclude current user
+        ->where('userID', '!=', $currentUser->userID)
+        // Text search
+        ->when($q !== '', function ($query) use ($q) {
+            $like = "%{$q}%";
+            $query->where(function ($sub) use ($like) {
+                $sub->where('firstName', 'like', $like)
+                    ->orWhere('lastName', 'like', $like)
+                    ->orWhereRaw("CONCAT(firstName,' ',lastName) like ?", [$like])
+                    ->orWhere('email', 'like', $like);
+            });
+        })
+        ->orderBy('lastName')
+        ->orderBy('firstName')
+        ->limit($limit)
+        ->get()
+        ->map(function ($u) {
+            return [
+                'userID' => $u->userID,
+                'firstName' => $u->firstName,
+                'lastName' => $u->lastName,
+                'email' => $u->email,
+                'role' => $u->role?->userRole,
+            ];
+        });
+
+    return response()->json(['success' => true, 'data' => $users]);
+})->middleware('auth:web');
+
 // Admin: Research Centers list for user creation form
 Route::get('/admin/research-centers', function (Request $request) {
     try {
@@ -127,7 +190,7 @@ Route::get('/admin/research-centers', function (Request $request) {
                 'centerID' => $center->centerID,
                 'centerName' => $center->name,
                 'departmentID' => $center->departmentID,
-                'departmentName' => $center->department->name ?? $center->department->departmentName ?? null,
+                'departmentName' => $center->department ? ($center->department->name ?? $center->department->departmentName ?? null) : null,
             ];
         });
 
@@ -136,9 +199,10 @@ Route::get('/admin/research-centers', function (Request $request) {
             'data' => $centers,
         ]);
     } catch (\Throwable $e) {
+        \Log::error('Research centers endpoint error: ' . $e->getMessage());
         return response()->json([
             'success' => false,
-            'message' => 'Failed to load research centers',
+            'message' => 'Failed to load research centers: ' . $e->getMessage(),
         ], 500);
     }
 })->middleware('auth:web');
@@ -154,6 +218,9 @@ Route::post('/admin/research-centers', function (Request $request) {
         'name' => $request->name,
         'departmentID' => $request->departmentID
     ]);
+    
+    // Log activity
+    ActivityService::logResearchCenterCreate($center->researchCenterID, $center->name);
     
     return response()->json(['success' => true, 'data' => $center]);
 })->middleware('auth:web');
@@ -177,7 +244,12 @@ Route::put('/admin/research-centers/{id}', function (Request $request, $id) {
 // Admin: Delete research center
 Route::delete('/admin/research-centers/{id}', function ($id) {
     $center = ResearchCenter::findOrFail($id);
+    $centerName = $center->name;
     $center->delete();
+    
+    // Log activity
+    ActivityService::logResearchCenterDelete($id, $centerName);
+    
     return response()->json(['success' => true]);
 })->middleware('auth:web');
 
@@ -740,6 +812,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     Route::put('/messages/mark-all-read', [SimpleOptimizedMessageController::class, 'markAllAsRead']);
     Route::delete('/messages/{id}', [SimpleOptimizedMessageController::class, 'destroy']);
     Route::delete('/messages/clear-all', [SimpleOptimizedMessageController::class, 'clearAll']);
+    Route::delete('/messages/conversation/{otherUserId}', [SimpleOptimizedMessageController::class, 'deleteConversation']);
 
 });
 
@@ -750,10 +823,16 @@ Route::middleware(['auth:web'])->group(function () {
     Route::get('/settings', [SettingController::class, 'index']);
     Route::get('/settings/{key}', [SettingController::class, 'show']);
     Route::put('/settings', [SettingController::class, 'update']);
+
+    // Backup management
+    Route::post('/backup/trigger', [SettingController::class, 'triggerBackup']);
+    Route::post('/backup/scan', [SettingController::class, 'scanBackupFolder']);
+    Route::get('/backup/status', [SettingController::class, 'getBackupStatus']);
     
     Route::get('/admin/users', [AdminUserController::class, 'index']);
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
+    Route::post('/admin/users/{user:userID}/reset-password', [AdminUserController::class, 'resetPassword']);
     Route::delete('/admin/users/{userId}', [AdminUserController::class, 'destroy']);
     
     // Department management
@@ -849,6 +928,9 @@ Route::middleware(['auth:web'])->group(function () {
             ];
             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
             
+            // Log activity
+            ActivityService::log('create', 'Uploaded proponent template: ' . $templateName, 'Template', null);
+            
             // For now, return success - will be saved to database later
             return response()->json([
                 'success' => true,
@@ -883,13 +965,18 @@ Route::middleware(['auth:web'])->group(function () {
                     if (md5($filename) === $id) {
                         \Storage::disk('public')->delete('templates/proponent/' . $filename);
                         
-                        // Remove from metadata
+                        // Get template name before removing metadata
                         $metadataPath = storage_path('app/public/templates/proponent/.metadata.json');
+                        $templateName = $filename;
                         if (file_exists($metadataPath)) {
                             $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+                            $templateName = $metadata[$filename]['customName'] ?? $filename;
                             unset($metadata[$filename]);
                             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
                         }
+                        
+                        // Log activity
+                        ActivityService::log('delete', 'Deleted proponent template: ' . $templateName, 'Template', null);
                         
                         return response()->json([
                             'success' => true,
@@ -997,6 +1084,9 @@ Route::middleware(['auth:web'])->group(function () {
             ];
             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
             
+            // Log activity
+            ActivityService::log('create', 'Uploaded general template: ' . $templateName, 'Template', null);
+            
             // For now, return success - will be saved to database later
             return response()->json([
                 'success' => true,
@@ -1031,13 +1121,18 @@ Route::middleware(['auth:web'])->group(function () {
                     if (md5($filename) === $id) {
                         \Storage::disk('public')->delete('templates/general/' . $filename);
                         
-                        // Remove from metadata
+                        // Get template name before removing metadata
                         $metadataPath = storage_path('app/public/templates/general/.metadata.json');
+                        $templateName = $filename;
                         if (file_exists($metadataPath)) {
                             $metadata = json_decode(file_get_contents($metadataPath), true) ?: [];
+                            $templateName = $metadata[$filename]['customName'] ?? $filename;
                             unset($metadata[$filename]);
                             file_put_contents($metadataPath, json_encode($metadata, JSON_PRETTY_PRINT));
                         }
+                        
+                        // Log activity
+                        ActivityService::log('delete', 'Deleted general template: ' . $templateName, 'Template', null);
                         
                         return response()->json([
                             'success' => true,
@@ -1067,3 +1162,28 @@ Route::middleware('auth:web')->group(function () {
     Route::put('/project-roles/{id}', [ProjectRoleController::class, 'update']);
     Route::delete('/project-roles/{id}', [ProjectRoleController::class, 'destroy']);
 });
+
+// Timeline Stages API
+use App\Http\Controllers\TimelineStageController;
+
+// Public endpoint for active timeline stages (used by all users)
+Route::middleware('auth:web')->get('/timeline-stages/active', [TimelineStageController::class, 'getActiveStages']);
+
+// Admin-only routes for managing timeline stages
+Route::middleware(['auth:web'])->prefix('admin/timeline-stages')->group(function () {
+    Route::get('/', [TimelineStageController::class, 'getAllStages']);
+    Route::post('/', [TimelineStageController::class, 'store']);
+    Route::put('/{id}', [TimelineStageController::class, 'update']);
+    Route::delete('/{id}', [TimelineStageController::class, 'destroy']);
+});
+
+Route::middleware(['auth:web'])->prefix('timeline-stages')->group(function () {
+    Route::post('/update-order', [TimelineStageController::class, 'updateOrder']);
+    Route::post('/{id}/toggle', [TimelineStageController::class, 'toggleActive']);
+});
+
+// Activity Logging API
+use App\Http\Controllers\ActivityController;
+
+Route::middleware('auth:web')->get('/activities/recent', [ActivityController::class, 'getRecentActivities']);
+Route::middleware('auth:web')->get('/activities/dashboard', [ActivityController::class, 'getDashboardActivities']);

@@ -43,11 +43,12 @@ const RDDResources = () => {
                 title: template.name || template.fileName || "Untitled",
                 description: template.description || "Document template",
                 type: (template.type || template.fileType || "FILE").toUpperCase(),
-                fileSize: template.size || template.fileSize || "—",
+                size: template.size || template.fileSize || "—",
                 category: "Templates",
                 tags: ["Template", template.type || "Document"],
-                uploadedBy: "Admin",
+                uploader: "Admin",
                 uploadDate: template.createdAt || template.created_at || new Date().toISOString(),
+                downloads: 0,
                 downloadUrl: template.url || template.filePath || "#",
             }));
             setResources(mapped);
@@ -271,7 +272,7 @@ const RDDResources = () => {
                             <div className="space-y-2 mb-4">
                                 <div className="flex items-center text-xs text-gray-500">
                                     <BiCalendar className="mr-1" />
-                                    {resource.uploadDate}
+                                    {new Date(resource.uploadDate).toLocaleDateString()}
                                 </div>
                                 <div className="flex items-center text-xs text-gray-500">
                                     <BiUser className="mr-1" />

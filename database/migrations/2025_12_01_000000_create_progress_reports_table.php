@@ -13,7 +13,9 @@ return new class extends Migration
     {
         Schema::create('progress_reports', function (Blueprint $table) {
             $table->id('reportID');
-            $table->foreignId('proposalID')->constrained('proposals', 'proposalID');
+            // proposalID is nullable to support CM submissions without a specific proposal
+            $table->unsignedBigInteger('proposalID')->nullable();
+            $table->foreign('proposalID')->references('proposalID')->on('proposals')->nullOnDelete();
             $table->foreignId('userID')->constrained('users', 'userID');
             $table->string('reportType'); // Quarterly, Annual, Final, Interim
             $table->string('reportPeriod'); // e.g., Q1 2025, 2025

@@ -25,6 +25,7 @@ const CMProposalDetail = () => {
     const [isEndorsed, setIsEndorsed] = useState(false);
     const [endorsementData, setEndorsementData] = useState(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [activeTimelineStages, setActiveTimelineStages] = useState([]);
 
     console.log("CMProposalDetail rendered with ID:", id);
     console.log("Current user:", user);
@@ -34,6 +35,33 @@ const CMProposalDetail = () => {
             fetchProposal();
         }
     }, [id, user]);
+
+    // Fetch admin-configured timeline stages
+    useEffect(() => {
+        const fetchActiveStages = async () => {
+            try {
+                const response = await fetch('/api/timeline-stages/active', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.stages) {
+                        setActiveTimelineStages(data.stages);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching timeline stages:', error);
+                setActiveTimelineStages([]);
+            }
+        };
+
+        fetchActiveStages();
+    }, [user]);
 
     // Check endorsement status when proposal is loaded
     useEffect(() => {
@@ -165,12 +193,67 @@ const CMProposalDetail = () => {
 
     // Dynamic timeline based on actual proposal status and endorsement status
     const getTimelineStages = () => {
+        if (!proposal || activeTimelineStages.length === 0) return [];
+
+        const statusId = proposal.statusID;
+
+        // Check for actual endorsements from the database
+        const cmEndorsement = proposal.endorsements?.find(
+            (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
+        );
+        const rddEndorsement = proposal.endorsements?.find(
+            (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+        );
+
+        // Map database timeline stages to display format
+        const allStages = activeTimelineStages.map((stage, index) => ({
+            id: stage.timelineStageID,
+            name: stage.stageName,
+            description: stage.stageDescription,
+            status: "pending",
+            color: stage.color || 'blue',
+            statusName: stage.status?.statusName || null,
+            statusID: stage.statusID
+        }));
+
+        if (allStages.length === 0) return [];
+
+        // Determine which stage is current based on proposal's status
+        const currentStageIndex = allStages.findIndex(
+            (stage) => stage.statusID === statusId
+        );
+
+        // Update stages based on current proposal status
+        allStages.forEach((stage, index) => {
+            if (currentStageIndex === -1) {
+                // No matching status, mark first stage as current
+                if (index === 0) {
+                    stage.status = "current";
+                }
+            } else if (index < currentStageIndex) {
+                // Stages before current are completed
+                stage.status = "completed";
+            } else if (index === currentStageIndex) {
+                // Current stage
+                stage.status = "current";
+                // Check if proposal is rejected
+                if (proposal.status?.statusName?.toLowerCase().includes('reject')) {
+                    stage.status = "rejected";
+                }
+            }
+            // Remaining stages stay as "pending"
+        });
+
+        return allStages;
+    };
+
+    // Legacy fallback function for compatibility
+    const getLegacyTimelineStages = () => {
         if (!proposal) return [];
 
         const statusId = proposal.statusID;
 
-        // Define all possible timeline stages (ordered from start to finish)
-        const allStages = [
+        const baseStages = [
             { id: 0, name: "Proposal Submitted", status: "pending" },
             { id: 1, name: "College Endorsement", status: "pending" },
             { id: 2, name: "R&D Division", status: "pending" },
@@ -184,91 +267,90 @@ const CMProposalDetail = () => {
             { id: 10, name: "For Completion", status: "pending" },
         ];
 
+        // Helper to set status safely by index
+        const setStatus = (idx, value) => {
+            if (baseStages[idx]) baseStages[idx].status = value;
+        };
+
         // Update stages based on actual proposal status (matching StatusSeeder IDs)
         switch (statusId) {
             case 1: // Under Review - Proposal submitted, waiting for College Endorsement
-                allStages[0].status = "completed"; // Proposal Submitted
-                // Check if endorsed to determine College Endorsement status
+                setStatus(0, "completed");
                 if (isEndorsed) {
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
+                    setStatus(1, "completed");
+                    setStatus(2, "current");
                 } else {
-                    allStages[1].status = "current"; // College Endorsement - current
+                    setStatus(1, "current");
                 }
                 break;
             case 2: // Approved - All stages up to Implementation completed, Implementation current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "current"; // Implementation
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "completed");
+                setStatus(3, "completed");
+                setStatus(4, "completed");
+                setStatus(5, "completed");
+                setStatus(6, "completed");
+                setStatus(7, "completed");
+                setStatus(8, "current");
                 break;
             case 3: // Rejected - College Endorsement completed, R&D Division rejected
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "rejected"; // R&D Division
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "rejected");
                 break;
             case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "current"; // Monitoring
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "completed");
+                setStatus(3, "completed");
+                setStatus(4, "completed");
+                setStatus(5, "completed");
+                setStatus(6, "completed");
+                setStatus(7, "completed");
+                setStatus(8, "completed");
+                setStatus(9, "current");
                 break;
             case 5: // Completed - All stages completed
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "completed"; // Monitoring
-                allStages[10].status = "completed"; // For Completion
+                setStatus(0, "completed");
+                setStatus(1, "completed");
+                setStatus(2, "completed");
+                setStatus(3, "completed");
+                setStatus(4, "completed");
+                setStatus(5, "completed");
+                setStatus(6, "completed");
+                setStatus(7, "completed");
+                setStatus(8, "completed");
+                setStatus(9, "completed");
+                setStatus(10, "completed");
                 break;
             default:
-                // Check if endorsed to determine College Endorsement status
+                setStatus(0, "completed");
                 if (isEndorsed) {
-                    allStages[0].status = "completed"; // Proposal Submitted
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
+                    setStatus(1, "completed");
+                    setStatus(2, "current");
                 } else {
-                    allStages[1].status = "current"; // College Endorsement - current
+                    setStatus(1, "current");
                 }
         }
 
-        return allStages;
+        return baseStages;
     };
 
-    // Dynamic status history based on actual proposal data
     const getStatusHistory = () => {
-        if (!proposal) return [];
-
-        const timelineStages = getTimelineStages();
-        const baseDate = new Date(proposal.created_at);
-
-        // Generate status history based on timeline stages
+        const baseDate = new Date(proposal?.created_at || Date.now());
         const statusHistory = [];
 
+        const allTimelineStages = getTimelineStages();
+
         // Get stages in chronological order
-        const completedStages = timelineStages.filter(
+        const completedStages = allTimelineStages.filter(
             (stage) => stage.status === "completed"
         );
-        const currentStage = timelineStages.find(
+        const currentStage = allTimelineStages.find(
             (stage) => stage.status === "current"
         );
-        const rejectedStage = timelineStages.find(
+        const rejectedStage = allTimelineStages.find(
             (stage) => stage.status === "rejected"
         );
 
@@ -366,6 +448,7 @@ const CMProposalDetail = () => {
                     minute: "2-digit",
                     hour12: true,
                 }),
+                dateObj: entry.date, // Add date object for timeline display
                 status: entry.status,
                 action: entry.action,
                 priority: entry.priority,
@@ -479,10 +562,14 @@ const CMProposalDetail = () => {
                         {(() => {
                             const timelineStages = getTimelineStages();
                             const collegeEndorsementStage = timelineStages.find(
-                                (stage) => stage.name === "College Endorsement"
+                                (stage) => stage.name === "College Endorsement" || 
+                                           stage.name?.toLowerCase().includes("college") ||
+                                           stage.name?.toLowerCase().includes("endorsement")
                             );
+                            // Show button if College Endorsement stage is current, or if proposal is Under Review (statusID 1) and not endorsed
                             const isCurrentStage =
-                                collegeEndorsementStage?.status === "current";
+                                collegeEndorsementStage?.status === "current" ||
+                                (proposal.statusID === 1 && !isEndorsed);
 
                             if (isEndorsed) {
                                 return (
@@ -564,29 +651,7 @@ const CMProposalDetail = () => {
                                     </svg>
                                     <span className="font-medium">ID:</span>
                                     <span className="ml-1">
-                                        PRO-
-                                        {proposal.proposalID
-                                            .toString()
-                                            .padStart(6, "0")}
-                                    </span>
-                                </div>
-                                <div className="flex items-center">
-                                    <svg
-                                        className="w-5 h-5 mr-2 text-gray-400"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                                        />
-                                    </svg>
-                                    <span className="font-medium">Author:</span>
-                                    <span className="ml-1">
-                                        {proposal.user?.fullName || "Unknown"}
+                                        {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
                                     </span>
                                 </div>
                                 <div className="flex items-center">
@@ -624,55 +689,52 @@ const CMProposalDetail = () => {
                                             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                                         />
                                     </svg>
-                                    <span className="font-medium">Status:</span>
-                                    <span
-                                        className={`ml-1 px-2 py-1 rounded-full text-xs font-medium border ${
-                                            proposal.status?.statusName ===
-                                            "Completed"
-                                                ? "bg-green-100 text-green-800 border-green-300"
-                                                : proposal.status
-                                                      ?.statusName ===
-                                                  "Under Review"
-                                                ? "bg-blue-100 text-blue-800 border-blue-300"
-                                                : proposal.status
-                                                      ?.statusName === "Ongoing"
-                                                ? "bg-orange-100 text-orange-800 border-orange-300"
-                                                : proposal.status
-                                                      ?.statusName ===
-                                                  "Approved"
-                                                ? "bg-green-100 text-green-800 border-green-300"
-                                                : proposal.status
-                                                      ?.statusName ===
-                                                  "Rejected"
-                                                ? "bg-red-100 text-red-800 border-red-300"
-                                                : "bg-gray-100 text-gray-800 border-gray-300"
-                                        }`}
-                                    >
-                                        {proposal.status?.statusName ||
-                                            "Unknown"}
-                                    </span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Progress Card */}
-                        <div className="bg-gradient-to-r from-red-50 to-red-100 rounded-2xl p-6 min-w-[280px]">
+                        <div className={`bg-gradient-to-r rounded-2xl p-6 min-w-[280px] transition-colors duration-300 ${
+                            getCompletionPercentage() === 100
+                                ? 'from-green-50 to-green-100'
+                                : 'from-red-50 to-red-100'
+                        }`}>
                             <div className="text-center">
-                                <div className="text-3xl font-bold text-red-600 mb-1">
+                                <div className={`text-3xl font-bold mb-1 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}>
                                     {getCompletionPercentage()}%
                                 </div>
-                                <div className="text-sm text-red-700 font-medium mb-3">
+                                <div className={`text-sm font-medium mb-3 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-700'
+                                        : 'text-red-700'
+                                }`}>
                                     Project Progress
                                 </div>
-                                <div className="w-full bg-red-200 rounded-full h-2">
+                                <div className={`w-full rounded-full h-2 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'bg-green-200'
+                                        : 'bg-red-200'
+                                }`}>
                                     <div
-                                        className="bg-red-600 h-2 rounded-full transition-all duration-500"
+                                        className={`h-2 rounded-full transition-all duration-500 ${
+                                            getCompletionPercentage() === 100
+                                                ? 'bg-green-600'
+                                                : 'bg-red-600'
+                                        }`}
                                         style={{
                                             width: `${getCompletionPercentage()}%`,
                                         }}
                                     ></div>
                                 </div>
-                                <div className="text-xs text-red-600 mt-2">
+                                <div className={`text-xs mt-2 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}>
                                     {
                                         timelineStages.filter(
                                             (s) => s.status === "completed"
@@ -711,85 +773,153 @@ const CMProposalDetail = () => {
                             <p className="text-gray-600">
                                 Track your project's progress through each stage
                             </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                ← Scroll horizontally to view all stages →
+                            </p>
                         </div>
                     </div>
 
-                    {/* Horizontal Timeline */}
-                    <div className="relative">
-                        {/* Scrollable Timeline Container */}
-                        <div className="overflow-x-auto pb-4">
-                            <div className="flex justify-between items-start relative min-w-max px-4">
-                                {timelineStages.map((stage, index) => (
-                                    <div
-                                        key={stage.id}
-                                        className="flex flex-col items-center relative mx-8"
-                                    >
-                                        {/* Stage Dot */}
-                                        <div
-                                            className={`w-12 h-12 rounded-full ${getStatusColor(
-                                                stage.status
-                                            )} mb-4 relative z-10`}
-                                        >
-                                            {stage.status === "completed" && (
-                                                <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
-                                                    <svg
-                                                        className="w-6 h-6 text-green-500"
-                                                        fill="currentColor"
-                                                        viewBox="0 0 20 20"
-                                                    >
-                                                        <path
-                                                            fillRule="evenodd"
-                                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                                            clipRule="evenodd"
-                                                        />
-                                                    </svg>
-                                                </div>
-                                            )}
-                                        </div>
+                    {/* Timeline stages data */}
+                    {(() => {
+                        const timelineStages = getTimelineStages();
+                        const statusHistory = getStatusHistory(); // Compute once to get dates
 
-                                        {/* Connecting Line */}
-                                        {index < timelineStages.length - 1 && (
-                                            <div className="absolute top-3 left-full w-16 h-0.5 bg-gray-300 z-0">
-                                                <div
-                                                    className="h-full bg-green-500 transition-all duration-500"
-                                                    style={{
-                                                        width:
-                                                            stage.status ===
-                                                            "completed"
-                                                                ? "100%"
-                                                                : "0%",
-                                                    }}
-                                                ></div>
-                                            </div>
-                                        )}
+                        const getStatusColor = (status) => {
+                            switch (status) {
+                                case "completed":
+                                    return "bg-green-500";
+                                case "current":
+                                    return "bg-blue-500";
+                                case "rejected":
+                                    return "bg-red-500";
+                                default:
+                                    return "bg-gray-300";
+                            }
+                        };
 
-                                        {/* Stage Label */}
-                                        <div
-                                            className={`px-4 py-2 rounded-lg text-center min-w-32 ${
-                                                stage.status === "current"
-                                                    ? "bg-red-50 border border-red-200"
-                                                    : stage.status ===
-                                                      "completed"
-                                                    ? "bg-green-50 border border-green-200"
-                                                    : stage.status ===
-                                                      "rejected"
-                                                    ? "bg-red-50 border border-red-200"
-                                                    : "bg-gray-50 border border-gray-200"
-                                            }`}
-                                        >
-                                            <span
-                                                className={`text-sm font-medium ${getStatusTextColor(
-                                                    stage.status
-                                                )} leading-tight`}
-                                            >
-                                                {stage.name}
-                                            </span>
-                                        </div>
+                        const getStatusTextColor = (status) => {
+                            switch (status) {
+                                case "completed":
+                                    return "text-green-700";
+                                case "current":
+                                    return "text-blue-700";
+                                case "rejected":
+                                    return "text-red-700";
+                                default:
+                                    return "text-gray-600";
+                            }
+                        };
+
+                        return (
+                            <div className="relative">
+                                {timelineStages.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <p className="text-gray-500">No timeline stages configured. Please contact the administrator.</p>
                                     </div>
-                                ))}
+                                ) : (
+                                    <>
+                                        {/* Scrollable Timeline Container */}
+                                        <div className="overflow-x-auto pb-4">
+                                            <div className="flex justify-between items-start relative min-w-max px-4">
+                                                {timelineStages.map((stage, index) => {
+                                            // Get date for this stage from status history
+                                            const stageEntry = statusHistory.find(
+                                                (e) => e.status === stage.name
+                                            );
+                                            const stageDate =
+                                                stageEntry?.dateObj || null;
+
+                                            return (
+                                                <div
+                                                    key={`timeline-stage-${stage.id}-${index}`}
+                                                    className="flex flex-col items-center relative mx-4 sm:mx-8"
+                                                >
+                                                    {/* Stage Dot */}
+                                                    <div
+                                                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(
+                                                            stage.status
+                                                        )} mb-4 relative z-10`}
+                                                    >
+                                                        {stage.status ===
+                                                            "completed" && (
+                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
+                                                                <svg
+                                                                    className="w-5 h-5 sm:w-6 sm:h-6 text-green-500"
+                                                                    fill="currentColor"
+                                                                    viewBox="0 0 20 20"
+                                                                >
+                                                                    <path
+                                                                        fillRule="evenodd"
+                                                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                                        clipRule="evenodd"
+                                                                    />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Connecting Line */}
+                                                    {index <
+                                                        timelineStages.length -
+                                                            1 && (
+                                                        <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
+                                                            <div
+                                                                className="h-full bg-green-500 transition-all duration-500"
+                                                                style={{
+                                                                    width:
+                                                                        stage.status ===
+                                                                        "completed"
+                                                                            ? "100%"
+                                                                            : "0%",
+                                                                }}
+                                                            ></div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Stage Label with Date */}
+                                                    <div
+                                                        className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
+                                                            stage.status ===
+                                                            "current"
+                                                                ? "bg-blue-50 border border-blue-200"
+                                                                : stage.status ===
+                                                                  "completed"
+                                                                ? "bg-green-50 border border-green-200"
+                                                                : stage.status ===
+                                                                  "rejected"
+                                                                ? "bg-red-50 border border-red-200"
+                                                                : "bg-gray-50 border border-gray-200"
+                                                        }`}
+                                                    >
+                                                        <span
+                                                            className={`text-xs sm:text-sm font-medium ${getStatusTextColor(
+                                                                stage.status
+                                                            )} leading-tight block mb-1`}
+                                                        >
+                                                            {stage.name}
+                                                        </span>
+                                                        {stageDate && (
+                                                            <span className="text-xs text-gray-500 block">
+                                                                {stageDate.toLocaleDateString(
+                                                                    "en-US",
+                                                                    {
+                                                                        month: "short",
+                                                                        day: "numeric",
+                                                                    }
+                                                                )}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                    </>
+                                )}
                             </div>
-                        </div>
-                    </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Status History Section */}
@@ -900,142 +1030,96 @@ const CMProposalDetail = () => {
                     </div>
                 </div>
 
-                {/* Attached Files Section */}
-                {proposal.files && proposal.files.length > 0 && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-                        <div className="flex items-center gap-3 mb-6">
-                            <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                                <svg
-                                    className="w-5 h-5 text-orange-600"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                    />
-                                </svg>
-                            </div>
-                            <h2 className="text-2xl font-bold text-gray-900">
-                                Attached Files
-                            </h2>
-                            <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
-                                {proposal.files.length} file
-                                {proposal.files.length !== 1 ? "s" : ""}
-                            </span>
-                        </div>
+                {/* Supporting Documents - SETI, GAD, MOC */}
+                {proposal.files && proposal.files.length > 0 && (() => {
+                    const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
+                    const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
+                    const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
+                    const otherFiles = proposal.files.filter(f => 
+                        f.fileType !== 'seti_scorecard' && 
+                        f.fileType !== 'gad_certificate' && 
+                        f.fileType !== 'matrix_compliance'
+                    );
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            {proposal.files.map((file) => (
-                                <div
-                                    key={file.fileID}
-                                    className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                            <svg
-                                                className="w-6 h-6 text-red-600"
-                                                fill="none"
-                                                stroke="currentColor"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <path
-                                                    strokeLinecap="round"
-                                                    strokeLinejoin="round"
-                                                    strokeWidth={2}
-                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                />
-                                            </svg>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">
-                                                {file.fileName}
-                                            </h3>
-                                            <p className="text-xs text-gray-500 mb-3">
-                                                {file.formattedSize ||
-                                                    `${Math.round(
-                                                        file.fileSize / 1024
-                                                    )} KB`}
-                                            </p>
-                                            <div className="flex items-center gap-2">
-                                                <button
-                                                    onClick={() =>
-                                                        window.open(
-                                                            `/storage/${file.filePath}`,
-                                                            "_blank"
-                                                        )
-                                                    }
-                                                    className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
-                                                    title="View file"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                        />
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                                        />
-                                                    </svg>
-                                                    View
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        const link =
-                                                            document.createElement(
-                                                                "a"
-                                                            );
-                                                        link.href = `/storage/${file.filePath}`;
-                                                        link.download =
-                                                            file.fileName;
-                                                        link.target = "_blank";
-                                                        document.body.appendChild(
-                                                            link
-                                                        );
-                                                        link.click();
-                                                        document.body.removeChild(
-                                                            link
-                                                        );
-                                                    }}
-                                                    className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
-                                                    title="Download file"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                        />
-                                                    </svg>
-                                                    Download
-                                                </button>
-                                            </div>
-                                        </div>
+                    const renderFileCard = (file) => (
+                        <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
+                            <div className="flex items-start gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">{file.fileName}</h3>
+                                    <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={() => window.open(`/storage/${file.filePath}`, "_blank")} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200" title="View file">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                            View
+                                        </button>
+                                        <button onClick={() => { const link = document.createElement("a"); link.href = `/storage/${file.filePath}`; link.download = file.fileName; link.target = "_blank"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200" title="Download file">
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                            Download
+                                        </button>
                                     </div>
                                 </div>
-                            ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    );
+
+                    return (
+                        <>
+                            {(setiFiles.length > 0 || gadFiles.length > 0 || mocFiles.length > 0) && (
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Supporting Documents</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {setiFiles.length > 0 && (
+                                            <div>
+                                                <div className="mb-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="font-bold text-blue-900">SETI</h3>
+                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{setiFiles.length} file{setiFiles.length !== 1 ? "s" : ""}</span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600">Science and Engineering Technology Initiative</p>
+                                                </div>
+                                                <div className="space-y-2">{setiFiles.map(renderFileCard)}</div>
+                                            </div>
+                                        )}
+                                        {gadFiles.length > 0 && (
+                                            <div>
+                                                <div className="mb-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="font-bold text-purple-900">GAD</h3>
+                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{gadFiles.length} file{gadFiles.length !== 1 ? "s" : ""}</span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600">Gender and Development</p>
+                                                </div>
+                                                <div className="space-y-2">{gadFiles.map(renderFileCard)}</div>
+                                            </div>
+                                        )}
+                                        {mocFiles.length > 0 && (
+                                            <div>
+                                                <div className="mb-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="font-bold text-green-900">MOC</h3>
+                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{mocFiles.length} file{mocFiles.length !== 1 ? "s" : ""}</span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600">Matrix of Compliance</p>
+                                                </div>
+                                                <div className="space-y-2">{mocFiles.map(renderFileCard)}</div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                            {otherFiles.length > 0 && (
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg></div>
+                                        <div><h2 className="text-2xl font-bold text-gray-900">Other Supporting Documents</h2><p className="text-sm text-gray-600">Additional files and attachments</p></div>
+                                        <span className="ml-auto bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">{otherFiles.length} file{otherFiles.length !== 1 ? "s" : ""}</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{otherFiles.map(renderFileCard)}</div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
 
                 {/* PDF Viewer - Legacy support for revisionFile */}
                 {proposal.revisionFile && (

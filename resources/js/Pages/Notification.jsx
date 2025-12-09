@@ -21,6 +21,7 @@ const Notification = () => {
     const [notifications, setNotifications] = useState([]);
     const [loading, setLoading] = useState(true);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [detailNotification, setDetailNotification] = useState(null);
 
     // Fetch notifications
     const fetchNotifications = async () => {
@@ -172,6 +173,7 @@ const Notification = () => {
         time: formatTime(notification.created_at),
         unread: !notification.read,
         type: notification.type || "info",
+        data: notification.data || {},
     }));
 
     const filteredNotifications = formattedNotifications.filter(
@@ -212,15 +214,25 @@ const Notification = () => {
     };
 
     const handleNotificationClick = (notification) => {
-        // Mark as read when clicked
         if (notification.unread) {
             markAsReadContext(notification.id);
         }
+
+        // Show details for revision and endorsement notifications
+        if (notification.type === "revision" || notification.data?.revision_comments) {
+            setDetailNotification(notification);
+            return;
+        }
+
+        if (notification.data?.endorsement_comments) {
+            setDetailNotification(notification);
+            return;
+        }
+
         // Only navigate if it's a proposal notification, otherwise stay on the page
         if (notification.type === "proposal") {
             router.visit("/proponent/projects");
         }
-        // For other notification types, just mark as read and stay on the page
     };
 
     const getTypeIcon = (type) => {
@@ -479,13 +491,15 @@ const Notification = () => {
                         {currentNotifications.map((notification) => (
                             <div
                                 key={notification.id}
-                                className={`p-4 rounded-lg border border-gray-100 mb-2 hover:bg-gray-50 transition-colors ${
+                                onClick={() => handleNotificationClick(notification)}
+                                className={`p-4 rounded-lg border border-gray-100 mb-2 hover:bg-gray-50 transition-colors cursor-pointer ${
                                     notification.unread ? "bg-blue-50" : ""
                                 }`}
                             >
                                 <div className="flex items-center space-x-4 w-full">
                                     {getTypeIcon(notification.type)}
                                     <div className="flex-1 min-w-0">
+                                        <span className="text-[11px] uppercase tracking-wide text-red-600 font-semibold">Notification</span>
                                         <div className="flex items-center gap-2 mb-1">
                                             <h4 className="text-sm font-semibold text-gray-900 truncate">
                                                 {notification.title}
@@ -494,6 +508,9 @@ const Notification = () => {
                                         <p className="text-sm text-gray-600 mb-2">
                                             {notification.message}
                                         </p>
+                                        {(notification.data?.revision_comments || notification.data?.endorsement_comments) && (
+                                            <p className="text-xs font-semibold text-red-600">Click to see more details</p>
+                                        )}
                                         <p className="text-xs text-gray-400">
                                             {notification.time}
                                         </p>
@@ -590,6 +607,54 @@ const Notification = () => {
                             Next
                             <ChevronRight className="w-4 h-4 ml-1" />
                         </button>
+                    </div>
+                </div>
+            )}
+
+            {detailNotification && (
+                <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <p className="text-xs font-semibold uppercase text-red-600">Notification here</p>
+                                <h3 className="text-xl font-bold text-gray-900">{detailNotification.title}</h3>
+                                <p className="text-sm text-gray-500 mt-1">{detailNotification.data?.proposal_title || 'Proposal update'}</p>
+                            </div>
+                            <button
+                                onClick={() => setDetailNotification(null)}
+                                className="text-gray-400 hover:text-gray-600"
+                                aria-label="Close"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="border border-gray-200 rounded-xl bg-gray-50 p-4">
+                            <p className="text-sm font-semibold text-gray-800 mb-2">
+                                {detailNotification.data?.endorsement_comments ? 'Endorsement Comments' : 'Revision Details'}
+                            </p>
+                            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                                {detailNotification.data?.endorsement_comments || detailNotification.data?.revision_comments || detailNotification.message}
+                            </p>
+                        </div>
+                        <div className="flex justify-between gap-3">
+                            <button
+                                onClick={() => setDetailNotification(null)}
+                                className="px-4 py-2 rounded-lg bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                            >
+                                Close
+                            </button>
+                            {detailNotification.data?.proposal_id && (
+                                <button
+                                    onClick={() => {
+                                        setDetailNotification(null);
+                                        router.visit(`/proponent/revision/${detailNotification.data.proposal_id}`);
+                                    }}
+                                    className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
+                                >
+                                    {detailNotification.data?.endorsement_comments ? 'View Proposal' : 'Edit Proposal'}
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

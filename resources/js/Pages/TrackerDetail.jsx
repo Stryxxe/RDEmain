@@ -21,9 +21,36 @@ const TrackerDetail = ({ id: propId }) => {
         terminalReport: null,
         evidence6Ps: null,
     });
+    const [timelineStages, setTimelineStages] = useState([]);
 
     // Get user from Inertia props (more reliable than context on initial load)
     const currentUser = user || props?.auth?.user;
+
+    // Fetch timeline stages from API
+    useEffect(() => {
+        const fetchTimelineStages = async () => {
+            try {
+                const response = await fetch('/api/timeline-stages/active', {
+                    headers: {
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                    },
+                    credentials: 'include'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success && data.stages) {
+                        setTimelineStages(data.stages);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching timeline stages:', error);
+            }
+        };
+
+        fetchTimelineStages();
+    }, []);
 
     // Validate authentication on mount
     useEffect(() => {
@@ -110,95 +137,120 @@ const TrackerDetail = ({ id: propId }) => {
     };
 
     const getTimelineStages = () => {
-        if (!proposal) return [];
+        if (!proposal || timelineStages.length === 0) return [];
 
         const statusId = proposal.statusID;
+        const statusName = proposal.status?.statusName?.toLowerCase() || "";
 
         // Check for actual endorsements from the database
         const cmEndorsement = proposal.endorsements?.find(
-            (e) => e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved"
+            (e) =>
+                e.endorser?.role?.userRole === "CM" &&
+                e.endorsementStatus === "approved"
         );
         const rddEndorsement = proposal.endorsements?.find(
-            (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+            (e) =>
+                e.endorser?.role?.userRole === "RDD" &&
+                e.endorsementStatus === "approved"
         );
 
-        // Define all possible timeline stages (matching other components)
-        const allStages = [
-            { id: 0, name: "Proposal Submitted", status: "pending" },
-            { id: 1, name: "College Endorsement", status: "pending" },
-            { id: 2, name: "R&D Division", status: "pending" },
-            { id: 3, name: "Proposal Review", status: "pending" },
-            { id: 4, name: "Ethics Review", status: "pending" },
-            { id: 5, name: "OVPRDE", status: "pending" },
-            { id: 6, name: "President", status: "pending" },
-            { id: 7, name: "OSOURU", status: "pending" },
-            { id: 8, name: "Implementation", status: "pending" },
-            { id: 9, name: "Monitoring", status: "pending" },
-            { id: 10, name: "For Completion", status: "pending" },
-        ];
+        // Map database timeline stages to display format
+        const allStages = timelineStages.map((stage, index) => ({
+            id: stage.timelineStageID,
+            name: stage.stageName,
+            description: stage.stageDescription,
+            status: "pending",
+            color: stage.color || 'blue',
+            statusName: stage.status?.statusName || null,
+            statusID: stage.statusID
+        }));
 
-        // Update stages based on actual proposal status (matching StatusSeeder IDs)
-        switch (statusId) {
-            case 1: // Under Review - Proposal submitted, waiting for College Endorsement
-                allStages[0].status = "completed"; // Proposal Submitted
-                // Check if CM has endorsed to determine College Endorsement status
-                if (cmEndorsement) {
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
-                } else {
-                    allStages[1].status = "current"; // College Endorsement - current
-                }
-                break;
-            case 2: // Approved - All stages up to Implementation completed, Implementation current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "current"; // Implementation
-                break;
-            case 3: // Rejected - College Endorsement completed, R&D Division rejected
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "rejected"; // R&D Division
-                break;
-            case 4: // Ongoing - All stages up to Monitoring completed, Monitoring current
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "current"; // Monitoring
-                break;
-            case 5: // Completed - All stages completed
-                allStages[0].status = "completed"; // Proposal Submitted
-                allStages[1].status = "completed"; // College Endorsement
-                allStages[2].status = "completed"; // R&D Division
-                allStages[3].status = "completed"; // Proposal Review
-                allStages[4].status = "completed"; // Ethics Review
-                allStages[5].status = "completed"; // OVPRDE
-                allStages[6].status = "completed"; // President
-                allStages[7].status = "completed"; // OSOURU
-                allStages[8].status = "completed"; // Implementation
-                allStages[9].status = "completed"; // Monitoring
-                allStages[10].status = "completed"; // For Completion
-                break;
-            default:
-                // Check if CM has endorsed to determine College Endorsement status
-                if (cmEndorsement) {
-                    allStages[0].status = "completed"; // Proposal Submitted
-                    allStages[1].status = "completed"; // College Endorsement - completed
-                    allStages[2].status = "current"; // R&D Division - next stage
-                } else {
-                    allStages[1].status = "current"; // College Endorsement
-                }
+        if (allStages.length === 0) return [];
+
+        const findStageIndex = (predicate) =>
+            allStages.findIndex((stage) => predicate((stage.name || "").toLowerCase()));
+
+        const submissionIdx = findStageIndex(
+            (name) => name.includes("proposal") && name.includes("submit")
+        );
+        const collegeIdx = findStageIndex(
+            (name) => name.includes("college") || name.includes("endorsement")
+        );
+        const rddIdx = findStageIndex(
+            (name) =>
+                name.includes("r&d") ||
+                name.includes("r&d division") ||
+                name.includes("research and development")
+        );
+
+        const markCompletedUpTo = (idx) => {
+            if (idx < 0) return;
+            allStages.forEach((stage, index) => {
+                if (index <= idx) stage.status = "completed";
+            });
+        };
+
+        // If the proposal is fully approved/ongoing/completed, mark everything done
+        if (
+            statusName.includes("completed") ||
+            statusName.includes("approved") ||
+            statusId === 2 ||
+            statusId === 4 ||
+            statusId === 5
+        ) {
+            allStages.forEach((stage) => (stage.status = "completed"));
+            return allStages;
+        }
+
+        // Handle rejection
+        if (statusName.includes("reject")) {
+            markCompletedUpTo(submissionIdx);
+            if (cmEndorsement) markCompletedUpTo(collegeIdx);
+            const rejectIdx =
+                rddIdx !== -1
+                    ? rddIdx
+                    : collegeIdx !== -1
+                    ? collegeIdx
+                    : submissionIdx !== -1
+                    ? submissionIdx
+                    : 0;
+
+            allStages.forEach((stage, idx) => {
+                if (idx < rejectIdx) stage.status = "completed";
+                if (idx === rejectIdx) stage.status = "rejected";
+            });
+            return allStages;
+        }
+
+        // Baseline: submission is completed once filed
+        if (submissionIdx !== -1) {
+            allStages[submissionIdx].status = "completed";
+        }
+
+        // Apply endorsements
+        if (cmEndorsement) {
+            markCompletedUpTo(collegeIdx);
+        }
+
+        if (rddEndorsement) {
+            markCompletedUpTo(rddIdx);
+        }
+
+        // Determine current stage based on what is still pending
+        if (!rddEndorsement && cmEndorsement && rddIdx !== -1) {
+            if (allStages[rddIdx].status === "pending") {
+                allStages[rddIdx].status = "current";
+            }
+        } else if (!cmEndorsement && collegeIdx !== -1) {
+            if (allStages[collegeIdx].status === "pending") {
+                allStages[collegeIdx].status = "current";
+            }
+        }
+
+        // If nothing is marked current yet, set the first pending stage as current
+        if (!allStages.some((stage) => stage.status === "current")) {
+            const firstPending = allStages.find((stage) => stage.status === "pending");
+            if (firstPending) firstPending.status = "current";
         }
 
         return allStages;
@@ -260,215 +312,88 @@ const TrackerDetail = ({ id: propId }) => {
     const getStatusHistory = () => {
         if (!proposal) return [];
 
-        const timelineStages = getTimelineStages();
-        const statusId = proposal.statusID;
-        const baseDate = new Date(proposal.uploadedAt || proposal.created_at);
-
-        // Get actual dates from proposal data
-        const cmEndorsements =
-            proposal.endorsements?.filter(
-                (e) =>
-                    e.endorser?.role?.userRole === "CM" &&
-                    e.endorsementStatus === "approved"
-            ) || [];
-        const rddEndorsements =
-            proposal.endorsements?.filter(
-                (e) =>
-                    e.endorser?.role?.userRole === "RDD" &&
-                    e.endorsementStatus === "approved"
-            ) || [];
-        const reviews = proposal.reviews?.filter((r) => r.reviewedAt) || [];
-
-        // Create a proper chronological timeline using actual dates
-        const timelineEntries = [];
+        const baseDate = new Date(proposal?.created_at || Date.now());
         const statusHistory = [];
 
-        // 1. Proposal Submitted (always first, use actual submission date)
+        const allTimelineStages = getTimelineStages();
+
+        // Get stages in chronological order
+        const completedStages = allTimelineStages.filter(
+            (stage) => stage.status === "completed"
+        );
+        const currentStage = allTimelineStages.find(
+            (stage) => stage.status === "current"
+        );
+        const rejectedStage = allTimelineStages.find(
+            (stage) => stage.status === "rejected"
+        );
+
+        // Determine endorsement information from proposal data
+        const endorsementData = proposal.endorsements?.find(
+            (e) =>
+                e.endorser?.role?.userRole === "CM" &&
+                e.endorsementStatus === "approved"
+        );
+        const isEndorsed = Boolean(endorsementData);
+
+        // Create a proper chronological timeline
+        const timelineEntries = [];
+
+        // 1. Add initial proposal submission (always first)
         timelineEntries.push({
             date: baseDate,
             status: "Proposal Submitted",
-            action: "Research proposal submitted successfully and is now under review.",
+            action: "Proposal submitted successfully and is now under review.",
             priority: "medium",
             type: "completed",
         });
 
-        // 2. College Endorsement (use actual endorsement date if available)
-        const cmEndorsement = cmEndorsements[0];
-        if (cmEndorsement && cmEndorsement.endorsementDate) {
-            const endorsementDate = new Date(cmEndorsement.endorsementDate);
-            timelineEntries.push({
-                date: endorsementDate,
-                status: "College Endorsement",
-                action: `Proposal endorsed by ${
-                    cmEndorsement.endorser?.fullName || "College Manager"
-                } and forwarded to R&D Division for review.`,
-                priority: "high",
-                type: "completed",
-            });
-        } else if (statusId >= 2) {
-            // If status is beyond submission but no endorsement date, estimate based on submission date
-            const estimatedDate = new Date(baseDate);
-            estimatedDate.setDate(estimatedDate.getDate() + 7); // Estimate 1 week after submission
-            timelineEntries.push({
-                date: estimatedDate,
-                status: "College Endorsement",
-                action: "Proposal endorsed by the college committee and forwarded to R&D Division for review.",
-                priority: "high",
-                type: "completed",
-            });
-        }
-
-        // 3. R&D Division Review (use actual RDD endorsement date or review date)
-        // Show as current if CM has endorsed but RDD hasn't yet (even if status is still 1)
-        const rddEndorsement = rddEndorsements[0];
-        if (statusId >= 2 || (cmEndorsement && !rddEndorsement)) {
-            const rddDate = rddEndorsement?.endorsementDate
-                ? new Date(rddEndorsement.endorsementDate)
-                : reviews[0]?.reviewedAt
-                ? new Date(reviews[0].reviewedAt)
-                : cmEndorsement?.endorsementDate
-                ? new Date(
-                      new Date(cmEndorsement.endorsementDate).getTime() +
-                          7 * 24 * 60 * 60 * 1000
-                  )
-                : new Date(baseDate.getTime() + 14 * 24 * 60 * 60 * 1000);
-
-            // Determine if R&D Division should be current or completed
-            const isRDDCurrent = cmEndorsement && !rddEndorsement && statusId === 1;
-            
-            timelineEntries.push({
-                date: rddDate,
-                status: "R&D Division",
-                action: isRDDCurrent 
-                    ? "Currently under technical assessment by R&D Division."
-                    : "Technical assessment completed by R&D Division with positive evaluation.",
-                priority: "high",
-                type: isRDDCurrent ? "current" : (statusId >= 3 ? "completed" : "current"),
-            });
-        }
-
-        // 4. Proposal Review (use actual review dates)
-        if (reviews.length > 0) {
-            reviews.forEach((review, index) => {
-                const reviewDate = new Date(review.reviewedAt);
-                const reviewerName = review.reviewer?.fullName || "Reviewer";
-                const decision = review.decision?.decision || "reviewed";
-
-                timelineEntries.push({
-                    date: reviewDate,
-                    status: "Proposal Review",
-                    action: `Proposal reviewed by ${reviewerName}. Decision: ${decision}. ${
-                        review.remarks ? `Remarks: ${review.remarks}` : ""
-                    }`,
-                    priority: "high",
-                    type: "completed",
-                });
-            });
-        } else if (statusId >= 3) {
-            // If status is beyond RDD but no reviews, estimate
-            const estimatedDate = new Date(baseDate);
-            estimatedDate.setDate(estimatedDate.getDate() + 21);
-            timelineEntries.push({
-                date: estimatedDate,
-                status: "Proposal Review",
-                action: "Initial proposal review completed with recommendations for improvement.",
-                priority: "high",
-                type: "completed",
-            });
-        }
-
-        // 5. Additional stages based on status (estimate dates if not available)
-        if (statusId >= 2) {
-            const stagesToAdd = [];
-
-            if (statusId >= 3) {
-                stagesToAdd.push({
-                    name: "Ethics Review",
-                    action: "Ethics committee review completed with compliance approval.",
-                    daysAfterBase: 28,
-                });
-            }
-
-            if (statusId >= 3) {
-                stagesToAdd.push({
-                    name: "OVPRDE",
-                    action: "Office of Vice President for Research and Development approval granted.",
-                    daysAfterBase: 35,
-                });
-            }
-
-            if (statusId >= 3) {
-                stagesToAdd.push({
-                    name: "President",
-                    action: "Presidential approval received for project implementation.",
-                    daysAfterBase: 42,
-                });
-            }
-
-            if (statusId >= 3) {
-                stagesToAdd.push({
-                    name: "OSOURU",
-                    action: "Office of Student Organizations and University Relations approval completed.",
-                    daysAfterBase: 49,
-                });
-            }
-
-            if (statusId >= 2) {
-                stagesToAdd.push({
-                    name: "Implementation",
-                    action: "Project implementation phase initiated and research work commenced.",
-                    daysAfterBase: 56,
-                    isCurrent: statusId === 2 || statusId === 4,
-                });
-            }
-
-            if (statusId >= 4) {
-                stagesToAdd.push({
-                    name: "Monitoring",
-                    action: "Project monitoring and progress tracking phase activated.",
-                    daysAfterBase: 90,
-                    isCurrent: statusId === 4,
-                });
-            }
-
-            if (statusId === 5) {
-                stagesToAdd.push({
-                    name: "For Completion",
-                    action: "Project completed successfully with all deliverables submitted.",
-                    daysAfterBase: 120,
-                });
-            }
-
-            stagesToAdd.forEach((stage, index) => {
+        // 2. Add completed stages in chronological order (excluding Proposal Submitted to avoid duplication)
+        // Also exclude College Endorsement here if we have actual endorsement data
+        completedStages
+            .filter((stage) => {
+                if (stage.name === "Proposal Submitted") return false;
+                // Skip College Endorsement here if we have real endorsement data
+                if (stage.name === "College Endorsement" && isEndorsed && endorsementData) return false;
+                return true;
+            })
+            .forEach((stage, index) => {
                 const stageDate = new Date(baseDate);
-                stageDate.setDate(stageDate.getDate() + stage.daysAfterBase);
-                // Set time to business hours (10 AM)
-                stageDate.setHours(10, 0, 0, 0);
+                // Add realistic time progression: 1-2 weeks between stages
+                const daysToAdd =
+                    (index + 1) * 7 + Math.floor(Math.random() * 7);
+                stageDate.setDate(stageDate.getDate() + daysToAdd);
+
+                // Add random time during business hours (9 AM - 5 PM)
+                const randomHour = 9 + Math.floor(Math.random() * 8);
+                const randomMinute = Math.floor(Math.random() * 60);
+                stageDate.setHours(randomHour, randomMinute, 0, 0);
 
                 timelineEntries.push({
                     date: stageDate,
                     status: stage.name,
-                    action: stage.action,
-                    priority:
-                        stage.name === "Ethics Review" ||
-                        stage.name === "President"
-                            ? "high"
-                            : "medium",
-                    type: stage.isCurrent ? "current" : "completed",
+                    action: `${stage.name} completed successfully.`,
+                    priority: "medium",
+                    type: "completed",
                 });
+            });
+
+        // 3. Add endorsement entry if proposal has been endorsed (with actual date and endorser)
+        if (isEndorsed && endorsementData) {
+            const endorsementDate = new Date(endorsementData.endorsementDate);
+            timelineEntries.push({
+                date: endorsementDate,
+                status: "College Endorsement",
+                action: `Proposal endorsed by ${
+                    endorsementData.endorser?.fullName || "Center Manager"
+                }`,
+                priority: "high",
+                type: "completed",
             });
         }
 
-        // 6. Add current stage if not already added
-        const currentStage = timelineStages.find(
-            (stage) => stage.status === "current"
-        );
-        if (
-            currentStage &&
-            !timelineEntries.find(
-                (e) => e.status === currentStage.name && e.type === "current"
-            )
-        ) {
+        // 4. Add current stage (most recent)
+        if (currentStage) {
             const currentDate = new Date();
             timelineEntries.push({
                 date: currentDate,
@@ -479,16 +404,13 @@ const TrackerDetail = ({ id: propId }) => {
             });
         }
 
-        // 7. Add rejected stage (if applicable)
-        const rejectedStage = timelineStages.find(
-            (stage) => stage.status === "rejected"
-        );
+        // 5. Add rejected stage (if applicable)
         if (rejectedStage) {
             const rejectedDate = new Date();
             timelineEntries.push({
                 date: rejectedDate,
                 status: rejectedStage.name,
-                action: `Proposal rejected at ${rejectedStage.name} stage. Please review feedback and resubmit with necessary revisions.`,
+                action: `Proposal rejected at ${rejectedStage.name} stage.`,
                 priority: "high",
                 type: "rejected",
             });
@@ -501,7 +423,7 @@ const TrackerDetail = ({ id: propId }) => {
         timelineEntries.forEach((entry) => {
             statusHistory.push({
                 date: formatDateTime(entry.date),
-                dateObj: entry.date, // Keep original date object for sorting
+                dateObj: entry.date, // Add date object for timeline display
                 status: entry.status,
                 action: entry.action,
                 priority: entry.priority,
@@ -519,7 +441,6 @@ const TrackerDetail = ({ id: propId }) => {
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
                         <p className="text-gray-600">Loading proposal details...</p>
-                        <p className="text-sm text-gray-500 mt-2">ID: {id || "No ID provided"}</p>
                     </div>
                 </div>
             </div>
@@ -648,7 +569,7 @@ const TrackerDetail = ({ id: propId }) => {
                                         Research Project
                                     </p>
                                     <p className="text-xs text-gray-500">
-                                        ID: {proposal.proposalID}
+                                        ID: {proposal.custom_proposal_id || proposal.proposalID}
                                     </p>
                                 </div>
                             </div>
@@ -668,107 +589,120 @@ const TrackerDetail = ({ id: propId }) => {
                                 })}
                             </p>
                         </div>
-                        <div className="flex flex-col items-end gap-3">
-                            <span
-                                className={`inline-flex px-4 py-2 text-sm font-semibold rounded-xl text-white shadow-lg ${
-                                    proposal.statusID === 1
-                                        ? "bg-yellow-500" // Under Review
-                                        : proposal.statusID === 2
-                                        ? "bg-green-500" // Approved
-                                        : proposal.statusID === 3
-                                        ? "bg-red-600" // Rejected
-                                        : proposal.statusID === 4
-                                        ? "bg-blue-500" // Ongoing
-                                        : proposal.statusID === 5
-                                        ? "bg-green-600" // Completed
-                                        : "bg-gray-500"
-                                }`}
-                            >
-                                {proposal.status?.statusName ||
-                                    "Unknown Status"}
-                            </span>
-                            {/* Progress Card */}
-                            <div
-                                className={`bg-gradient-to-r rounded-2xl p-4 w-full lg:min-w-[240px] xl:min-w-[280px] lg:w-auto flex-shrink-0 ${
-                                    proposal.statusID === 3
-                                        ? "from-red-50 to-red-100" // Rejected
-                                        : proposal.statusID === 5
-                                        ? "from-green-50 to-green-100" // Completed
-                                        : proposal.statusID === 4
-                                        ? "from-blue-50 to-blue-100" // Ongoing
-                                        : "from-yellow-50 to-yellow-100" // Default (Under Review)
-                                }`}
-                            >
-                                <div className="text-center">
-                                    <div
-                                        className={`text-2xl sm:text-3xl font-bold mb-1 ${
-                                            proposal.statusID === 3
-                                                ? "text-red-600" // Rejected
-                                                : proposal.statusID === 5
-                                                ? "text-green-600" // Completed
-                                                : proposal.statusID === 4
-                                                ? "text-blue-600" // Ongoing
-                                                : "text-yellow-600" // Default (Under Review)
-                                        }`}
+                        {(() => {
+                            const completionPct = getCompletionPercentage();
+                            const isFullyComplete = completionPct === 100;
+
+                            const badgeLabel = isFullyComplete
+                                ? "Project Endorsed"
+                                : proposal.status?.statusName || "Unknown Status";
+
+                            const badgeColor = isFullyComplete
+                                ? "bg-green-600"
+                                : proposal.statusID === 1
+                                ? "bg-yellow-500"
+                                : proposal.statusID === 2
+                                ? "bg-green-500"
+                                : proposal.statusID === 3
+                                ? "bg-red-600"
+                                : proposal.statusID === 4
+                                ? "bg-blue-500"
+                                : proposal.statusID === 5
+                                ? "bg-green-600"
+                                : "bg-gray-500";
+
+                            const gradient = isFullyComplete
+                                ? "from-green-50 to-green-100"
+                                : proposal.statusID === 3
+                                ? "from-red-50 to-red-100"
+                                : proposal.statusID === 5
+                                ? "from-green-50 to-green-100"
+                                : proposal.statusID === 4
+                                ? "from-blue-50 to-blue-100"
+                                : "from-yellow-50 to-yellow-100";
+
+                            const textColor = isFullyComplete
+                                ? "text-green-600"
+                                : proposal.statusID === 3
+                                ? "text-red-600"
+                                : proposal.statusID === 5
+                                ? "text-green-600"
+                                : proposal.statusID === 4
+                                ? "text-blue-600"
+                                : "text-yellow-600";
+
+                            const barBg = isFullyComplete
+                                ? "bg-green-200"
+                                : proposal.statusID === 3
+                                ? "bg-red-200"
+                                : proposal.statusID === 5
+                                ? "bg-green-200"
+                                : proposal.statusID === 4
+                                ? "bg-blue-200"
+                                : "bg-yellow-200";
+
+                            const barFill = isFullyComplete
+                                ? "bg-green-600"
+                                : proposal.statusID === 3
+                                ? "bg-red-600"
+                                : proposal.statusID === 5
+                                ? "bg-green-600"
+                                : proposal.statusID === 4
+                                ? "bg-blue-600"
+                                : "bg-yellow-600";
+
+                            return (
+                                <div className="flex flex-col items-end gap-3">
+                                    <span
+                                        className={`inline-flex px-4 py-2 text-sm font-semibold rounded-xl text-white shadow-lg ${badgeColor}`}
                                     >
-                                        {getCompletionPercentage()}%
-                                    </div>
+                                        {badgeLabel}
+                                    </span>
+                                    {/* Progress Card */}
                                     <div
-                                        className={`text-sm font-medium mb-3 ${
-                                            proposal.statusID === 3
-                                                ? "text-red-700" // Rejected
-                                                : proposal.statusID === 5
-                                                ? "text-green-700" // Completed
-                                                : proposal.statusID === 4
-                                                ? "text-blue-700" // Ongoing
-                                                : "text-yellow-700" // Default (Under Review)
-                                        }`}
+                                        className={`bg-gradient-to-r rounded-2xl p-4 w-full lg:min-w-[240px] xl:min-w-[280px] lg:w-auto flex-shrink-0 ${gradient}`}
                                     >
-                                        Project Progress
-                                    </div>
-                                    <div
-                                        className={`w-full rounded-full h-2 ${
-                                            proposal.statusID === 3
-                                                ? "bg-red-200" // Rejected
-                                                : proposal.statusID === 5
-                                                ? "bg-green-200" // Completed
-                                                : proposal.statusID === 4
-                                                ? "bg-blue-200" // Ongoing
-                                                : "bg-yellow-200" // Default (Under Review)
-                                        }`}
-                                    >
-                                        <div
-                                            className={`h-2 rounded-full transition-all duration-500 ${
-                                                proposal.statusID === 3
-                                                    ? "bg-red-600" // Rejected
-                                                    : proposal.statusID === 5
-                                                    ? "bg-green-600" // Completed
-                                                    : proposal.statusID === 4
-                                                    ? "bg-blue-600" // Ongoing
-                                                    : "bg-yellow-600" // Default (Under Review)
-                                            }`}
-                                            style={{
-                                                width: `${getCompletionPercentage()}%`,
-                                            }}
-                                        ></div>
-                                    </div>
-                                    <div
-                                        className={`text-xs mt-2 ${
-                                            proposal.statusID === 3
-                                                ? "text-red-600" // Rejected
-                                                : proposal.statusID === 5
-                                                ? "text-green-600" // Completed
-                                                : proposal.statusID === 4
-                                                ? "text-blue-600" // Ongoing
-                                                : "text-yellow-600" // Default (Under Review)
-                                        }`}
-                                    >
-                                        {getCompletedStagesCount()} of 11 stages
-                                        completed
+                                        <div className="text-center">
+                                            <div
+                                                className={`text-2xl sm:text-3xl font-bold mb-1 ${textColor}`}
+                                            >
+                                                {completionPct}%
+                                            </div>
+                                            <div
+                                                className={`text-sm font-medium mb-3 ${
+                                                    isFullyComplete
+                                                        ? "text-green-700"
+                                                        : proposal.statusID === 3
+                                                        ? "text-red-700"
+                                                        : proposal.statusID === 5
+                                                        ? "text-green-700"
+                                                        : proposal.statusID === 4
+                                                        ? "text-blue-700"
+                                                        : "text-yellow-700"
+                                                }`}
+                                            >
+                                                Project Progress
+                                            </div>
+                                            <div
+                                                className={`w-full rounded-full h-2 ${barBg}`}
+                                            >
+                                                <div
+                                                    className={`h-2 rounded-full transition-all duration-500 ${barFill}`}
+                                                    style={{
+                                                        width: `${completionPct}%`,
+                                                    }}
+                                                ></div>
+                                            </div>
+                                            <div className={`text-xs mt-2 ${textColor}`}>
+                                                {getCompletedStagesCount()} of {getTimelineStages().length}
+                                                {" "}
+                                                stages completed
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        </div>
+                            );
+                        })()}
                     </div>
                 </div>
                 {/* Authors / Proponents */}
@@ -788,7 +722,7 @@ const TrackerDetail = ({ id: propId }) => {
                             const allAuthors = submitter ? [submitter, ...others] : proposal.proponents;
                             
                             return (
-                                <div className="space-y-2">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                                     {allAuthors.map(p => (
                                         <div key={p.userID} className="flex items-center justify-between px-4 py-3 rounded-lg bg-red-50 border border-red-200">
                                             <div className="flex flex-col">
@@ -876,10 +810,16 @@ const TrackerDetail = ({ id: propId }) => {
 
                     return (
                         <div className="relative">
-                            {/* Scrollable Timeline Container */}
-                            <div className="overflow-x-auto pb-4">
-                                <div className="flex justify-between items-start relative min-w-max px-4">
-                                    {timelineStages.map((stage, index) => {
+                            {timelineStages.length === 0 ? (
+                                <div className="text-center py-8">
+                                    <p className="text-gray-500">No timeline stages configured. Please contact the administrator.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Scrollable Timeline Container */}
+                                    <div className="overflow-x-auto pb-4">
+                                        <div className="flex justify-between items-start relative min-w-max px-4">
+                                            {timelineStages.map((stage, index) => {
                                         // Get date for this stage from status history
                                         const stageEntry = statusHistory.find(
                                             (e) => e.status === stage.name
@@ -889,7 +829,7 @@ const TrackerDetail = ({ id: propId }) => {
 
                                         return (
                                             <div
-                                                key={stage.id}
+                                                key={`${stage.id || stage.name}-${index}`}
                                                 className="flex flex-col items-center relative mx-4 sm:mx-8"
                                             >
                                                 {/* Stage Dot */}
@@ -1000,6 +940,8 @@ const TrackerDetail = ({ id: propId }) => {
                                     })}
                                 </div>
                             </div>
+                                </>
+                            )}
                         </div>
                     );
                 })()}
@@ -1124,142 +1066,97 @@ const TrackerDetail = ({ id: propId }) => {
                 })()}
             </div>
 
-            {/* Attached Files Section */}
-            {proposal.files && proposal.files.length > 0 && (
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
-                            <svg
-                                className="w-5 h-5 text-orange-600"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"
-                                />
-                            </svg>
-                        </div>
-                        <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
-                            Attached Files
-                        </h2>
-                        <span className="bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
-                            {proposal.files.length} file
-                            {proposal.files.length !== 1 ? "s" : ""}
-                        </span>
-                    </div>
+            {/* Supporting Documents - SETI, GAD, MOC */}
+            {proposal.files && proposal.files.length > 0 && (() => {
+                const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
+                const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
+                const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
+                // Other files exclude only SETI/GAD/MOC - include report and supporting_document
+                const otherFiles = proposal.files.filter(f => 
+                  f.fileType !== 'seti_scorecard' && 
+                  f.fileType !== 'gad_certificate' && 
+                  f.fileType !== 'matrix_compliance'
+                );
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {proposal.files.map((file) => (
-                            <div
-                                key={file.fileID}
-                                className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
-                            >
-                                <div className="flex items-start gap-4">
-                                    <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                                        <svg
-                                            className="w-6 h-6 text-red-600"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">
-                                            {file.fileName}
-                                        </h3>
-                                        <p className="text-xs text-gray-500 mb-3">
-                                            {file.formattedSize ||
-                                                `${Math.round(
-                                                    file.fileSize / 1024
-                                                )} KB`}
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                onClick={() =>
-                                                    window.open(
-                                                        `/storage/${file.filePath}`,
-                                                        "_blank"
-                                                    )
-                                                }
-                                                className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
-                                                title="View file"
-                                            >
-                                                <svg
-                                                    className="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                    />
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                                    />
-                                                </svg>
-                                                View
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    const link =
-                                                        document.createElement(
-                                                            "a"
-                                                        );
-                                                    link.href = `/storage/${file.filePath}`;
-                                                    link.download =
-                                                        file.fileName;
-                                                    link.target = "_blank";
-                                                    document.body.appendChild(
-                                                        link
-                                                    );
-                                                    link.click();
-                                                    document.body.removeChild(
-                                                        link
-                                                    );
-                                                }}
-                                                className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
-                                                title="Download file"
-                                            >
-                                                <svg
-                                                    className="w-4 h-4"
-                                                    fill="none"
-                                                    stroke="currentColor"
-                                                    viewBox="0 0 24 24"
-                                                >
-                                                    <path
-                                                        strokeLinecap="round"
-                                                        strokeLinejoin="round"
-                                                        strokeWidth={2}
-                                                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                    />
-                                                </svg>
-                                                Download
-                                            </button>
-                                        </div>
-                                    </div>
+                const renderFileCard = (file) => (
+                    <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
+                        <div className="flex items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">{file.fileName}</h3>
+                                <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => window.open(`/storage/${file.filePath}`, "_blank")} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200" title="View file">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        View
+                                    </button>
+                                    <button onClick={() => { const link = document.createElement("a"); link.href = `/storage/${file.filePath}`; link.download = file.fileName; link.target = "_blank"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200" title="Download file">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        Download
+                                    </button>
                                 </div>
                             </div>
-                        ))}
+                        </div>
                     </div>
-                </div>
-            )}
+                );
+
+                return (
+                    <>
+                        {(setiFiles.length > 0 || gadFiles.length > 0 || mocFiles.length > 0) && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
+                                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-6">Supporting Documents</h2>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {setiFiles.length > 0 && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h3 className="font-bold text-blue-900">SETI</h3>
+                                                    <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{setiFiles.length} file{setiFiles.length !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-600">Science and Engineering Technology Initiative</p>
+                                            </div>
+                                            <div className="space-y-2">{setiFiles.map(renderFileCard)}</div>
+                                        </div>
+                                    )}
+                                    {gadFiles.length > 0 && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h3 className="font-bold text-purple-900">GAD</h3>
+                                                    <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{gadFiles.length} file{gadFiles.length !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-600">Gender and Development</p>
+                                            </div>
+                                            <div className="space-y-2">{gadFiles.map(renderFileCard)}</div>
+                                        </div>
+                                    )}
+                                    {mocFiles.length > 0 && (
+                                        <div>
+                                            <div className="mb-4">
+                                                <div className="flex items-start justify-between mb-2">
+                                                    <h3 className="font-bold text-green-900">MOC</h3>
+                                                    <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{mocFiles.length} file{mocFiles.length !== 1 ? "s" : ""}</span>
+                                                </div>
+                                                <p className="text-xs text-gray-600">Matrix of Compliance</p>
+                                            </div>
+                                            <div className="space-y-2">{mocFiles.map(renderFileCard)}</div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                        {otherFiles.length > 0 && (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg></div>
+                                    <div><h2 className="text-xl sm:text-2xl font-bold text-gray-900">Other Supporting Documents</h2><p className="text-sm text-gray-600">Additional files and attachments</p></div>
+                                    <span className="ml-auto bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">{otherFiles.length} file{otherFiles.length !== 1 ? "s" : ""}</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{otherFiles.map(renderFileCard)}</div>
+                            </div>
+                        )}
+                    </>
+                );
+            })()}
 
             {/* Upload Modal */}
             {showUploadModal && (

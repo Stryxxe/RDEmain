@@ -18,7 +18,8 @@ return new class extends Migration
                 $table->string('fileType', 25);
                 $table->bigInteger('fileSize')->nullable();
                 $table->timestamp('uploadedAt')->useCurrent();
-                $table->foreignId('proposalID')->constrained('proposals', 'proposalID');
+                $table->unsignedBigInteger('proposalID')->nullable();
+                $table->foreign('proposalID')->references('proposalID')->on('proposals')->nullOnDelete();
                 $table->timestamps();
             });
         }

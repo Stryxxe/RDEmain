@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\TimelineStageController;
 use Inertia\Inertia;
 
 // Expose CSRF helpers (Inertia handles CSRF automatically, but this can be useful for manual API calls)
@@ -31,14 +32,13 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/review-proposal', fn() => Inertia::render('RoleViews/RDD/RDDEndorsement'))->name('endorsement');
         Route::get('/review-proposal/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDEndorsementDetail', ['id' => $id]))->name('endorsement.detail');
         Route::get('/progress-report', fn() => Inertia::render('RoleViews/RDD/RDDProgressReport'))->name('progress-report');
-        Route::get('/progress-report/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDProgressReportDetail', ['id' => $id]))->name('progress-report.detail');
         Route::get('/archive', fn() => Inertia::render('RoleViews/RDD/RDDArchive'))->name('archive');
         Route::get('/submit-report', fn() => Inertia::render('RoleViews/RDD/RDDSubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('RoleViews/RDD/RDDResources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('RoleViews/RDD/RDDAccount'))->name('account');
         Route::get('/proposal/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDProposalDetail', ['id' => $id]))->name('proposal.detail');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');
-        Route::get('/messages', fn() => Inertia::render('Messages'))->name('messages');
+        Route::get('/messages', fn() => Inertia::render('RoleViews/RDD/RDDMessages'))->name('messages');
     });
 
     // ============================================================================
@@ -50,6 +50,8 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/tracker/{id}', fn($id) => Inertia::render('TrackerDetail', ['id' => $id]))->name('tracker.detail');
         Route::get('/progress-report', fn() => Inertia::render('RoleViews/Proponent/ProponentProgressReport'))->name('progress-report');
         Route::get('/progress-report/{id}', fn($id) => Inertia::render('RoleViews/Proponent/ProponentProgressReportDetail', ['id' => $id]))->name('progress-report.detail');
+        Route::get('/revision', fn() => Inertia::render('ForRevision'))->name('revision');
+        Route::get('/revision/{id}', fn($id) => Inertia::render('RevisionDetail', ['id' => $id]))->name('revision.detail');
         Route::get('/submit-report', fn() => Inertia::render('RoleViews/Proponent/ProponentSubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('Resources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('Account'))->name('account');
@@ -79,6 +81,9 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('RoleViews/Dashboards/AdminDashboard'))->name('dashboard');
         Route::get('/user-management', fn() => Inertia::render('RoleViews/Admin/UserManagement'))->name('user-management');
         Route::get('/system-settings', fn() => Inertia::render('RoleViews/Admin/SystemSettings'))->name('system-settings');
+        Route::post('/timeline-stages', [TimelineStageController::class, 'store'])->name('timeline-stages.store');
+        Route::put('/timeline-stages/{id}', [TimelineStageController::class, 'update'])->name('timeline-stages.update');
+        Route::delete('/timeline-stages/{id}', [TimelineStageController::class, 'destroy'])->name('timeline-stages.destroy');
         Route::get('/profile', fn() => Inertia::render('RoleViews/Admin/Profile'))->name('profile');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');
         Route::get('/messages', fn() => Inertia::render('Messages'))->name('messages');

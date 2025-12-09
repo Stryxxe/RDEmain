@@ -9,6 +9,7 @@ import {
     User,
     Clock,
     AlertCircle,
+    Trash2,
 } from "lucide-react";
 import { useMessages } from "../../../contexts/MessageContext";
 import { useNotifications } from "../../../contexts/NotificationContext";
@@ -47,6 +48,8 @@ const CMMessages = () => {
     const [availableProponents, setAvailableProponents] = useState(null);
     const [proponentsLoading, setProponentsLoading] = useState(false);
     const [startingConversation, setStartingConversation] = useState(false);
+    const [searchResults, setSearchResults] = useState([]);
+    const [searchLoading, setSearchLoading] = useState(false);
 
     useEffect(() => {
         fetchConversations();
@@ -256,6 +259,31 @@ const CMMessages = () => {
         await fetchConversation(conversation.otherUser.userID);
     };
 
+    const handleDeleteConversation = async (conversation, e) => {
+        e.stopPropagation();
+        
+        if (!window.confirm(`Are you sure you want to delete this conversation with ${conversation.otherUser.fullName}? This will delete all messages.`)) {
+            return;
+        }
+        
+        try {
+            await axiosInstance.delete(`/messages/conversation/${conversation.otherUser.userID}`, {
+                withCredentials: true,
+            });
+            
+            if (selectedConversation?.otherUser.userID === conversation.otherUser.userID) {
+                setSelectedConversation(null);
+                setCurrentConversation(null);
+                window.history.pushState({}, "", url.split("?")[0]);
+            }
+            
+            await fetchConversations();
+        } catch (error) {
+            console.error("Error deleting conversation:", error);
+            alert("Failed to delete conversation. Please try again.");
+        }
+    };
+
     const filteredConversations = conversations.filter((conversation) => {
         const searchLower = searchTerm.toLowerCase();
         const otherUserName = conversation.otherUser?.fullName || "Unknown";
@@ -268,6 +296,106 @@ const CMMessages = () => {
             latestMessageSubject.toLowerCase().includes(searchLower)
         );
     });
+
+    // Search for users to start new conversations
+    const handleSearchUsers = async (query) => {
+        if (query.trim().length < 2) {
+            setSearchResults([]);
+            return;
+        }
+
+        setSearchLoading(true);
+        try {
+            const response = await axiosInstance.get("/users/search", {
+                params: { q: query, limit: 10 },
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+
+            if (response.data.success && response.data.data) {
+                // Filter results to include:
+                // - Other CMs in the same research center
+                // - Proponents in the same research center
+                // - RDD users
+                const filteredResults = response.data.data.filter((searchUser) => {
+                    const userRole = searchUser.role?.toLowerCase();
+                    
+                    // Exclude self
+                    if (searchUser.userID === user?.userID) {
+                        return false;
+                    }
+
+                    // Allow other CMs (same research center), Proponents (same research center), and RDD
+                    if (userRole === "cm" || userRole === "rdd") {
+                        return true;
+                    }
+                    if (userRole === "proponent") {
+                        return true;
+                    }
+                    return false;
+                });
+
+                setSearchResults(filteredResults);
+            }
+        } catch (error) {
+            console.error("Error searching users:", error);
+            setSearchResults([]);
+        } finally {
+            setSearchLoading(false);
+        }
+    };
+
+    const startConversationWithUser = async (targetUser) => {
+        try {
+            setStartingConversation(true);
+
+            // Create a conversation by sending an initial message
+            await sendMessageFromContext(
+                String(targetUser.userID),
+                "New Conversation",
+                "Hello! I would like to start a conversation with you.",
+                "general"
+            );
+
+            // Wait a bit for the message to be processed
+            await new Promise((resolve) => setTimeout(resolve, 300));
+
+            // Refresh conversations
+            await fetchConversations();
+
+            // Get updated conversations list
+            const updatedResponse = await axiosInstance.get(
+                "/messages/conversations",
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+
+            if (updatedResponse.data.data) {
+                setConversations(updatedResponse.data.data);
+
+                // Find the new conversation
+                const newConversation = updatedResponse.data.data.find(
+                    (conv) =>
+                        String(conv.otherUser.userID) === String(targetUser.userID)
+                );
+
+                if (newConversation) {
+                    // Select the conversation
+                    setSelectedConversation(newConversation);
+                    await fetchConversation(targetUser.userID);
+                    setSearchTerm("");
+                    setSearchResults([]);
+                }
+            }
+        } catch (error) {
+            console.error("Error starting conversation:", error);
+            alert("Failed to start conversation. Please try again.");
+        } finally {
+            setStartingConversation(false);
+        }
+    };
 
     const getTotalUnreadCount = () => {
         return conversations.reduce(
@@ -289,88 +417,49 @@ const CMMessages = () => {
 
     return (
         <div className="max-w-6xl mx-auto">
-            <div className="mb-8">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <div className="flex items-center gap-3 mb-2">
-                            <h1 className="text-3xl font-bold text-gray-900">
-                                Messages
-                            </h1>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={handleRefresh}
-                                    disabled={isRefreshing || messageRefreshing}
-                                    className="flex items-center space-x-2 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                                >
-                                    <RefreshCw
-                                        className={`w-5 h-5 ${
-                                            isRefreshing || messageRefreshing
-                                                ? "animate-spin"
-                                                : ""
-                                        }`}
-                                    />
-                                    <span>
-                                        {isRefreshing || messageRefreshing
-                                            ? "Refreshing..."
-                                            : "Refresh"}
-                                    </span>
-                                </button>
-                            </div>
+            <div className="mb-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-4">
+                    <div className="flex items-start justify-between mb-3">
+                        <div>
+                            <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
+                            <p className="text-sm text-gray-600 mt-1">Communicate with researchers and team members</p>
                         </div>
-                        <p className="text-gray-600">
-                            Communicate with researchers and team members
-                        </p>
+                        <button
+                            onClick={handleRefresh}
+                            disabled={isRefreshing || messageRefreshing}
+                            className="flex items-center space-x-1 text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50 whitespace-nowrap"
+                        >
+                            <RefreshCw
+                                className={`w-4 h-4 ${
+                                    isRefreshing || messageRefreshing
+                                        ? "animate-spin"
+                                        : ""
+                                }`}
+                            />
+                            <span className="hidden sm:inline">
+                                {isRefreshing || messageRefreshing
+                                    ? "Refreshing..."
+                                    : "Refresh"}
+                            </span>
+                        </button>
                     </div>
-                    <div className="flex items-center gap-3">
-                        {/* Auto-refresh Controls */}
-                        <AutoRefreshControls />
-                        <RefreshStatusIndicator />
+                    <div className="flex items-center gap-2 flex-wrap">
                         {getTotalUnreadCount() > 0 && (
                             <button
                                 onClick={() => {
                                     // Mark all as read functionality
                                     console.log("Mark all as read");
                                 }}
-                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                                className="px-3 py-1.5 text-sm bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
                             >
                                 Mark All as Read
                             </button>
                         )}
-                        <button
-                            onClick={async () => {
-                                if (
-                                    confirm(
-                                        "Are you sure you want to clear all conversations? This will delete all messages."
-                                    )
-                                ) {
-                                    try {
-                                        await axiosInstance.delete(
-                                            "/messages/clear-all",
-                                            {
-                                                headers: {
-                                                    Accept: "application/json",
-                                                },
-                                                withCredentials: true,
-                                            }
-                                        );
-                                        clearConversation();
-                                        await fetchConversations();
-                                    } catch (error) {
-                                        alert(
-                                            "Failed to clear messages. Please try again."
-                                        );
-                                    }
-                                }
-                            }}
-                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
-                        >
-                            Clear All
-                        </button>
                     </div>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Conversations List */}
                 <div className="lg:col-span-1">
                     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -383,18 +472,84 @@ const CMMessages = () => {
                                 />
                                 <input
                                     type="text"
-                                    placeholder="Search conversations..."
+                                    placeholder="Search conversations or users..."
                                     value={searchTerm}
-                                    onChange={(e) =>
-                                        setSearchTerm(e.target.value)
-                                    }
+                                    onChange={(e) => {
+                                        setSearchTerm(e.target.value);
+                                        handleSearchUsers(e.target.value);
+                                    }}
                                     className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm"
                                 />
                             </div>
                         </div>
 
                         {/* Conversations List */}
-                        <div className="max-h-96 overflow-y-auto">
+                        <div className="max-h-[calc(100vh-400px)] overflow-y-auto">
+                            {/* Show search results when searching */}
+                            {searchTerm.length >= 2 && searchResults.length > 0 && (
+                                <div className="p-4 border-b border-gray-200 bg-purple-50">
+                                    <p className="text-xs text-purple-700 mb-3 font-semibold">
+                                        Search Results ({searchResults.length})
+                                    </p>
+                                    <div className="space-y-2">
+                                        {searchResults.map((searchUser) => (
+                                            <div
+                                                key={searchUser.userID}
+                                                className="p-3 bg-white rounded-lg border border-purple-200"
+                                            >
+                                                <div className="flex items-center gap-3 mb-2">
+                                                    <div className="w-8 h-8 bg-purple-200 rounded-full flex items-center justify-center">
+                                                        <User className="w-4 h-4 text-purple-600" />
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <h4 className="text-sm font-semibold text-purple-900">
+                                                            {searchUser.firstName} {searchUser.lastName}
+                                                        </h4>
+                                                        <p className="text-xs text-purple-500">
+                                                            {searchUser.email}
+                                                        </p>
+                                                        <p className="text-xs text-purple-600">
+                                                            {searchUser.role}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() =>
+                                                        startConversationWithUser(searchUser)
+                                                    }
+                                                    disabled={startingConversation}
+                                                    className="w-full px-3 py-1.5 bg-purple-600 text-white text-xs rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                                                >
+                                                    {startingConversation
+                                                        ? "Starting..."
+                                                        : "Chat"}
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Show "No search results" when search returns empty */}
+                            {searchTerm.length >= 2 &&
+                                searchLoading === false &&
+                                searchResults.length === 0 && (
+                                    <div className="p-4 border-b border-gray-200 bg-gray-50">
+                                        <p className="text-xs text-gray-600 text-center">
+                                            No users found matching "{searchTerm}"
+                                        </p>
+                                    </div>
+                                )}
+
+                            {/* Show loading state */}
+                            {searchLoading && (
+                                <div className="p-4 border-b border-gray-200 bg-gray-50">
+                                    <p className="text-xs text-gray-600 text-center">
+                                        Searching...
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Show "Start Conversation" when there are no conversations at all */}
                             {conversations.length === 0 && (
                                 <>
@@ -546,7 +701,7 @@ const CMMessages = () => {
                                                                     disabled={
                                                                         startingConversation
                                                                     }
-                                                                    className="w-full px-3 py-2 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                    className="w-full px-3 py-1.5 bg-blue-600 text-white text-xs rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                                                 >
                                                                     {startingConversation
                                                                         ? "Starting..."
@@ -637,6 +792,11 @@ const CMMessages = () => {
                                                                         .fullName
                                                                 }
                                                             </h4>
+                                                            <p className="text-xs text-gray-400 truncate">
+                                                                {conversation
+                                                                    .otherUser
+                                                                    .email}
+                                                            </p>
                                                             <p className="text-xs text-gray-500 truncate">
                                                                 {conversation
                                                                     .otherUser
@@ -647,6 +807,13 @@ const CMMessages = () => {
                                                         </div>
                                                     </div>
                                                     <div className="flex items-center gap-2">
+                                                        <button
+                                                            onClick={(e) => handleDeleteConversation(conversation, e)}
+                                                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                            title="Delete conversation"
+                                                        >
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
                                                         <span className="text-xs text-gray-500">
                                                             {formatTime(
                                                                 conversation
@@ -723,6 +890,10 @@ const CMMessages = () => {
                                                         .otherUser.fullName
                                                 }
                                             </h2>
+                                            <p className="text-xs text-gray-500">
+                                                {selectedConversation.otherUser
+                                                    .email}
+                                            </p>
                                             <p className="text-sm text-gray-600">
                                                 {selectedConversation.otherUser
                                                     .role?.userRole || "User"}
@@ -752,7 +923,7 @@ const CMMessages = () => {
                             </div>
 
                             {/* Messages */}
-                            <div className="flex-1 p-6 overflow-y-auto max-h-96">
+                            <div className="flex-1 p-5 overflow-y-auto max-h-[calc(100vh-480px)]">
                                 <div className="space-y-4">
                                     {currentConversation.map(
                                         (message, index) => {
@@ -822,10 +993,10 @@ const CMMessages = () => {
                             </div>
 
                             {/* Reply Section */}
-                            <div className="p-6 border-t border-gray-200">
-                                <div className="space-y-4">
+                            <div className="p-4 border-t border-gray-200 bg-gray-50">
+                                <div className="space-y-3">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                        <label className="block text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wider">
                                             Reply
                                         </label>
                                         <textarea
@@ -834,7 +1005,7 @@ const CMMessages = () => {
                                                 setNewMessage(e.target.value)
                                             }
                                             rows={3}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm resize-none"
                                             placeholder="Type your reply here..."
                                         />
                                     </div>
@@ -845,7 +1016,7 @@ const CMMessages = () => {
                                                 !newMessage.trim() ||
                                                 sendingMessage
                                             }
-                                            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            className="flex items-center gap-2 px-3 py-1.5 bg-red-600 text-white text-sm rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                                         >
                                             <Send size={16} />
                                             {sendingMessage

@@ -11,9 +11,11 @@ import {
     FiUpload,
     FiDownload,
     FiTrash2,
+    FiPlus,
 } from "react-icons/fi";
 import AdminLayout from "../../../Components/Layouts/AdminLayout";
 import SimpleAlert from "../../../Components/SimpleAlert";
+import ConfirmDeleteDialog from "../../../Components/ConfirmDeleteDialog";
 import axios from "axios";
 
 const SystemSettings = () => {
@@ -24,12 +26,14 @@ const SystemSettings = () => {
         // Core
         systemName: "Research Management System",
         systemVersion: "1.0.0",
-        // Security
+        // System Configuration
         sessionTimeout: "30",
         maxFileSize: "20",
         logRetention: "90",
+        proposalYear: new Date().getFullYear().toString(),
         // Backup
         backupFrequency: "daily",
+        backupStorageLocation: "local",
         // File Types
         allowedFileTypes: ".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg",
         // Departments
@@ -76,8 +80,25 @@ const SystemSettings = () => {
     const [roleForm, setRoleForm] = useState({ id: null, roleName: "", isActive: true });
     const [roleErrors, setRoleErrors] = useState("");
     const [editingRole, setEditingRole] = useState(null);
+    
     // UI feedback
     const [alertState, setAlertState] = useState({ visible: false, type: 'success', title: '', message: '' });
+    const [savingStatus, setSavingStatus] = useState(''); // '', 'saving', 'saved'
+    
+    // Backup storage
+    const filePickerRef = React.useRef(null);
+    const [backupPath, setBackupPath] = useState('');
+    const [showBackupModal, setShowBackupModal] = useState(false);
+    const [backupPathInput, setBackupPathInput] = useState('');
+    const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+    const [selectedFolderPath, setSelectedFolderPath] = useState('');
+    const [currentPath, setCurrentPath] = useState('C:\\');
+    const [availableFolders, setAvailableFolders] = useState([
+        { name: 'Backups', path: 'C:\\Backups' },
+        { name: 'Documents', path: 'C:\\Users\\Documents' },
+        { name: 'Desktop', path: 'C:\\Users\\Desktop' },
+        { name: 'Downloads', path: 'C:\\Users\\Downloads' }
+    ]);
 
     // Auto-hide alerts after 3 seconds
     useEffect(() => {
@@ -87,6 +108,55 @@ const SystemSettings = () => {
         }, 3000);
         return () => clearTimeout(t);
     }, [alertState.visible]);
+
+    // Auto-save settings with debounce
+    useEffect(() => {
+        const autoSave = async () => {
+            if (!settings.sessionTimeout || !settings.maxFileSize) return;
+            
+            setSavingStatus('saving');
+            try {
+                const sessionTimeoutNum = parseInt(settings.sessionTimeout, 10);
+                const logRetentionNum = parseInt(settings.logRetention, 10);
+                const maxFileSizeNum = parseInt(settings.maxFileSize, 10);
+                
+                if (isNaN(sessionTimeoutNum) || sessionTimeoutNum < 5 ||
+                    isNaN(logRetentionNum) || logRetentionNum < 7 ||
+                    isNaN(maxFileSizeNum) || maxFileSizeNum < 1 || maxFileSizeNum > 20) {
+                    setSavingStatus('');
+                    return;
+                }
+                
+                await axiosInstance.put('/settings', {
+                    settings: {
+                        systemName: settings.systemName,
+                        systemVersion: settings.systemVersion,
+                        sessionTimeout: sessionTimeoutNum,
+                        logRetention: logRetentionNum,
+                        maxFileSize: maxFileSizeNum,
+                        backupFrequency: settings.backupFrequency,
+                        backupStorageLocation: settings.backupStorageLocation,
+                        allowDepartmentCreation: !!settings.allowDepartmentCreation,
+                        requireDepartmentAssignment: !!settings.requireDepartmentAssignment,
+                        allowed_file_types: settings.allowedFileTypes,
+                        max_file_size: maxFileSizeNum,
+                    }
+                }, {
+                    headers: { Accept: 'application/json' },
+                    withCredentials: true,
+                });
+                
+                setSavingStatus('saved');
+                setTimeout(() => setSavingStatus(''), 2000);
+            } catch (error) {
+                console.error('Auto-save failed:', error);
+                setSavingStatus('');
+            }
+        };
+
+        const timer = setTimeout(autoSave, 1000);
+        return () => clearTimeout(timer);
+    }, [settings.sessionTimeout, settings.logRetention, settings.maxFileSize, settings.allowedFileTypes, settings.backupFrequency, settings.backupStorageLocation, settings.systemName, settings.systemVersion, settings.allowDepartmentCreation, settings.requireDepartmentAssignment]);
 
     const FILE_TYPE_PRESETS = [
         { key: 'docs', label: 'Documents (PDF, DOC, DOCX)', value: '.pdf,.doc,.docx' },
@@ -101,6 +171,206 @@ const SystemSettings = () => {
         setSettings((prev) => ({
             ...prev,
             [name]: type === "checkbox" ? checked : value,
+        }));
+    };
+
+    const handleBackupStorageClick = () => {
+        setShowBackupModal(true);
+        setBackupPathInput(backupPath);
+    };
+
+    const handleBrowseFolderClick = () => {
+        // Trigger the native folder picker
+        filePickerRef.current?.click();
+    };
+
+    const handleFolderSelection = (e) => {
+        const files = e.target.files;
+        console.log('Files selected:', files);
+        
+        if (files && files.length > 0) {
+            const file = files[0];
+            console.log('First file:', file);
+            console.log('webkitRelativePath:', file.webkitRelativePath);
+            console.log('file.path:', file.path);
+            console.log('file.name:', file.name);
+            
+            let folderPath = '';
+            
+            if (file.path) {
+                // Electron or some environments provide full path
+                const lastSlash = Math.max(file.path.lastIndexOf('/'), file.path.lastIndexOf('\\'));
+                folderPath = file.path.substring(0, lastSlash);
+            } else if (file.webkitRelativePath) {
+                // Get folder name from webkitRelativePath
+                const parts = file.webkitRelativePath.split('/');
+                folderPath = parts[0];
+            } else {
+                // Fallback to file name directory
+                folderPath = file.name;
+            }
+            
+            console.log('Extracted folder path:', folderPath);
+            
+            // Directly set the path in the main input field
+            setBackupPathInput(folderPath);
+            
+            // Don't show the confirmation dialog, just close it if open
+            setShowFolderBrowser(false);
+            setSelectedFolderPath('');
+        } else {
+            console.log('No files selected');
+        }
+    };
+
+    const handleConfirmFolderPath = () => {
+        if (selectedFolderPath.trim()) {
+            setBackupPathInput(selectedFolderPath);
+            setShowFolderBrowser(false);
+            setSelectedFolderPath('');
+        }
+    };
+
+    const confirmBackupPath = () => {
+        if (backupPathInput.trim()) {
+            setBackupPath(backupPathInput);
+            setSettings((prev) => ({
+                ...prev,
+                backupStorageLocation: backupPathInput,
+            }));
+            setShowBackupModal(false);
+            setBackupPathInput('');
+        }
+    };
+
+    const cancelBackupPath = () => {
+        setShowBackupModal(false);
+        setBackupPathInput('');
+    };
+
+    const triggerBackup = async () => {
+        try {
+            setLoading(true);
+            const backupPath = settings.backupStorageLocation;
+
+            if (!backupPath) {
+                setAlertState({
+                    visible: true,
+                    type: 'error',
+                    title: 'Configuration Error',
+                    message: 'Backup path not configured',
+                });
+                return;
+            }
+
+            // Step 1: Scan for existing backups to avoid duplicates
+            const scanResponse = await axiosInstance.post('backup/scan', {
+                backup_path: backupPath,
+            });
+
+            if (!scanResponse.data.success) {
+                setAlertState({
+                    visible: true,
+                    type: 'error',
+                    title: 'Scan Failed',
+                    message: scanResponse.data.message || 'Scan failed before backup',
+                });
+                return;
+            }
+
+            const existingCount = scanResponse.data.data?.existing_backups_count ?? 0;
+
+            // Step 2: Run backup with duplicate skipping
+            const response = await axiosInstance.post('backup/trigger', {
+                scan_for_duplicates: true,
+            });
+
+            if (response.data.success) {
+                setAlertState({
+                    visible: true,
+                    type: 'success',
+                    title: 'Backup Success',
+                    message: `Scan found ${existingCount} existing backups. Completed! ${response.data.data.backed_up} proposals backed up, ${response.data.data.files_copied} files copied.`,
+                });
+                
+                // Update last backup time
+                setSettings((prev) => ({
+                    ...prev,
+                    lastBackupTime: new Date().toISOString(),
+                }));
+            } else {
+                setAlertState({
+                    visible: true,
+                    type: 'error',
+                    title: 'Backup Failed',
+                    message: response.data.message || 'Backup failed',
+                });
+            }
+        } catch (error) {
+            console.error('Backup error:', error);
+            setAlertState({
+                visible: true,
+                type: 'error',
+                title: 'Backup Error',
+                message: error.response?.data?.message || 'Failed to trigger backup',
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const scanBackupFolder = async () => {
+        try {
+            setLoading(true);
+            const backupPath = settings.backupStorageLocation;
+            
+            if (!backupPath) {
+                setAlertState({
+                    visible: true,
+                    type: 'error',
+                    title: 'Configuration Error',
+                    message: 'Backup path not configured',
+                });
+                return;
+            }
+
+            const response = await axiosInstance.post('backup/scan', {
+                backup_path: backupPath,
+            });
+
+            if (response.data.success) {
+                setAlertState({
+                    visible: true,
+                    type: 'success',
+                    title: 'Scan Complete',
+                    message: `Scan complete! Found ${response.data.data.existing_backups_count} existing backup records.`,
+                });
+            } else {
+                setAlertState({
+                    visible: true,
+                    type: 'error',
+                    title: 'Scan Failed',
+                    message: response.data.message || 'Scan failed',
+                });
+            }
+        } catch (error) {
+            console.error('Scan error:', error);
+            setAlertState({
+                visible: true,
+                type: 'error',
+                title: 'Scan Error',
+                message: error.response?.data?.message || 'Failed to scan backup folder',
+            });
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const clearBackupPath = () => {
+        setBackupPath('');
+        setSettings((prev) => ({
+            ...prev,
+            backupStorageLocation: '',
         }));
     };
 
@@ -259,6 +529,7 @@ const SystemSettings = () => {
                     maxFileSize: String(s.max_file_size ?? prev.maxFileSize),
                     logRetention: String(s.logRetention ?? prev.logRetention),
                     backupFrequency: s.backupFrequency ?? prev.backupFrequency,
+                    backupStorageLocation: s.backupStorageLocation ?? prev.backupStorageLocation,
                     allowDepartmentCreation: Boolean(s.allowDepartmentCreation ?? prev.allowDepartmentCreation),
                     requireDepartmentAssignment: Boolean(s.requireDepartmentAssignment ?? prev.requireDepartmentAssignment),
                     allowedFileTypes: s.allowed_file_types ?? prev.allowedFileTypes,
@@ -274,7 +545,7 @@ const SystemSettings = () => {
     }, []);
 
     const resetDeptForm = () => {
-        setDeptForm({ id: null, name: "" });
+        setDeptForm({ id: null, name: "", college_idNo: "" });
         setDeptErrors("");
     };
 
@@ -285,13 +556,17 @@ const SystemSettings = () => {
         }
         try {
             setDeptLoading(true);
+            const payload = { 
+                name: deptForm.name,
+                college_idNo: deptForm.college_idNo || null
+            };
             if (deptForm.id) {
-                await axiosInstance.put(`/admin/departments/${deptForm.id}`, { name: deptForm.name }, {
+                await axiosInstance.put(`/admin/departments/${deptForm.id}`, payload, {
                     headers: { Accept: "application/json" },
                     withCredentials: true,
                 });
             } else {
-                await axiosInstance.post(`/admin/departments`, { name: deptForm.name }, {
+                await axiosInstance.post(`/admin/departments`, payload, {
                     headers: { Accept: "application/json" },
                     withCredentials: true,
                 });
@@ -307,7 +582,11 @@ const SystemSettings = () => {
     };
 
     const editDepartment = (dept) => {
-        setDeptForm({ id: dept.departmentID || dept.id, name: dept.name || dept.departmentName || "" });
+        setDeptForm({ 
+            id: dept.departmentID || dept.id, 
+            name: dept.name || dept.departmentName || "",
+            college_idNo: dept.college_idNo || ""
+        });
         setDeptErrors("");
     };
 
@@ -662,39 +941,39 @@ const SystemSettings = () => {
     return (
         <AdminLayout>
             <div className="space-y-6">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">
-                            System Settings
-                        </h1>
-                        <p className="mt-1 text-sm text-gray-600">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        System Settings
+                    </h1>
+                    <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-gray-600">
                             Configure system-wide settings and preferences
                         </p>
+                        {savingStatus === 'saving' && (
+                            <span className="text-xs text-blue-600 flex items-center gap-1">
+                                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                Saving...
+                            </span>
+                        )}
+                        {savingStatus === 'saved' && (
+                            <span className="text-xs text-green-600 flex items-center gap-1">
+                                <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                                </svg>
+                                Saved
+                            </span>
+                        )}
+                    </div>
                 </div>
-                <div className="flex space-x-3">
-                    <button
-                        onClick={handleReset}
-                        className="admin-button-secondary flex items-center space-x-2"
-                    >
-                        <FiRefreshCw className="w-4 h-4" />
-                        <span>Reset</span>
-                    </button>
-                    <button
-                        onClick={handleSave}
-                        disabled={loading}
-                        className="admin-button-primary flex items-center space-x-2"
-                    >
-                        <FiSave className="w-4 h-4" />
-                        <span>{loading ? "Saving..." : "Save Changes"}</span>
-                    </button>
-                </div>
-            </div>
 
                 <div className="admin-card">
                                 <div className="admin-card">
                     <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
                         <FiShield className="w-5 h-5 mr-2" />
-                        Security
+                        System Configuration
                     </h3>
                     <div className="space-y-4">
                         <div>
@@ -710,6 +989,21 @@ const SystemSettings = () => {
                                 min="5"
                                 max="480"
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Proposal ID Year
+                            </label>
+                            <input
+                                type="number"
+                                name="proposalYear"
+                                value={settings.proposalYear}
+                                onChange={handleChange}
+                                className="admin-input"
+                                min="2000"
+                                max="2999"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">Year used in proposal ID format: YEAR-RDP-INT/EXT-college_idNo</p>
                         </div>
                         {/* Max File Upload Size moved to File Storage settings */}
                         <div>
@@ -754,6 +1048,52 @@ const SystemSettings = () => {
                                 <option value="monthly">Monthly</option>
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Backup Storage Location
+                            </label>
+                            <div className="space-y-2">
+                                {backupPath ? (
+                                    <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <FiFolder className="w-5 h-5 text-green-600 flex-shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-medium text-green-900 truncate">
+                                                {backupPath}
+                                            </p>
+                                            <p className="text-xs text-green-700 mt-0.5">
+                                                Backups will be stored here
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setBackupPath('');
+                                                setSettings((prev) => ({
+                                                    ...prev,
+                                                    backupStorageLocation: '',
+                                                }));
+                                            }}
+                                            className="flex-shrink-0 text-green-600 hover:text-red-600 transition-colors"
+                                            title="Clear selection"
+                                        >
+                                            <FiTrash2 className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleBackupStorageClick}
+                                        className="w-full p-3 bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg hover:bg-blue-100 transition-colors flex items-center justify-center gap-2 text-blue-600 hover:text-blue-700"
+                                    >
+                                        <FiFolder className="w-5 h-5" />
+                                        <span className="font-medium">Click to select backup storage location</span>
+                                    </button>
+                                )}
+                                <p className="text-xs text-gray-500">
+                                    Select a folder where backups will be automatically stored
+                                </p>
+                            </div>
+                        </div>
                         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
                             <div className="flex">
                                 <FiBell className="w-5 h-5 text-yellow-400" />
@@ -762,14 +1102,32 @@ const SystemSettings = () => {
                                         Last Backup
                                     </h4>
                                     <p className="text-sm text-yellow-700 mt-1">
-                                        Successfully completed recently
+                                        {settings.lastBackupTime 
+                                            ? new Date(settings.lastBackupTime).toLocaleString()
+                                            : 'No backups yet'
+                                        }
                                     </p>
                                 </div>
                             </div>
                         </div>
-                        <button className="admin-button-secondary w-full">
-                            Create Manual Backup
-                        </button>
+                        <div className="space-y-2">
+                            <button
+                                type="button"
+                                onClick={triggerBackup}
+                                disabled={!backupPath || loading}
+                                className="admin-button-secondary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? 'Scanning + Backing Up...' : 'Create Manual Backup (scans first)'}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={scanBackupFolder}
+                                disabled={!backupPath || loading}
+                                className="admin-button-secondary w-full disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {loading ? 'Scanning...' : 'Scan Backup Folder Only'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -1179,7 +1537,7 @@ const SystemSettings = () => {
                         Departments
                     </h3>
                     <div className="space-y-6">
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div className="md:col-span-2">
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Department Name</label>
                                 <input
@@ -1190,6 +1548,16 @@ const SystemSettings = () => {
                                     placeholder="Enter department name"
                                 />
                                 {deptErrors && <p className="mt-1 text-sm text-red-600">{deptErrors}</p>}
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">College ID</label>
+                                <input
+                                    type="text"
+                                    value={deptForm.college_idNo || ''}
+                                    onChange={(e) => setDeptForm((p) => ({ ...p, college_idNo: e.target.value }))}
+                                    className="admin-input"
+                                    placeholder="e.g. CAE"
+                                />
                             </div>
                             <div className="flex items-end">
                                 <button onClick={submitDepartment} className="admin-button-primary w-full" disabled={deptLoading}>
@@ -1203,13 +1571,14 @@ const SystemSettings = () => {
                                 <thead>
                                     <tr>
                                         <th className="text-left">Name</th>
+                                        <th className="text-left w-40">College ID</th>
                                         <th className="w-52 text-left">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {departments.length === 0 && (
                                         <tr>
-                                            <td colSpan="2" className="text-center text-sm text-gray-500 py-6">No departments found</td>
+                                            <td colSpan="3" className="text-center text-sm text-gray-500 py-6">No departments found</td>
                                         </tr>
                                     )}
                                     {departments
@@ -1217,6 +1586,7 @@ const SystemSettings = () => {
                                         .map((dept) => (
                                         <tr key={dept.departmentID || dept.id} className="hover:bg-gray-50">
                                             <td className="text-base text-gray-900 py-4">{dept.name || dept.departmentName}</td>
+                                            <td className="text-sm text-gray-600 py-4">{dept.college_idNo || '—'}</td>
                                             <td className="py-4">
                                                 <div className="flex items-center gap-3">
                                                     <button onClick={() => editDepartment(dept)} className="admin-button-secondary px-4 py-2">Edit</button>
@@ -1445,6 +1815,194 @@ const SystemSettings = () => {
                             className="px-4 py-2 text-sm text-white bg-red-600 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             Upload Template
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Backup Storage Selection Modal */}
+        {showBackupModal && !showFolderBrowser && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-40">
+                <div className="bg-gray-900 rounded-lg shadow-2xl max-w-md w-full mx-4 p-8">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                        Set Backup Storage Location
+                    </h2>
+                    <p className="text-gray-300 text-sm mb-6">
+                        Enter the path where backups will be stored:
+                    </p>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="block text-gray-400 text-sm mb-2">
+                                Backup Path {backupPathInput && <span className="text-green-500">(Path detected)</span>}
+                            </label>
+                            <input
+                                type="text"
+                                value={backupPathInput}
+                                onChange={(e) => setBackupPathInput(e.target.value)}
+                                placeholder="e.g., C:\Backups or /var/backups"
+                                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                onKeyDown={(e) => e.key === 'Enter' && confirmBackupPath()}
+                                autoFocus
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleBrowseFolderClick}
+                            className="w-full px-4 py-2 text-sm text-white bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium border border-gray-600"
+                        >
+                            <FiFolder className="w-4 h-4" />
+                            Browse Folder
+                        </button>
+                        <input
+                            ref={filePickerRef}
+                            type="file"
+                            webkitdirectory="true"
+                            directory="true"
+                            onChange={handleFolderSelection}
+                            className="hidden"
+                            style={{ display: 'none' }}
+                        />
+                        <div className="bg-blue-900/30 border border-blue-700/50 rounded-lg p-3">
+                            <p className="text-blue-300 text-xs flex items-start gap-2">
+                                <span className="text-blue-400 mt-0.5">ℹ️</span>
+                                <span>
+                                    <strong>Note:</strong> You can select folders that contain files. For new/empty backup folders, type the full path manually (e.g., C:\NewBackups), or click "Build Path" below.
+                                </span>
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setShowFolderBrowser(true)}
+                            className="w-full px-4 py-2 text-sm text-gray-300 bg-gray-800 hover:bg-gray-750 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium border border-gray-700"
+                        >
+                            <FiPlus className="w-4 h-4" />
+                            Build Path for New Folder
+                        </button>
+                    </div>
+                    <div className="flex gap-3 justify-end mt-8">
+                        <button
+                            onClick={cancelBackupPath}
+                            className="px-6 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={confirmBackupPath}
+                            disabled={!backupPathInput.trim()}
+                            className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
+                        >
+                            Confirm
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* Folder Path Builder Dialog */}
+        {showFolderBrowser && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div className="bg-gray-900 rounded-lg shadow-2xl max-w-lg w-full mx-4 p-8">
+                    <h2 className="text-lg font-semibold text-white mb-2">
+                        Create Backup Folder Path
+                    </h2>
+                    <p className="text-gray-300 text-sm mb-6">
+                        Build your backup folder path:
+                    </p>
+                    
+                    <div className="space-y-4">
+                        {/* Common base paths */}
+                        <div>
+                            <label className="block text-gray-400 text-xs mb-2">Base Path (Select or type custom)</label>
+                            <div className="grid grid-cols-2 gap-2 mb-2">
+                                <button
+                                    onClick={() => setSelectedFolderPath('C:\\')}
+                                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${selectedFolderPath.startsWith('C:\\') ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-750'}`}
+                                >
+                                    C:\ (Windows)
+                                </button>
+                                <button
+                                    onClick={() => setSelectedFolderPath('D:\\')}
+                                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${selectedFolderPath.startsWith('D:\\') ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-750'}`}
+                                >
+                                    D:\ (Windows)
+                                </button>
+                                <button
+                                    onClick={() => setSelectedFolderPath('/var/')}
+                                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${selectedFolderPath.startsWith('/var/') ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-750'}`}
+                                >
+                                    /var/ (Linux)
+                                </button>
+                                <button
+                                    onClick={() => setSelectedFolderPath('/home/')}
+                                    className={`px-3 py-2 text-sm rounded-lg border transition-colors ${selectedFolderPath.startsWith('/home/') ? 'bg-blue-600 border-blue-500 text-white' : 'bg-gray-800 border-gray-700 text-gray-300 hover:bg-gray-750'}`}
+                                >
+                                    /home/ (Linux)
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Full path input */}
+                        <div>
+                            <label className="block text-gray-400 text-xs mb-2">Complete Backup Path</label>
+                            <input
+                                type="text"
+                                value={selectedFolderPath}
+                                onChange={(e) => setSelectedFolderPath(e.target.value)}
+                                placeholder="e.g., C:\Backups\RDE or /var/backups/rde"
+                                className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono text-sm"
+                                autoFocus
+                            />
+                        </div>
+
+                        {/* Quick suggestions */}
+                        <div>
+                            <label className="block text-gray-400 text-xs mb-2">Quick Suggestions</label>
+                            <div className="flex flex-wrap gap-2">
+                                <button
+                                    onClick={() => setSelectedFolderPath('C:\\RDE_Backups')}
+                                    className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-gray-300"
+                                >
+                                    C:\RDE_Backups
+                                </button>
+                                <button
+                                    onClick={() => setSelectedFolderPath('C:\\Backups\\RDE')}
+                                    className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-gray-300"
+                                >
+                                    C:\Backups\RDE
+                                </button>
+                                <button
+                                    onClick={() => setSelectedFolderPath('/var/backups/rde')}
+                                    className="px-3 py-1 text-xs bg-gray-800 hover:bg-gray-700 border border-gray-700 rounded text-gray-300"
+                                >
+                                    /var/backups/rde
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-3 justify-end mt-8">
+                        <button
+                            onClick={() => {
+                                setShowFolderBrowser(false);
+                                setSelectedFolderPath('');
+                            }}
+                            className="px-6 py-2 text-gray-300 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (selectedFolderPath.trim()) {
+                                    setBackupPathInput(selectedFolderPath);
+                                    setShowFolderBrowser(false);
+                                    setSelectedFolderPath('');
+                                }
+                            }}
+                            disabled={!selectedFolderPath.trim()}
+                            className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors"
+                        >
+                            Use This Path
                         </button>
                     </div>
                 </div>

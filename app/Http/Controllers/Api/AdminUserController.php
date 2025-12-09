@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
+use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -51,7 +52,7 @@ class AdminUserController extends Controller
             'lastName' => ['required', 'string', 'max:50'],
             'email' => ['required', 'email', 'max:50', 'unique:users,email'],
             'role' => ['required', 'string'],
-            'department' => ['required', 'string', 'max:255'],
+            'department' => ['nullable', 'string', 'max:255'],
             'researchCenter' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
@@ -65,8 +66,12 @@ class AdminUserController extends Controller
             ['userRole' => $roleName]
         );
 
-        $departmentName = $validated['department'];
-        $department = $this->resolveDepartment($departmentName);
+        // Resolve department if provided
+        $departmentID = null;
+        if (!empty($validated['department'])) {
+            $department = $this->resolveDepartment($validated['department']);
+            $departmentID = $department->departmentID;
+        }
 
         // Resolve research center if provided
         $researchCenterID = null;
@@ -95,7 +100,7 @@ class AdminUserController extends Controller
             'lastName' => $validated['lastName'],
             'email' => $validated['email'],
             'password' => $password,
-            'departmentID' => $department->departmentID,
+            'departmentID' => $departmentID,
             'researchCenterID' => $researchCenterID,
             'userRolesID' => $role->userRoleID,
         ];
@@ -109,6 +114,12 @@ class AdminUserController extends Controller
         $user = User::create($createData);
 
         $user->load(['role', 'department', 'researchCenter']);
+
+        // Log activity
+        ActivityService::logUserCreate(
+            $validated,
+            $user->userID
+        );
 
         $responseUser = $this->formatUserResponse($user, [
             'role' => $roleSlug,
@@ -140,7 +151,7 @@ class AdminUserController extends Controller
                 Rule::unique('users', 'email')->ignore($user->userID, 'userID'),
             ],
             'role' => ['required', 'string'],
-            'department' => ['required', 'string', 'max:255'],
+            'department' => ['nullable', 'string', 'max:255'],
             'researchCenter' => ['sometimes', 'nullable', 'string', 'max:255'],
             'status' => ['sometimes', 'string'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
@@ -154,8 +165,15 @@ class AdminUserController extends Controller
             ['userRole' => $roleName]
         );
 
-        $departmentName = $validated['department'];
-        $department = $this->resolveDepartment($departmentName);
+        // Resolve department if provided
+        $departmentID = null;
+        if (!empty($validated['department'])) {
+            $department = $this->resolveDepartment($validated['department']);
+            $departmentID = $department->departmentID;
+        } else {
+            // Keep existing department if not provided
+            $departmentID = $user->departmentID;
+        }
 
         // Resolve research center if provided
         $researchCenterID = null;
@@ -184,12 +202,19 @@ class AdminUserController extends Controller
         if (!empty($validated['password'])) {
             $user->password = $validated['password'];
         }
-        $user->departmentID = $department->departmentID;
+        $user->departmentID = $departmentID;
         $user->researchCenterID = $researchCenterID;
         $user->userRolesID = $role->userRoleID;
         $user->save();
 
         $user->load(['role', 'department', 'researchCenter']);
+
+        // Log activity
+        ActivityService::logUserUpdate(
+            $user->userID,
+            $user->getOriginal(),
+            $user->toArray()
+        );
 
         $responseUser = $this->formatUserResponse($user, [
             'role' => $roleSlug,
@@ -200,6 +225,27 @@ class AdminUserController extends Controller
         return response()->json([
             'message' => 'User updated successfully.',
             'user' => $responseUser,
+        ]);
+    }
+
+    public function resetPassword(Request $request, User $user)
+    {
+        // Generate or use configured default password
+        $defaultPassword = config('auth.default_reset_password')
+            ?? env('DEFAULT_RESET_PASSWORD', 'ChangeMe123!');
+
+        $user->password = $defaultPassword;
+        $user->save();
+
+        ActivityService::logUserUpdate(
+            $user->userID,
+            ['password' => 'reset'],
+            ['password' => 'reset']
+        );
+
+        return response()->json([
+            'message' => 'Password reset successfully.',
+            'temporaryPassword' => $defaultPassword,
         ]);
     }
 
@@ -298,7 +344,8 @@ class AdminUserController extends Controller
                 return [
                     'departmentID' => $dept->departmentID,
                     'name' => $dept->departmentName ?? $dept->name ?? 'Unknown',
-                    'departmentName' => $dept->departmentName ?? $dept->name ?? 'Unknown'
+                    'departmentName' => $dept->departmentName ?? $dept->name ?? 'Unknown',
+                    'college_idNo' => $dept->college_idNo
                 ];
             })->unique('name')->values();
 
@@ -319,12 +366,17 @@ class AdminUserController extends Controller
     {
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:departments,name'],
+            'college_idNo' => ['nullable', 'string', 'max:50'],
         ]);
 
         try {
             $department = Department::create([
                 'name' => $validated['name'],
+                'college_idNo' => $validated['college_idNo'] ?? null,
             ]);
+
+            // Log activity
+            ActivityService::logDepartmentCreate($department->departmentID, $department->name);
 
             return response()->json([
                 'success' => true,
@@ -332,6 +384,7 @@ class AdminUserController extends Controller
                     'departmentID' => $department->departmentID,
                     'name' => $department->name,
                     'departmentName' => $department->name,
+                    'college_idNo' => $department->college_idNo,
                 ]
             ], 201);
         } catch (\Exception $e) {
@@ -349,12 +402,18 @@ class AdminUserController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255', 'unique:departments,name,' . $id . ',departmentID'],
+            'college_idNo' => ['nullable', 'string', 'max:50'],
         ]);
 
         try {
+            $oldName = $department->name;
             $department->update([
                 'name' => $validated['name'],
+                'college_idNo' => $validated['college_idNo'] ?? null,
             ]);
+
+            // Log activity
+            ActivityService::logDepartmentUpdate($department->departmentID, $oldName, $department->name);
 
             return response()->json([
                 'success' => true,
@@ -362,6 +421,7 @@ class AdminUserController extends Controller
                     'departmentID' => $department->departmentID,
                     'name' => $department->name,
                     'departmentName' => $department->name,
+                    'college_idNo' => $department->college_idNo,
                 ]
             ]);
         } catch (\Exception $e) {
@@ -393,7 +453,11 @@ class AdminUserController extends Controller
                 ], 422);
             }
 
+            $departmentName = $department->name;
             $department->delete();
+
+            // Log activity
+            ActivityService::logDepartmentDelete($id, $departmentName);
 
             return response()->json([
                 'success' => true,
@@ -421,6 +485,9 @@ class AdminUserController extends Controller
                 ], 422);
             }
 
+            // Store user data for activity log
+            $userData = $user->toArray();
+
             // Check if user has related records that prevent deletion
             try {
                 $hasProposals = \DB::table('proposals')->where('userID', $userId)->count() > 0;
@@ -445,6 +512,9 @@ class AdminUserController extends Controller
             
             // Now delete the user
             $user->delete();
+
+            // Log activity
+            ActivityService::logUserDelete($userData);
 
             return response()->json([
                 'success' => true,

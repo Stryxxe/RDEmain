@@ -27,6 +27,7 @@ const CMProgressReport = () => {
     const { refreshAllMessages } = useMessages();
     const [proposals, setProposals] = useState([]);
     const [progressReports, setProgressReports] = useState([]);
+    const [selectedReport, setSelectedReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [filterStatus, setFilterStatus] = useState("all");
@@ -46,6 +47,17 @@ const CMProgressReport = () => {
         return () => clearTimeout(checkAndLoad);
     }, [user]);
 
+    const dedupeProposalsFromReports = (reports = []) => {
+        const map = new Map();
+        reports.forEach((report) => {
+            const proposal = report.proposal;
+            if (proposal?.proposalID && !map.has(proposal.proposalID)) {
+                map.set(proposal.proposalID, proposal);
+            }
+        });
+        return Array.from(map.values());
+    };
+
     const fetchData = async () => {
         try {
             setLoading(true);
@@ -64,11 +76,12 @@ const CMProgressReport = () => {
 
             // Handle proposals response
             if (proposalsResponse.status === 'fulfilled' && proposalsResponse.value?.data?.success) {
-                // Filter proposals from the same department
+                // Filter proposals from the same research center (CM scope)
                 const filteredProposals = proposalsResponse.value.data.data.filter(
                     (proposal) => {
                         return (
-                            proposal.user?.departmentID === user?.departmentID
+                            proposal.user?.researchCenterID &&
+                            proposal.user.researchCenterID === user?.researchCenterID
                         );
                     }
                 );
@@ -79,7 +92,28 @@ const CMProgressReport = () => {
 
             // Handle progress reports response
             if (reportsResponse.status === 'fulfilled' && reportsResponse.value?.data?.success) {
-                setProgressReports(reportsResponse.value.data.data || []);
+                const reports = reportsResponse.value.data.data || [];
+
+                // Keep only reports whose proposal proponent is in the CM's research center
+                const filteredReports = reports.filter((report) => {
+                    const centerId = report.proposal?.user?.researchCenterID;
+                    return centerId && centerId === user?.researchCenterID;
+                });
+
+                setProgressReports(filteredReports);
+
+                // If proposals API filtered out items (e.g., due to endorsement rules), backfill proposals from reports
+                const proposalsFromReports = dedupeProposalsFromReports(filteredReports);
+                if (proposalsFromReports.length) {
+                    setProposals((existing) => {
+                        if (!existing || existing.length === 0) return proposalsFromReports;
+                        const map = new Map();
+                        [...existing, ...proposalsFromReports].forEach((p) => {
+                            if (p?.proposalID) map.set(p.proposalID, p);
+                        });
+                        return Array.from(map.values());
+                    });
+                }
             } else if (reportsResponse.status === 'rejected') {
                 console.error("Error fetching progress reports:", reportsResponse.reason);
                 setProgressReports([]);
@@ -111,12 +145,78 @@ const CMProgressReport = () => {
                 withCredentials: true,
             });
             if (response.data.success) {
-                setProgressReports(response.data.data || []);
+                const reports = response.data.data || [];
+                const filteredReports = reports.filter((report) => {
+                    const centerId = report.proposal?.user?.researchCenterID;
+                    return centerId && centerId === user?.researchCenterID;
+                });
+                setProgressReports(filteredReports);
+
+                const proposalsFromReports = dedupeProposalsFromReports(filteredReports);
+                if (proposalsFromReports.length) {
+                    setProposals((existing) => {
+                        if (!existing || existing.length === 0) return proposalsFromReports;
+                        const map = new Map();
+                        [...existing, ...proposalsFromReports].forEach((p) => {
+                            if (p?.proposalID) map.set(p.proposalID, p);
+                        });
+                        return Array.from(map.values());
+                    });
+                }
             }
         } catch (error) {
             console.error("Error fetching progress reports:", error);
         }
     };
+
+    const openReportDetails = (report) => {
+        setSelectedReport(report);
+    };
+
+    const closeReportDetails = () => {
+        setSelectedReport(null);
+    };
+
+    const formatCurrency = (value) => {
+        if (value === null || value === undefined) return "N/A";
+        const num = Number(value);
+        if (Number.isNaN(num)) return "N/A";
+        return num.toLocaleString(undefined, { style: "currency", currency: "PHP" });
+    };
+
+    const formatProposalId = (proposal) => {
+        if (!proposal) return "";
+        return proposal.custom_proposal_id || `PRO-${String(proposal.proposalID || 0).padStart(6, "0")}`;
+    };
+
+    const sortedRows = progressReports
+        .map((report) => ({
+            report,
+            proposal: report.proposal,
+            status: report.proposal?.status?.statusName || "Unknown",
+        }))
+        .filter(({ report, proposal }) => {
+            const search = searchTerm.toLowerCase();
+            const title = proposal?.researchTitle?.toLowerCase() || "";
+            const proponent = proposal?.user?.fullName?.toLowerCase() || "";
+            const idText = formatProposalId(proposal).toLowerCase();
+            const matchesSearch =
+                !search ||
+                title.includes(search) ||
+                proponent.includes(search) ||
+                idText.includes(search);
+
+            const matchesStatus =
+                filterStatus === "all" ||
+                (proposal?.status?.statusName || "Unknown") === filterStatus;
+
+            return matchesSearch && matchesStatus;
+        })
+        .sort((a, b) => {
+            const dateA = new Date(a.report.submittedAt || a.report.created_at || 0).getTime();
+            const dateB = new Date(b.report.submittedAt || b.report.created_at || 0).getTime();
+            return dateB - dateA;
+        });
 
     const handleRefresh = async () => {
         try {
@@ -143,8 +243,15 @@ const CMProgressReport = () => {
         return acc;
     }, {});
 
+    // Only show proposals that actually have progress reports
+    const proposalsWithReports = proposals.filter((proposal) => {
+        const proposalId = proposal.proposalID;
+        const reports = reportsByProposal[proposalId] || [];
+        return reports.length > 0;
+    });
+
     // Filter proposals based on search
-    const filteredProposals = proposals.filter((proposal) => {
+    const filteredProposals = proposalsWithReports.filter((proposal) => {
         const matchesSearch =
             proposal.researchTitle
                 .toLowerCase()
@@ -295,253 +402,220 @@ const CMProgressReport = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-            <Breadcrumbs items={[
-                { label: 'Progress Reports', href: null }
-            ]} />
-            {/* Header Section */}
-            <div className="max-w-7xl mx-auto px-6 py-8">
-                <div className="text-center">
-                    <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
-                        Progress Reports
-                    </h1>
-                    <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed mb-6">
-                        Monitor and track project progress across divisions
-                    </p>
+            <Breadcrumbs items={[{ label: 'Progress Reports', href: null }]} />
 
-                    {/* Manual Refresh Button */}
-                    <div className="flex flex-wrap justify-center items-center gap-4">
-                        <button
-                            onClick={handleRefresh}
-                            disabled={isRefreshing}
-                            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-                            title="Refresh progress reports and notifications"
-                        >
-                            <RefreshCw
-                                className={`w-4 h-4 ${
-                                    isRefreshing ? "animate-spin" : ""
-                                }`}
-                            />
-                            <span>
-                                {isRefreshing ? "Refreshing..." : "Refresh"}
-                            </span>
-                        </button>
+            <div className="max-w-7xl mx-auto px-6 py-8">
+                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-gray-900">Progress Reports</h1>
+                        <p className="text-gray-600 text-base md:text-lg">Monitor and track project progress across divisions</p>
                     </div>
+                    <button
+                        onClick={handleRefresh}
+                        disabled={isRefreshing}
+                        className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 disabled:opacity-50"
+                        title="Refresh progress reports and notifications"
+                    >
+                        <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+                        <span>{isRefreshing ? "Refreshing..." : "Refresh"}</span>
+                    </button>
                 </div>
             </div>
 
             <div className="max-w-7xl mx-auto px-6 py-8">
-                {/* Projects and Reports */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                    {/* Header */}
                     <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-                        <h2 className="text-xl font-semibold text-gray-900">
-                            Projects and Progress Reports
-                        </h2>
-                        <p className="text-sm text-gray-600 mt-1">
-                            {filteredProposals.length} projects found
-                        </p>
+                        <h2 className="text-xl font-semibold text-gray-900">Projects and Progress Reports</h2>
+                        <p className="text-sm text-gray-600 mt-1">{sortedRows.length} reports found</p>
                     </div>
 
-                    {/* Filter Bar */}
                     <FilterBar />
 
-                    {/* Projects List */}
-                    <div className="divide-y divide-gray-200">
-                        {filteredProposals.length === 0 ? (
-                            <div className="p-8 text-center text-gray-500">
-                                No projects found
-                            </div>
-                        ) : (
-                            filteredProposals.map((proposal, index) => {
-                                const proposalId = proposal.proposalID;
-                                const reports =
-                                    reportsByProposal[proposalId] || [];
-                                const isExpanded =
-                                    expandedProposals.has(proposalId);
-
-                                return (
-                                    <div
-                                        key={proposalId}
-                                        className="hover:bg-gray-50 transition-colors"
-                                    >
-                                        {/* Proposal Row */}
-                                        <div
-                                            className="px-6 py-4 cursor-pointer"
-                                            onClick={() =>
-                                                toggleProposal(proposalId)
-                                            }
-                                        >
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center space-x-4 flex-1">
-                                                    <span className="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-800 text-sm font-medium rounded-full">
-                                                        {String(
-                                                            index + 1
-                                                        ).padStart(2, "0")}
-                                                    </span>
-                                                    <div className="flex-1">
-                                                        <div className="flex items-center space-x-3">
-                                                            <h3 className="text-sm font-medium text-gray-900">
-                                                                {
-                                                                    proposal.researchTitle
-                                                                }
-                                                            </h3>
-                                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                                                                PRO-
-                                                                {proposalId
-                                                                    .toString()
-                                                                    .padStart(
-                                                                        6,
-                                                                        "0"
-                                                                    )}
-                                                            </span>
-                                                            <span
-                                                                className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(
-                                                                    proposal
-                                                                        .status
-                                                                        ?.statusName
-                                                                )}`}
-                                                            >
-                                                                {proposal.status
-                                                                    ?.statusName ||
-                                                                    "Unknown"}
-                                                            </span>
-                                                        </div>
-                                                        <div className="mt-1 text-xs text-gray-500">
-                                                            Researcher:{" "}
-                                                            {proposal.user
-                                                                ?.fullName ||
-                                                                "Unknown"}{" "}
-                                                            | Submitted:{" "}
-                                                            {new Date(
-                                                                proposal.created_at
-                                                            ).toLocaleDateString()}{" "}
-                                                            | Reports:{" "}
-                                                            {reports.length}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center space-x-2">
-                                                    <span className="text-sm text-gray-500">
-                                                        {reports.length} report
-                                                        {reports.length !== 1
-                                                            ? "s"
-                                                            : ""}
-                                                    </span>
-                                                    <svg
-                                                        className={`w-5 h-5 text-gray-400 transition-transform ${
-                                                            isExpanded
-                                                                ? "transform rotate-180"
-                                                                : ""
-                                                        }`}
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 9l-7 7-7-7"
-                                                        />
+                    {sortedRows.length === 0 ? (
+                        <div className="p-10 text-center text-gray-500">No reports found</div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Proposal</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Name</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Submitted</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 bg-white">
+                                    {sortedRows.map(({ report, proposal }) => (
+                                        <tr key={report.reportID} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 align-top">
+                                                <div className="text-sm font-semibold text-gray-900">{proposal?.researchTitle || "Untitled"}</div>
+                                                <div className="text-xs text-gray-600">{formatProposalId(proposal)}</div>
+                                            </td>
+                                            <td className="px-6 py-4 align-top text-sm text-gray-900">
+                                                {proposal?.user?.fullName || "Unknown proponent"}
+                                            </td>
+                                            <td className="px-6 py-4 align-top text-sm text-gray-900">
+                                                {new Date(report.submittedAt || report.created_at).toLocaleString()}
+                                            </td>
+                                            <td className="px-6 py-4 align-top">
+                                                <button
+                                                    onClick={() => openReportDetails(report)}
+                                                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-800 to-red-900 hover:from-red-900 hover:to-red-950 rounded-lg transition-colors shadow-sm"
+                                                >
+                                                    View details
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                                                     </svg>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Progress Reports for this Proposal */}
-                                        {isExpanded && (
-                                            <div className="bg-gray-50 border-t border-gray-200">
-                                                {reports.length === 0 ? (
-                                                    <div className="px-14 py-4 text-sm text-gray-500">
-                                                        No progress reports
-                                                        submitted for this
-                                                        project yet.
-                                                    </div>
-                                                ) : (
-                                                    <div className="px-14 py-4 space-y-3">
-                                                        {reports.map(
-                                                            (report) => (
-                                                                <div
-                                                                    key={
-                                                                        report.reportID
-                                                                    }
-                                                                    className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow"
-                                                                >
-                                                                    <div className="flex items-start justify-between">
-                                                                        <div className="flex-1">
-                                                                            <div className="flex items-center space-x-2 mb-2">
-                                                                                <span className="text-sm font-medium text-gray-900">
-                                                                                    {report.reportType ||
-                                                                                        "Progress Report"}
-                                                                                </span>
-                                                                                <span className="text-xs text-gray-500">
-                                                                                    {report.reportPeriod ||
-                                                                                        "N/A"}
-                                                                                </span>
-                                                                                {report.progressPercentage !==
-                                                                                    null && (
-                                                                                    <span className="text-xs text-blue-600 font-medium">
-                                                                                        {
-                                                                                            report.progressPercentage
-                                                                                        }
-                                                                                        %
-                                                                                        Complete
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            {report.achievements && (
-                                                                                <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                                                                                    {
-                                                                                        report.achievements
-                                                                                    }
-                                                                                </p>
-                                                                            )}
-                                                                            <div className="text-xs text-gray-500">
-                                                                                Submitted:{" "}
-                                                                                {new Date(
-                                                                                    report.submittedAt ||
-                                                                                        report.created_at
-                                                                                ).toLocaleString()}
-                                                                            </div>
-                                                                            {report.files &&
-                                                                                report
-                                                                                    .files
-                                                                                    .length >
-                                                                                    0 && (
-                                                                                    <div className="mt-2 text-xs text-gray-500">
-                                                                                        {
-                                                                                            report
-                                                                                                .files
-                                                                                                .length
-                                                                                        }{" "}
-                                                                                        file
-                                                                                        {report
-                                                                                            .files
-                                                                                            .length !==
-                                                                                        1
-                                                                                            ? "s"
-                                                                                            : ""}{" "}
-                                                                                        attached
-                                                                                    </div>
-                                                                                )}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            )
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
+
+            {/* Report Details Modal */}
+            {selectedReport && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 px-4" role="dialog" aria-modal="true">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+                        {/* Header with gradient background - matches system header color */}
+                        <div className="bg-gradient-to-r from-red-800 to-red-900 px-6 py-6 text-white flex items-start justify-between">
+                            <div className="flex-1">
+                                <p className="text-xs uppercase tracking-wider opacity-90 font-semibold mb-2">Progress Report</p>
+                                <h3 className="text-2xl font-bold mb-2">
+                                    {selectedReport.proposal?.researchTitle || "Proposal"}
+                                </h3>
+                                <p className="text-sm font-mono bg-red-700 bg-opacity-50 px-2 py-1 rounded inline-block mb-3">
+                                    {formatProposalId(selectedReport.proposal)}
+                                </p>
+                                <div className="space-y-1 mt-3">
+                                    <p className="text-sm font-semibold">
+                                        Submitted by {selectedReport.user?.fullName || selectedReport.proposal?.user?.fullName || "Unknown"}
+                                    </p>
+                                    {selectedReport.proposal?.proponents && selectedReport.proposal.proponents.length > 0 && (
+                                        <div>
+                                            <p className="text-xs opacity-90 mb-1">Authors:</p>
+                                            <div className="flex flex-wrap gap-2">
+                                                {selectedReport.proposal.proponents.map((proponent) => (
+                                                    <span
+                                                        key={proponent.userID}
+                                                        className="text-xs bg-red-700 bg-opacity-70 px-2 py-1 rounded-full"
+                                                    >
+                                                        {proponent.firstName} {proponent.lastName}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                onClick={closeReportDetails}
+                                className="text-white hover:bg-red-700 hover:bg-opacity-40 rounded-lg p-2 transition-colors flex-shrink-0 ml-4"
+                            >
+                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        {/* Content */}
+                        <div className="px-6 py-6 space-y-6">
+                            {/* Description Section */}
+                            {selectedReport.achievements && (
+                                <div>
+                                    <p className="text-sm font-semibold text-gray-900 mb-2">Description</p>
+                                    <p className="text-gray-800 text-sm leading-relaxed whitespace-pre-wrap">{selectedReport.achievements}</p>
+                                </div>
+                            )}
+
+                            {/* Documents Section - Grid Layout */}
+                            {selectedReport.files && selectedReport.files.length > 0 && (
+                                <div>
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <div className="w-10 h-10 bg-orange-100 rounded flex items-center justify-center flex-shrink-0">
+                                            <svg className="w-6 h-6 text-orange-600" fill="currentColor" viewBox="0 0 24 24">
+                                                <path d="M13 6v2h5v11H6V8h5V6H5a2 2 0 00-2 2v11a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2z" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-semibold text-gray-900">Other Supporting Documents</h4>
+                                            <p className="text-sm text-gray-600">Additional files and attachments</p>
+                                        </div>
+                                        <span className="text-sm font-semibold text-orange-600 bg-orange-50 px-3 py-1 rounded">
+                                            {selectedReport.files.length} {selectedReport.files.length === 1 ? 'file' : 'files'}
+                                        </span>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {selectedReport.files.map((file) => (
+                                            <div
+                                                key={file.fileID}
+                                                className="bg-gray-50 border border-gray-200 rounded-lg p-4 hover:shadow-sm transition-shadow"
+                                            >
+                                                <h5 className="font-medium text-gray-900 mb-1 line-clamp-2 text-sm">{file.fileName}</h5>
+                                                {file.fileSize && (
+                                                    <p className="text-xs text-gray-600 mb-3">
+                                                        {(file.fileSize / 1024).toFixed(0)} KB
+                                                    </p>
+                                                )}
+                                                <div className="flex gap-2">
+                                                    <a
+                                                        href={`/storage/${file.filePath}`}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded text-xs font-semibold transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                        </svg>
+                                                        View
+                                                    </a>
+                                                    <a
+                                                        href={`/storage/${file.filePath}`}
+                                                        download={file.fileName}
+                                                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 bg-green-50 text-green-600 hover:bg-green-100 rounded text-xs font-semibold transition-colors"
+                                                    >
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                                        </svg>
+                                                        Download
+                                                    </a>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
+
+    // Small helper components for the modal (use function declarations for hoisting)
+    function InfoRow({ label, value }) {
+        return (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <p className="text-xs uppercase text-gray-500">{label}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1 whitespace-pre-wrap break-words">{value || "N/A"}</p>
+            </div>
+        );
+    }
+
+    function InfoBlock({ label, value }) {
+        return (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
+                <p className="text-xs uppercase text-gray-500 mb-1">{label}</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap break-words">{value || "N/A"}</p>
+            </div>
+        );
+    }
 };
 
 CMProgressReport.layout = (page) => (

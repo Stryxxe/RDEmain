@@ -3,18 +3,43 @@ import React from 'react';
 const CheckboxGroup = ({ 
   label, 
   options, 
-  selectedValues, 
+  selectedValues = [],
+  selectedOptions,
   onChange, 
   required = false, 
   hint = '', 
   columns = 1 
 }) => {
+  // Prefer selectedOptions when provided, otherwise fall back to selectedValues
+  const selected = Array.isArray(selectedOptions)
+    ? selectedOptions
+    : Array.isArray(selectedValues)
+      ? selectedValues
+      : [];
+  
+  console.log('CheckboxGroup render:', { label, selected, selectedOptions, selectedValues });
+  
   const getGridClass = () => {
     switch (columns) {
       case 1: return 'grid-cols-1';
       case 2: return 'grid-cols-1 md:grid-cols-2';
       case 3: return 'grid-cols-1 md:grid-cols-2 lg:grid-cols-3';
       default: return 'grid-cols-1';
+    }
+  };
+
+  const handleChange = (option, checked) => {
+    console.log('CheckboxGroup handleChange:', { option, checked, selected });
+    if (checked) {
+      // Add option
+      const newSelection = [...selected, option];
+      console.log('Adding option, new selection:', newSelection);
+      onChange(newSelection);
+    } else {
+      // Remove option
+      const newSelection = selected.filter(item => item !== option);
+      console.log('Removing option, new selection:', newSelection);
+      onChange(newSelection);
     }
   };
 
@@ -33,8 +58,8 @@ const CheckboxGroup = ({
           >
             <input
               type="checkbox"
-              checked={selectedValues.includes(option)}
-              onChange={(e) => onChange(option, e.target.checked)}
+              checked={selected.includes(option)}
+              onChange={(e) => handleChange(option, e.target.checked)}
               className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500"
             />
             <span className="leading-relaxed">{option}</span>

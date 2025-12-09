@@ -176,6 +176,7 @@ class EndorsementController extends Controller
                         'proposal_id' => $proposal->proposalID,
                         'proposal_title' => $proposal->researchTitle,
                         'proponent_name' => $proposal->user->fullName,
+                        'endorsement_comments' => $request->endorsementComments,
                         'event' => 'proposal.endorsed.cm'
                     ]
                 ]);
@@ -190,6 +191,7 @@ class EndorsementController extends Controller
                         'proposal_id' => $proposal->proposalID,
                         'proposal_title' => $proposal->researchTitle,
                         'endorser_name' => $user->fullName,
+                        'endorsement_comments' => $request->endorsementComments,
                         'event' => 'proposal.endorsed.proponent'
                     ]
                 ]);
@@ -211,6 +213,7 @@ class EndorsementController extends Controller
                             'endorser_name' => $user->fullName,
                             'proponent_name' => $proposal->user->fullName,
                             'department' => $departmentName,
+                            'endorsement_comments' => $request->endorsementComments,
                             'event' => 'proposal.endorsed.rdd'
                         ]
                     ]);

@@ -5,6 +5,7 @@ import { useNotifications } from '../contexts/NotificationContext';
 import { useMessages } from '../contexts/MessageContext';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import usepLogo from '../../assets/logo.png';
+import ConfirmLogout from './ConfirmLogout';
 
 const Header = () => {
   const { logout } = useAuth();
@@ -12,6 +13,7 @@ const Header = () => {
   const { unreadCount: messageUnreadCount } = useMessages();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileDropdown, setShowProfileDropdown] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
 
@@ -293,7 +295,7 @@ const Header = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
             </svg>
             {messageUnreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[1.25rem] h-5 px-1 flex items-center justify-center">
                 {messageUnreadCount}
               </span>
             )}
@@ -326,7 +328,7 @@ const Header = () => {
               <button
                 onClick={() => {
                   setShowProfileDropdown(false);
-                  logout();
+                  setShowLogoutConfirm(true);
                 }}
                 className="flex items-center gap-3 w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 transition-colors"
               >
@@ -337,6 +339,16 @@ const Header = () => {
           )}
         </div>
       </div>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmLogout
+        isOpen={showLogoutConfirm}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          logout();
+        }}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </header>
   );
 };

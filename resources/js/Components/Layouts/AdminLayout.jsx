@@ -3,6 +3,7 @@ import { Link, usePage, router } from '@inertiajs/react';
 import { FiUsers, FiFileText, FiSettings, FiBell, FiMenu, FiLogOut, FiX, FiHome, FiUser } from 'react-icons/fi';
 import { User, Settings, LogOut, ChevronDown } from 'lucide-react';
 import usepLogo from '../../../assets/logo.png';
+import ConfirmLogout from '../ConfirmLogout';
 
 const AdminLayout = ({ children }) => {
   const { auth, url } = usePage().props;
@@ -10,6 +11,7 @@ const AdminLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const dropdownRef = useRef(null);
   const profileDropdownRef = useRef(null);
   const notificationRef = useRef(null);
@@ -45,9 +47,7 @@ const AdminLayout = ({ children }) => {
   const currentPage = navigation.find(item => isActive(item.href))?.name || 'Dashboard';
 
   const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      router.post('/logout');
-    }
+    setShowLogoutConfirm(true);
   };
 
   return (
@@ -134,6 +134,16 @@ const AdminLayout = ({ children }) => {
           {children}
         </div>
       </main>
+
+      {/* Logout Confirmation Modal */}
+      <ConfirmLogout
+        isOpen={showLogoutConfirm}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          router.post('/logout');
+        }}
+        onCancel={() => setShowLogoutConfirm(false)}
+      />
     </div>
   );
 };

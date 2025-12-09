@@ -438,20 +438,22 @@ const Tracker = () => {
                                     {/* Research Title */}
                                     <div>
                                         <div
-                                            className="font-bold text-gray-900 mb-1 hover:text-blue-600 transition-colors duration-200 cursor-pointer"
+                                            className="font-bold text-gray-900 mb-1 hover:text-blue-600 transition-colors duration-200 cursor-pointer flex items-center gap-2"
                                             onClick={() =>
                                                 handleViewDetails(
                                                     proposal.proposalID
                                                 )
                                             }
                                         >
-                                            {proposal.researchTitle}
+                                            <span>{proposal.researchTitle}</span>
+                                            {proposal.statusID === 1 && proposal.revisionHistory && proposal.revisionHistory.length > 0 && (
+                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                                                    Revised
+                                                </span>
+                                            )}
                                         </div>
                                         <div className="text-sm text-gray-600">
-                                            ID: PRO-
-                                            {proposal.proposalID
-                                                .toString()
-                                                .padStart(6, "0")}
+                                            ID: {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
                                         </div>
                                         <div className="text-sm text-gray-600">
                                             Submitted:{" "}

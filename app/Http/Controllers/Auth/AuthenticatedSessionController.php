@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Jobs\PerformScheduledBackup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -35,6 +36,11 @@ class AuthenticatedSessionController extends Controller
         // Load user relationships for redirect
         $user = Auth::user();
         $user->load(['role', 'department']);
+
+        // Trigger automatic backup when admin logs in
+        if ($user->role && strtolower($user->role->userRole) === 'admin') {
+            PerformScheduledBackup::dispatch();
+        }
 
         $redirectPath = $this->getRoleBasedRedirect($user);
 

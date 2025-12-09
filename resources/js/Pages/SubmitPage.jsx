@@ -63,6 +63,9 @@ const SubmitPage = () => {
         dostSPs: [],
         sustainableDevelopmentGoals: [],
         proposedBudget: "",
+        setiFile: null,
+        gadFile: null,
+        matrixFile: null,
         supportingDocuments: [],
         proponents: [],
     });
@@ -157,12 +160,10 @@ const SubmitPage = () => {
         }));
     };
 
-    const handleCheckboxChange = (field, value, checked) => {
+    const handleCheckboxChange = (field, values) => {
         setFormData((prev) => ({
             ...prev,
-            [field]: checked
-                ? [...prev[field], value]
-                : prev[field].filter((item) => item !== value),
+            [field]: Array.isArray(values) ? values : [],
         }));
     };
 
@@ -343,8 +344,11 @@ const SubmitPage = () => {
                     dostSPs: [],
                     sustainableDevelopmentGoals: [],
                     proposedBudget: "",
-                        supportingDocuments: [],
-                        proponents: [],
+                    setiFile: null,
+                    gadFile: null,
+                    matrixFile: null,
+                    supportingDocuments: [],
+                    proponents: [],
                 });
                 setSubmitterProjectRoleID("");
 
@@ -536,13 +540,9 @@ const SubmitPage = () => {
                         label="Research Agenda"
                         required
                         options={researchAgendaOptions}
-                        selectedValues={formData.researchAgenda}
-                        onChange={(value, checked) =>
-                            handleCheckboxChange(
-                                "researchAgenda",
-                                value,
-                                checked
-                            )
+                        selectedOptions={formData.researchAgenda}
+                        onChange={(values) =>
+                            handleCheckboxChange("researchAgenda", values)
                         }
                         hint="Select the RDE Agenda that aligns best with your study."
                         columns={2}
@@ -554,9 +554,9 @@ const SubmitPage = () => {
                         label="DOST 6P's"
                         required
                         options={dostSPsOptions}
-                        selectedValues={formData.dostSPs}
-                        onChange={(value, checked) =>
-                            handleCheckboxChange("dostSPs", value, checked)
+                        selectedOptions={formData.dostSPs}
+                        onChange={(values) =>
+                            handleCheckboxChange("dostSPs", values)
                         }
                         hint="Select the most applicable category from the DOST 6Ps that best aligns with your study"
                         columns={1}
@@ -568,12 +568,11 @@ const SubmitPage = () => {
                         label="Sustainable Development Goal"
                         required
                         options={sdgOptions}
-                        selectedValues={formData.sustainableDevelopmentGoals}
-                        onChange={(value, checked) =>
+                        selectedOptions={formData.sustainableDevelopmentGoals}
+                        onChange={(values) =>
                             handleCheckboxChange(
                                 "sustainableDevelopmentGoals",
-                                value,
-                                checked
+                                values
                             )
                         }
                         hint="Select the SDG that best aligns with your study"
@@ -629,14 +628,57 @@ const SubmitPage = () => {
                     />
                 </div>
 
+                {/* Required Documents - Horizontal Layout */}
+                <div className="mb-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* SETI Scorecard */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            SETI Scorecard
+                        </label>
+                        <DragDropUpload
+                            selectedFile={formData.setiFile}
+                            onFileSelect={(file) => setFormData(prev => ({ ...prev, setiFile: file }))}
+                            maxSize={`${maxFileSizeMB}MB`}
+                            acceptedTypes="PDF, DOC, DOCX"
+                        />
+                    </div>
+
+                    {/* GAD Certificate */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            GAD Certificate
+                        </label>
+                        <DragDropUpload
+                            selectedFile={formData.gadFile}
+                            onFileSelect={(file) => setFormData(prev => ({ ...prev, gadFile: file }))}
+                            maxSize={`${maxFileSizeMB}MB`}
+                            acceptedTypes="PDF, DOC, DOCX"
+                        />
+                    </div>
+
+                    {/* Matrix of Compliance */}
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Matrix of Compliance
+                        </label>
+                        <DragDropUpload
+                            selectedFile={formData.matrixFile}
+                            onFileSelect={(file) => setFormData(prev => ({ ...prev, matrixFile: file }))}
+                            maxSize={`${maxFileSizeMB}MB`}
+                            acceptedTypes="PDF, DOC, DOCX"
+                        />
+                    </div>
+                </div>
+
+                {/* Other Supporting Documents */}
                 <div className="mb-8">
                     <MultiFileUpload
                         files={formData.supportingDocuments}
                         onChange={handleSupportingDocsChange}
                         maxFiles={10}
                         maxSizeMB={maxFileSizeMB}
-                        label="Supporting Documents"
-                        description="Attach SETI Scorecards, GAD Certificates, matrices, and any other approvals in one place. Accepted formats: PDF, DOC, DOCX."
+                        label="Other Supporting Documents (Optional)"
+                        description="Attach any other approvals or supporting files. Accepted formats: PDF, DOC, DOCX."
                     />
                 </div>
 
@@ -667,7 +709,11 @@ const SubmitPage = () => {
 
 SubmitPage.layout = (page) => (
     <AppLayout>
-        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
+        <RoleBasedLayout roleName="Proponent">
+            <div className="flex justify-center">
+                {page}
+            </div>
+        </RoleBasedLayout>
     </AppLayout>
 );
 

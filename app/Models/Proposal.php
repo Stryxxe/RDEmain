@@ -18,6 +18,7 @@ class Proposal extends Model
     public $timestamps = true;
 
     protected $fillable = [
+        'custom_proposal_id',
         'researchTitle',
         'description',
         'objectives',
@@ -32,7 +33,8 @@ class Proposal extends Model
         'uploadedAt',
         'statusID',
         'userID',
-        'archivedByRDD'
+        'archivedByRDD',
+        'resubmittedAfterRevision'
     ];
 
     protected $casts = [
@@ -42,7 +44,8 @@ class Proposal extends Model
         'matrixOfCompliance' => 'array',
         'budgetBreakdown' => 'array',
         'proposedBudget' => 'decimal:2',
-        'uploadedAt' => 'datetime'
+        'uploadedAt' => 'datetime',
+        'resubmittedAfterRevision' => 'datetime'
     ];
 
     /**
@@ -164,5 +167,40 @@ class Proposal extends Model
     {
         $matrix = $this->matrixOfCompliance;
         return $matrix['sustainableDevelopmentGoals'] ?? [];
+    }
+
+    /**
+     * Generate custom proposal ID
+     * Format: YEAR-RDP-INT/EXT-college_idNo-sequence
+     */
+    public static function generateCustomProposalId($userID, $researchCenter)
+    {
+        // Get year from settings
+        $yearSetting = Setting::where('key', 'proposal_id_year')->first();
+        $year = $yearSetting ? $yearSetting->value : date('Y');
+
+        // Get user's department college_idNo
+        $user = User::with('department')->find($userID);
+        $collegeIdNo = $user && $user->department ? ($user->department->college_idNo ?: 'XXX') : 'XXX';
+
+        // Generate base ID with literal "INT/EXT"
+        $baseId = "{$year}-RDP-INT/EXT-{$collegeIdNo}";
+
+        // Find the next sequence number for this combination
+        $lastProposal = self::where('custom_proposal_id', 'LIKE', "{$baseId}-%")
+            ->orderBy('custom_proposal_id', 'desc')
+            ->first();
+
+        $sequence = 1;
+        if ($lastProposal) {
+            // Extract sequence number from last ID (e.g., "2025-RDP-INT/EXT-05-003" -> 003)
+            preg_match('/-(\d+)$/', $lastProposal->custom_proposal_id, $matches);
+            if (isset($matches[1])) {
+                $sequence = intval($matches[1]) + 1;
+            }
+        }
+
+        // Return formatted ID with 3-digit sequence
+        return sprintf("%s-%03d", $baseId, $sequence);
     }
 }

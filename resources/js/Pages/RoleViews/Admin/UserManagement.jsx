@@ -98,6 +98,8 @@ const UserManagement = () => {
         setShowUserDetails(true);
     };
 
+
+
     const handleDeleteUser = async (userId) => {
         const confirmed = await window.customConfirm(
             "Are you sure you want to delete this user? This action cannot be undone.",
@@ -168,6 +170,8 @@ const UserManagement = () => {
                 : [...prev, userId]
         );
     };
+
+
 
     // Client-side filtering as fallback if API ignores filters
     const filteredUsers = users.filter((u) => {
@@ -320,7 +324,7 @@ const UserManagement = () => {
                         <p className="mt-1 text-sm text-gray-600">
                             Manage all users across the research management system
                         </p>
-                </div>
+                    </div>
                 <div className="flex space-x-2">
                     {selectedUsers.length > 0 && (
                         <button
@@ -341,7 +345,7 @@ const UserManagement = () => {
                         <span>Add User</span>
                     </button>
                 </div>
-            </div>
+                </div>
 
             <div className="admin-card">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

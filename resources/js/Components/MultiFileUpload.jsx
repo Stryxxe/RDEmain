@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { Upload, Paperclip, X } from "lucide-react";
+import { Upload, Paperclip, X, AlertTriangle } from "lucide-react";
 import { useUploadSettings } from "../hooks/useUploadSettings";
 
 const MultiFileUpload = ({
@@ -10,6 +10,8 @@ const MultiFileUpload = ({
     accept, // Optional override
     maxSizeMB, // Optional override
     maxFiles = 10,
+    existingFiles = [],
+    onRemoveExisting,
 }) => {
     const uploadSettings = useUploadSettings();
     
@@ -20,6 +22,9 @@ const MultiFileUpload = ({
     const [isDragOver, setIsDragOver] = useState(false);
     const [feedback, setFeedback] = useState("");
     const inputRef = useRef(null);
+
+    const existing = Array.isArray(existingFiles) ? existingFiles : [];
+    const totalFiles = (Array.isArray(files) ? files.length : 0) + existing.length;
 
     const bytesLimit = effectiveMaxSizeMB * 1024 * 1024;
 
@@ -58,7 +63,7 @@ const MultiFileUpload = ({
 
         incomingFiles.forEach((file) => {
             // Check if we've reached the limit
-            if (currentFiles.length + validFiles.length >= maxFiles) {
+            if (existing.length + currentFiles.length + validFiles.length >= maxFiles) {
                 errors.push(`Maximum of ${maxFiles} files reached.`);
                 return;
             }
@@ -117,6 +122,12 @@ const MultiFileUpload = ({
         onChange(nextFiles);
     };
 
+    const handleRemoveExisting = (index) => {
+        onRemoveExisting?.(index);
+    };
+
+    const closeFeedback = () => setFeedback("");
+
     return (
         <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
@@ -127,7 +138,7 @@ const MultiFileUpload = ({
                     <p className="text-sm text-gray-500">{description}</p>
                 </div>
                 <span className="text-sm text-gray-500">
-                    {files.length}/{maxFiles} files
+                    {totalFiles}/{maxFiles} files
                 </span>
             </div>
 
@@ -177,9 +188,87 @@ const MultiFileUpload = ({
             </div>
 
             {feedback && (
-                <p className="text-sm text-red-500" role="alert">
-                    {feedback}
-                </p>
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4"
+                    onClick={closeFeedback}
+                >
+                    <div
+                        className="w-full max-w-md rounded-lg bg-white shadow-xl border border-red-200"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center gap-2 border-b border-red-100 px-5 py-4">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-50 text-red-600">
+                                <AlertTriangle className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-semibold text-red-700">Upload issue</p>
+                                <p className="text-xs text-gray-500">
+                                    Max {effectiveMaxSizeMB}MB per file · Allowed: {effectiveAccept.map((ext) => ext.replace('.', '').toUpperCase()).join(', ')}
+                                </p>
+                            </div>
+                        </div>
+                        <div className="px-5 py-4 text-sm text-gray-800 space-y-2">
+                            <p>{feedback}</p>
+                            <p className="text-xs text-gray-600">Try another file within the limits, then upload again.</p>
+                        </div>
+                        <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
+                            <button
+                                type="button"
+                                onClick={closeFeedback}
+                                className="inline-flex items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {existing.length > 0 && (
+                <div className="space-y-3">
+                    {existing.map((file, index) => (
+                        <div
+                            key={`${file.filePath || file.fileName || 'existing'}-${index}`}
+                            className="flex items-center justify-between border border-gray-200 rounded-xl p-4 bg-white shadow-sm"
+                        >
+                            <div className="flex items-center gap-3">
+                                <div className="bg-red-50 p-2 rounded-lg">
+                                    <Paperclip className="w-5 h-5 text-red-500" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-900">
+                                        {file.fileName || file.fileType || 'Existing file'}
+                                    </p>
+                                    {file.fileSize && (
+                                        <p className="text-xs text-gray-500">{(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                                    )}
+                                    {file.filePath && (
+                                        <a
+                                            href={`/storage/${file.filePath}`}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-xs text-red-600 hover:underline inline-flex items-center gap-1"
+                                        >
+                                            <Paperclip className="w-3 h-3" />
+                                            Open current file
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveExisting(index);
+                                }}
+                                className="text-sm text-gray-500 hover:text-red-600 inline-flex items-center gap-1"
+                            >
+                                <X className="w-4 h-4" />
+                                Remove
+                            </button>
+                        </div>
+                    ))}
+                </div>
             )}
 
             {files.length > 0 && (

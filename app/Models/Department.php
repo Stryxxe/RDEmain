@@ -16,6 +16,7 @@ class Department extends Model
     protected $fillable = [
         'name',
         'departmentName',
+        'college_idNo',
     ];
 
     public function users()

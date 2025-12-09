@@ -12,5 +12,9 @@ cd /d "%~dp0"
 start "Laravel Server" cmd /k "php artisan serve"
 
 echo.
-echo Server started! Check the new window.
+echo Starting Laravel scheduler in background...
+start "Laravel Scheduler" cmd /k "php artisan schedule:work"
+
+echo.
+echo Server and scheduler started! Check the new windows.
 pause
