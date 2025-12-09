@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { BiSearch, BiShow } from "react-icons/bi";
 import { Link, router } from "@inertiajs/react";
-import { DollarSign } from "lucide-react";
+import { DollarSign, Filter } from "lucide-react";
 import StatsCard from "../../../Components/UI/StatsCard";
 import {
     getStatusBadgeClass,
@@ -11,10 +11,24 @@ import rddService from "../../../services/rddService";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 import Breadcrumbs from "../../../Components/Breadcrumbs";
+import axios from "axios";
+
+// Use window.axios which has session-based auth configured
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+    axiosInstance.defaults.withCredentials = true;
+    axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const RDDDashboard = () => {
     const [searchTerm, setSearchTerm] = useState("");
-    const [sortBy, setSortBy] = useState("Title");
+    const [sortBy, setSortBy] = useState("Date"); // Default to Date (Latest to Oldest)
+    const [selectedCenter, setSelectedCenter] = useState(null);
+    const [selectedDepartment, setSelectedDepartment] = useState(null);
+    const [researchCenters, setResearchCenters] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [loadingCenters, setLoadingCenters] = useState(true);
+    const [loadingDepartments, setLoadingDepartments] = useState(true);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [statsData, setStatsData] = useState([]);
@@ -24,8 +38,47 @@ const RDDDashboard = () => {
     const [itemsPerPage] = useState(10);
 
     useEffect(() => {
-        fetchDashboardData();
+        fetchResearchCenters();
+        fetchDepartments();
     }, []);
+
+    useEffect(() => {
+        fetchDashboardData();
+    }, [selectedCenter, selectedDepartment]);
+
+    const fetchResearchCenters = async () => {
+        try {
+            setLoadingCenters(true);
+            const response = await axiosInstance.get("/admin/research-centers", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            if (response.data.success) {
+                setResearchCenters(response.data.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching research centers:", err);
+        } finally {
+            setLoadingCenters(false);
+        }
+    };
+
+    const fetchDepartments = async () => {
+        try {
+            setLoadingDepartments(true);
+            const response = await axiosInstance.get("/admin/departments", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            if (response.data.success) {
+                setDepartments(response.data.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching departments:", err);
+        } finally {
+            setLoadingDepartments(false);
+        }
+    };
 
     const fetchDashboardData = async () => {
         try {
@@ -37,7 +90,7 @@ const RDDDashboard = () => {
             // Fetch statistics and proposals data in parallel
             const [statsResponse, proposalsResponse] = await Promise.all([
                 rddService.getProposalStatistics(),
-                rddService.getProposalsForReview(),
+                rddService.getProposalsForReview(selectedCenter, selectedDepartment),
             ]);
 
             console.log("Stats response:", statsResponse);
@@ -180,12 +233,35 @@ const RDDDashboard = () => {
         }
     };
 
-    const filteredResearch = researchData.filter(
+    // Filter and sort research data
+    let filteredResearch = researchData.filter(
         (research) =>
             research.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             research.author.toLowerCase().includes(searchTerm.toLowerCase()) ||
             research.college.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    // Sort the filtered data
+    filteredResearch = [...filteredResearch].sort((a, b) => {
+        switch (sortBy) {
+            case "Date":
+                // Latest to Oldest (descending by date)
+                const dateA = new Date(a.submittedDate);
+                const dateB = new Date(b.submittedDate);
+                return dateB - dateA;
+            case "Title":
+                return a.title.localeCompare(b.title);
+            case "Author":
+                return a.author.localeCompare(b.author);
+            case "Status":
+                return a.status.localeCompare(b.status);
+            default:
+                // Default: Latest to Oldest
+                const defaultDateA = new Date(a.submittedDate);
+                const defaultDateB = new Date(b.submittedDate);
+                return defaultDateB - defaultDateA;
+        }
+    });
 
     // Pagination calculations
     const indexOfLastItem = currentPage * itemsPerPage;
@@ -301,24 +377,77 @@ const RDDDashboard = () => {
                             onChange={(e) => setSortBy(e.target.value)}
                             className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
+                            <option value="Date">Date (Latest to Oldest)</option>
                             <option value="Title">Title</option>
                             <option value="Author">Author</option>
                             <option value="Status">Status</option>
-                            <option value="Date">Date</option>
                         </select>
-                        <span className="text-gray-500">↑</span>
+                        {sortBy === "Date" && <span className="text-gray-500">↓</span>}
+                        {sortBy !== "Date" && <span className="text-gray-500">↑</span>}
                     </div>
                 </div>
 
-                <div className="relative max-w-md">
-                    <input
-                        type="text"
-                        placeholder="Search projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
-                    />
-                    <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
+                {/* Filters Section */}
+                <div className="mb-4 space-y-4">
+                    <div className="flex flex-wrap gap-4 items-end">
+                        <div className="flex-1 min-w-[200px]">
+                            <div className="relative">
+                                <input
+                                    type="text"
+                                    placeholder="Search projects..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
+                                />
+                                <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap gap-4 items-center">
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-5 w-5 text-gray-600" />
+                            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                Research Center:
+                            </label>
+                            <select
+                                value={selectedCenter || ""}
+                                onChange={(e) => {
+                                    setSelectedCenter(e.target.value ? parseInt(e.target.value) : null);
+                                    setCurrentPage(1); // Reset to first page when filter changes
+                                }}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 min-w-[200px]"
+                                disabled={loadingCenters}
+                            >
+                                <option value="">All Centers</option>
+                                {researchCenters.map((center) => (
+                                    <option key={center.centerID} value={center.centerID}>
+                                        {center.centerName || center.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                Department:
+                            </label>
+                            <select
+                                value={selectedDepartment || ""}
+                                onChange={(e) => {
+                                    setSelectedDepartment(e.target.value ? parseInt(e.target.value) : null);
+                                    setCurrentPage(1); // Reset to first page when filter changes
+                                }}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 min-w-[200px]"
+                                disabled={loadingDepartments}
+                            >
+                                <option value="">All Departments</option>
+                                {departments.map((dept) => (
+                                    <option key={dept.departmentID} value={dept.departmentID}>
+                                        {dept.name || dept.departmentName}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
                 </div>
             </div>
 

@@ -33,10 +33,19 @@ class RDDService {
 
   /**
    * Get RDD analytics data for statistics dashboard
+   * @param {number|null} centerID - Optional research center ID to filter by
+   * @param {number|null} departmentID - Optional department ID to filter by
    */
-  async getRddAnalytics() {
+  async getRddAnalytics(centerID = null, departmentID = null) {
     try {
-      const response = await this.api.get('/proposals/rdd-analytics');
+      const params = {};
+      if (centerID) {
+        params.centerID = centerID;
+      }
+      if (departmentID) {
+        params.departmentID = departmentID;
+      }
+      const response = await this.api.get('/proposals/rdd-analytics', { params });
       return response.data;
     } catch (error) {
       console.error('Error fetching RDD analytics:', error);
@@ -46,10 +55,19 @@ class RDDService {
 
   /**
    * Get all proposals for RDD review
+   * @param {number|null} centerID - Optional research center ID to filter by
+   * @param {number|null} departmentID - Optional department ID to filter by
    */
-  async getProposalsForReview() {
+  async getProposalsForReview(centerID = null, departmentID = null) {
     try {
-      const response = await this.api.get('/proposals');
+      const params = {};
+      if (centerID) {
+        params.centerID = centerID;
+      }
+      if (departmentID) {
+        params.departmentID = departmentID;
+      }
+      const response = await this.api.get('/proposals', { params });
       return response.data;
     } catch (error) {
       console.error('Error fetching proposals for review:', error);

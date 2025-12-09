@@ -37,6 +37,14 @@ class EndorsementController extends Controller
 
         try {
             $user = Auth::user();
+            
+            // Explicitly load role and department relationships
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            if (!$user->relationLoaded('department')) {
+                $user->load('department');
+            }
 
             // Check if user has CM or RDD role (or other authorized roles)
             $authorizedRoles = ['CM', 'RDD', 'RDE'];

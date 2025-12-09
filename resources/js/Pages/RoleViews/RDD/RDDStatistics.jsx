@@ -1,9 +1,17 @@
 import React, { useState, useRef, useEffect } from "react";
-import { BarChart3, TrendingUp, Users, Target } from "lucide-react";
+import { BarChart3, TrendingUp, Users, Target, Filter } from "lucide-react";
 import rddService from "../../../services/rddService";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
 import Breadcrumbs from "../../../Components/Breadcrumbs";
+import axios from "axios";
+
+// Use window.axios which has session-based auth configured
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+    axiosInstance.defaults.withCredentials = true;
+    axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const RDDStatistics = () => {
     const [hoveredItem, setHoveredItem] = useState(null);
@@ -12,6 +20,12 @@ const RDDStatistics = () => {
     const [hoveredSdg, setHoveredSdg] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [selectedCenter, setSelectedCenter] = useState(null);
+    const [selectedDepartment, setSelectedDepartment] = useState(null);
+    const [researchCenters, setResearchCenters] = useState([]);
+    const [departments, setDepartments] = useState([]);
+    const [loadingCenters, setLoadingCenters] = useState(true);
+    const [loadingDepartments, setLoadingDepartments] = useState(true);
     const [analyticsData, setAnalyticsData] = useState({
         overview: {
             totalProposals: 0,
@@ -28,14 +42,53 @@ const RDDStatistics = () => {
     const sdgTooltipContainerRef = useRef(null);
 
     useEffect(() => {
-        fetchAnalyticsData();
+        fetchResearchCenters();
+        fetchDepartments();
     }, []);
+
+    useEffect(() => {
+        fetchAnalyticsData();
+    }, [selectedCenter, selectedDepartment]);
+
+    const fetchResearchCenters = async () => {
+        try {
+            setLoadingCenters(true);
+            const response = await axiosInstance.get("/admin/research-centers", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            if (response.data.success) {
+                setResearchCenters(response.data.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching research centers:", err);
+        } finally {
+            setLoadingCenters(false);
+        }
+    };
+
+    const fetchDepartments = async () => {
+        try {
+            setLoadingDepartments(true);
+            const response = await axiosInstance.get("/admin/departments", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            if (response.data.success) {
+                setDepartments(response.data.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching departments:", err);
+        } finally {
+            setLoadingDepartments(false);
+        }
+    };
 
     const fetchAnalyticsData = async () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await rddService.getRddAnalytics();
+            const response = await rddService.getRddAnalytics(selectedCenter, selectedDepartment);
             if (response.success) {
                 setAnalyticsData(response.data);
             } else {
@@ -182,6 +235,54 @@ const RDDStatistics = () => {
                             Comprehensive overview of research proposals and
                             outcomes
                         </p>
+                    </div>
+                </div>
+
+                {/* Filter Section */}
+                <div className="max-w-7xl mx-auto px-6 mb-6">
+                    <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-6">
+                        <div className="flex items-center space-x-3 mb-4">
+                            <Filter className="h-5 w-5 text-gray-600" />
+                            <h3 className="text-lg font-semibold text-gray-900">Filters</h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Research Center:
+                                </label>
+                                <select
+                                    value={selectedCenter || ""}
+                                    onChange={(e) => setSelectedCenter(e.target.value ? parseInt(e.target.value) : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                                    disabled={loadingCenters}
+                                >
+                                    <option value="">All Centers</option>
+                                    {researchCenters.map((center) => (
+                                        <option key={center.centerID} value={center.centerID}>
+                                            {center.centerName || center.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-2">
+                                    Department:
+                                </label>
+                                <select
+                                    value={selectedDepartment || ""}
+                                    onChange={(e) => setSelectedDepartment(e.target.value ? parseInt(e.target.value) : null)}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
+                                    disabled={loadingDepartments}
+                                >
+                                    <option value="">All Departments</option>
+                                    {departments.map((dept) => (
+                                        <option key={dept.departmentID} value={dept.departmentID}>
+                                            {dept.name || dept.departmentName}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 

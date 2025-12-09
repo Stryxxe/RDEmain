@@ -87,6 +87,9 @@ export const roleConfigs = {
       { path: '', component: 'SubmitPage', label: 'Submit Proposal' },
       { path: 'tracker', component: 'Tracker', label: 'Tracker' },
       { path: 'tracker/:id', component: 'TrackerDetail', label: 'Tracker Detail' },
+      { path: 'progress-report', component: 'ProponentProgressReport', label: 'Progress Reports' },
+      { path: 'progress-report/:id', component: 'ProponentProgressReportDetail', label: 'Progress Report Detail' },
+      { path: 'submit-report', component: 'ProponentSubmitReport', label: 'Submit Report' },
       { path: 'resources', component: 'ResourcesPage', label: 'Resources' },
       { path: 'account', component: 'AccountPage', label: 'Account' },
       { path: 'notification', component: 'NotificationsPage', label: 'Notifications', hidden: true },
@@ -96,6 +99,8 @@ export const roleConfigs = {
       'submit_proposals',
       'view_own_proposals',
       'track_progress',
+      'submit_progress_reports',
+      'view_own_progress_reports',
       'view_resources',
       'view_notifications',
       'send_messages'

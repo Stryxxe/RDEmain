@@ -25,52 +25,83 @@ class ProposalController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $user = Auth::user();
-        $user->loadMissing('role');
+        try {
+            $user = Auth::user();
+            $user->loadMissing('role');
 
-        // Build base query with common eager loads
-        $query = Proposal::with([
-            'status:statusID,statusName,statusColor',
-            'files:fileID,proposalID,fileName,filePath,fileType',
-            'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
-            'user.department:departmentID,departmentName',
-            'user.role:userRoleID,userRole',
-            'proponents:userID,firstName,lastName,email'
-        ]);
+            // Build base query with common eager loads
+            $query = Proposal::with([
+                'status:statusID,statusName,statusDescription',
+                'files:fileID,proposalID,fileName,filePath,fileType',
+                'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
+                'user.department:departmentID,name',
+                'user.role:userRoleID,userRole',
+                // Don't use column selection for many-to-many relationships - it can cause issues
+                'proponents'
+            ]);
 
-        // Apply role-specific filtering
-        $role = $user->role?->userRole;
-        if ($role === 'RDD') {
-            // Exclude archived proposals - see all non-archived proposals
-            $query->whereNull('archivedByRDD');
-        } elseif ($role === 'CM') {
-            // Show proposals whose submitting user is in same research center
-            // but exclude proposals that this CM has already endorsed
-            if ($user->researchCenterID) {
-                $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                    ->whereDoesntHave('endorsements', function ($q) use ($user) {
-                        $q->where('endorserID', $user->userID);
+            // Apply role-specific filtering
+            $role = $user->role?->userRole;
+            if ($role === 'RDD') {
+                // Exclude archived proposals - see all non-archived proposals
+                $query->whereNull('archivedByRDD');
+                
+                // Filter by research center if provided
+                if ($request->has('centerID') && $request->centerID) {
+                    $query->whereHas('user', function($q) use ($request) {
+                        $q->where('researchCenterID', $request->centerID);
                     });
+                }
+                
+                // Filter by department if provided
+                if ($request->has('departmentID') && $request->departmentID) {
+                    $query->whereHas('user', function($q) use ($request) {
+                        $q->where('departmentID', $request->departmentID);
+                    });
+                }
+            } elseif ($role === 'CM') {
+                // Show proposals whose submitting user is in same research center
+                // but exclude proposals that this CM has already endorsed
+                if ($user->researchCenterID) {
+                    $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                        ->whereDoesntHave('endorsements', function ($q) use ($user) {
+                            $q->where('endorserID', $user->userID);
+                        });
+                } else {
+                    // If CM has no research center assigned, return empty set
+                    $query->whereRaw('1=0');
+                }
+            } elseif ($role === 'Proponent') {
+                // Show proposals where this user is one of the proponents
+                $query->whereHas('proponents', function ($q) use ($user) {
+                    $q->where('users.userID', $user->userID);
+                });
             } else {
-                // If CM has no research center assigned, return empty set
-                $query->whereRaw('1=0');
+                // Fallback: show proposals submitted by the user
+                $query->where('userID', $user->userID);
             }
-        } elseif ($role === 'Proponent') {
-            // Show proposals where this user is one of the proponents
-            $query->whereHas('proponents', function ($q) use ($user) {
-                $q->where('users.userID', $user->userID);
-            });
-        } else {
-            // Fallback: show proposals submitted by the user
-            $query->where('userID', $user->userID);
+
+            // Default sorting: Latest to Oldest (by proposalID descending, then by uploadedAt descending)
+            $proposals = $query->orderByDesc('proposalID')
+                ->orderByDesc('uploadedAt')
+                ->get();
+
+            return response()->json([
+                'success' => true,
+                'data' => $proposals
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching proposals: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch proposals',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred'
+            ], 500);
         }
-
-        $proposals = $query->orderByDesc('proposalID')->get();
-
-        return response()->json([
-            'success' => true,
-            'data' => $proposals
-        ]);
     }
 
     /**
@@ -88,10 +119,10 @@ class ProposalController extends Controller
         $proposal = Cache::remember($cacheKey, 120, function () use ($id, $user) {
             // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
             $query = Proposal::where('proposalID', $id)->with([
-                'status:statusID,statusName,statusColor',
+                'status:statusID,statusName,statusDescription',
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
                 'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
-                'user.department:departmentID,departmentName',
+                'user.department:departmentID,name',
                 'user.role:userRoleID,userRole',
                 'reviews:reviewID,proposalID,reviewerID,remarks,reviewedAt,decisionID',
                 'reviews.reviewer:userID,firstName,lastName,email,userRolesID',
@@ -110,7 +141,17 @@ class ProposalController extends Controller
             if ($userRole === 'RDD') {
                 // RDD users can see all proposals including archived ones - no filter needed
             } elseif ($userRole === 'CM') {
-                $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+                // CM users can only see proposals from their research center
+                // and exclude proposals they've already endorsed (consistent with index method)
+                if ($user->researchCenterID) {
+                    $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                        ->whereDoesntHave('endorsements', function ($q) use ($user) {
+                            $q->where('endorserID', $user->userID);
+                        });
+                } else {
+                    // If CM has no research center assigned, return empty set
+                    $query->whereRaw('1=0');
+                }
             } else {
                 $query->whereHas('proponents', fn($q) => $q->where('users.userID', $user->userID));
             }
@@ -1149,7 +1190,7 @@ class ProposalController extends Controller
     /**
      * Get analytics data for RDD users
      */
-    public function getRddAnalytics(): JsonResponse
+    public function getRddAnalytics(Request $request): JsonResponse
     {
         $user = Auth::user();
         $user->loadMissing('role');
@@ -1162,16 +1203,28 @@ class ProposalController extends Controller
             ], 403);
         }
 
-        // Get only archived proposals (those endorsed by RDD)
-        $proposals = Proposal::with('endorsements')
-            ->whereNotNull('archivedByRDD')
-            ->get();
+        // Include all proposals (not just archived) so analytics reflects current pipeline
+        $query = Proposal::with(['status', 'endorsements', 'user.researchCenter', 'user.department']);
+        
+        // Filter by research center if provided
+        if ($request->has('centerID') && $request->centerID) {
+            $query->whereHas('user', function($q) use ($request) {
+                $q->where('researchCenterID', $request->centerID);
+            });
+        }
+        
+        // Filter by department if provided
+        if ($request->has('departmentID') && $request->departmentID) {
+            $query->whereHas('user', function($q) use ($request) {
+                $q->where('departmentID', $request->departmentID);
+            });
+        }
+        
+        $proposals = $query->get();
 
-        // Initialize counters
-        // All archived proposals are considered completed since they were RDD-endorsed
         $totalProposals = $proposals->count();
         $totalOngoing = 0;
-        $totalCompleted = $totalProposals;
+        $totalCompleted = 0;
 
         // Initialize aggregation maps
         $rdeAgendaMap = [];
@@ -1179,36 +1232,156 @@ class ProposalController extends Controller
         $sdgMap = [];
 
         foreach ($proposals as $proposal) {
-            // All archived proposals are completed (RDD-endorsed)
-            $status = 'completed';
+            // Determine completion based on status
+            $statusName = strtolower($proposal->status->statusName ?? '');
+            $isCompleted = in_array($proposal->statusID, [5]) // Approved
+                || str_contains($statusName, 'approved')
+                || str_contains($statusName, 'endorsed')
+                || str_contains($statusName, 'completed');
 
+            $statusBucket = $isCompleted ? 'completed' : 'ongoing';
+            $isCompleted ? $totalCompleted++ : $totalOngoing++;
+
+            // Get matrixOfCompliance once for all data extraction
+            $rawMatrix = $proposal->getRawOriginal('matrixOfCompliance');
+            $matrixOfCompliance = null;
+            if ($rawMatrix) {
+                if (is_string($rawMatrix)) {
+                    $matrixOfCompliance = json_decode($rawMatrix, true);
+                } else {
+                    $matrixOfCompliance = $rawMatrix;
+                }
+            }
+
+            // Get research agenda - check matrixOfCompliance first, then direct column
+            $researchAgenda = null;
+            
+            // Check matrixOfCompliance directly (bypass accessor)
+            if ($matrixOfCompliance && is_array($matrixOfCompliance) && isset($matrixOfCompliance['researchAgenda']) && !empty($matrixOfCompliance['researchAgenda'])) {
+                $researchAgenda = $matrixOfCompliance['researchAgenda'];
+            }
+            
+            // If still empty, try the accessor (which also reads from matrixOfCompliance)
+            if (empty($researchAgenda)) {
+                $matrixAgenda = $proposal->researchAgenda;
+                if (!empty($matrixAgenda) && is_array($matrixAgenda)) {
+                    $researchAgenda = $matrixAgenda;
+                }
+            }
+            
+            // Final fallback to direct column
+            if (empty($researchAgenda)) {
+                $rawAgenda = $proposal->getRawOriginal('researchAgenda');
+                if ($rawAgenda !== null) {
+                    if (is_string($rawAgenda)) {
+                        $decoded = json_decode($rawAgenda, true);
+                        $researchAgenda = json_last_error() === JSON_ERROR_NONE && is_array($decoded) && !empty($decoded) ? $decoded : null;
+                    } elseif (is_array($rawAgenda) && !empty($rawAgenda)) {
+                        $researchAgenda = $rawAgenda;
+                    }
+                }
+            }
+            
             // Aggregate by Research Agenda
-            if ($proposal->researchAgenda && is_array($proposal->researchAgenda)) {
-                foreach ($proposal->researchAgenda as $agenda) {
-                    if (!isset($rdeAgendaMap[$agenda])) {
-                        $rdeAgendaMap[$agenda] = ['ongoing' => 0, 'completed' => 0];
+            if ($researchAgenda && is_array($researchAgenda) && !empty($researchAgenda)) {
+                foreach ($researchAgenda as $agenda) {
+                    $normalizedAgenda = is_string($agenda) ? trim($agenda) : (is_array($agenda) ? ($agenda['name'] ?? $agenda['value'] ?? null) : $agenda);
+                    if ($normalizedAgenda === '' || $normalizedAgenda === null) {
+                        continue;
                     }
-                    $rdeAgendaMap[$agenda][$status]++;
+                    if (!isset($rdeAgendaMap[$normalizedAgenda])) {
+                        $rdeAgendaMap[$normalizedAgenda] = ['ongoing' => 0, 'completed' => 0];
+                    }
+                    $rdeAgendaMap[$normalizedAgenda][$statusBucket]++;
                 }
             }
 
+            // Get DOST 6Ps - check matrixOfCompliance first, then direct column
+            $dostSPs = null;
+            
+            // Check matrixOfCompliance directly (bypass accessor)
+            if ($matrixOfCompliance && is_array($matrixOfCompliance) && isset($matrixOfCompliance['dostSPs']) && !empty($matrixOfCompliance['dostSPs'])) {
+                $dostSPs = $matrixOfCompliance['dostSPs'];
+            }
+            
+            // If still empty, try the accessor
+            if (empty($dostSPs)) {
+                $matrixDost = $proposal->dostSPs;
+                if (!empty($matrixDost) && is_array($matrixDost)) {
+                    $dostSPs = $matrixDost;
+                }
+            }
+            
+            // Final fallback to direct column
+            if (empty($dostSPs)) {
+                $rawDost = $proposal->getRawOriginal('dostSPs');
+                if ($rawDost !== null) {
+                    if (is_string($rawDost)) {
+                        $decoded = json_decode($rawDost, true);
+                        $dostSPs = json_last_error() === JSON_ERROR_NONE && is_array($decoded) && !empty($decoded) ? $decoded : null;
+                    } elseif (is_array($rawDost) && !empty($rawDost)) {
+                        $dostSPs = $rawDost;
+                    }
+                }
+            }
+            
             // Aggregate by DOST 6Ps
-            if ($proposal->dostSPs && is_array($proposal->dostSPs)) {
-                foreach ($proposal->dostSPs as $dost) {
-                    if (!isset($dost6PsMap[$dost])) {
-                        $dost6PsMap[$dost] = 0;
+            if ($dostSPs && is_array($dostSPs) && !empty($dostSPs)) {
+                foreach ($dostSPs as $dost) {
+                    $normalizedDost = is_string($dost) ? trim($dost) : (is_array($dost) ? ($dost['name'] ?? $dost['value'] ?? null) : $dost);
+                    if ($normalizedDost === '' || $normalizedDost === null) {
+                        continue;
                     }
-                    $dost6PsMap[$dost]++;
+                    if (!isset($dost6PsMap[$normalizedDost])) {
+                        $dost6PsMap[$normalizedDost] = 0;
+                    }
+                    $dost6PsMap[$normalizedDost]++;
                 }
             }
 
-            // Aggregate by SDG
-            if ($proposal->sustainableDevelopmentGoals && is_array($proposal->sustainableDevelopmentGoals)) {
-                foreach ($proposal->sustainableDevelopmentGoals as $sdg) {
-                    if (!isset($sdgMap[$sdg])) {
-                        $sdgMap[$sdg] = 0;
+            // Get SDG - check matrixOfCompliance first, then direct column
+            $sdgGoals = null;
+            
+            // Check matrixOfCompliance directly (bypass accessor)
+            if ($matrixOfCompliance && is_array($matrixOfCompliance) && isset($matrixOfCompliance['sustainableDevelopmentGoals']) && !empty($matrixOfCompliance['sustainableDevelopmentGoals'])) {
+                $sdgGoals = $matrixOfCompliance['sustainableDevelopmentGoals'];
+            }
+            
+            // If still empty, try the accessor
+            if (empty($sdgGoals)) {
+                $matrixSdg = $proposal->sustainableDevelopmentGoals;
+                if (!empty($matrixSdg) && is_array($matrixSdg)) {
+                    $sdgGoals = $matrixSdg;
+                }
+            }
+            
+            // Final fallback to direct column
+            if (empty($sdgGoals)) {
+                $rawSdg = $proposal->getRawOriginal('sustainableDevelopmentGoals');
+                if ($rawSdg !== null) {
+                    if (is_string($rawSdg)) {
+                        $decoded = json_decode($rawSdg, true);
+                        $sdgGoals = json_last_error() === JSON_ERROR_NONE && is_array($decoded) && !empty($decoded) ? $decoded : null;
+                    } elseif (is_array($rawSdg) && !empty($rawSdg)) {
+                        $sdgGoals = $rawSdg;
                     }
-                    $sdgMap[$sdg]++;
+                }
+            }
+            
+            // Aggregate by SDG
+            if ($sdgGoals && is_array($sdgGoals) && !empty($sdgGoals)) {
+                foreach ($sdgGoals as $sdg) {
+                    $normalizedSdg = is_string($sdg) ? trim($sdg) : (is_array($sdg) ? ($sdg['name'] ?? $sdg['value'] ?? $sdg['goal'] ?? null) : $sdg);
+                    if ($normalizedSdg === '' || $normalizedSdg === null) {
+                        continue;
+                    }
+                    // Normalize SDG format (handle "1", "SDG 1", "SDG1", etc.)
+                    $normalizedSdg = preg_replace('/^sdg\s*/i', '', (string)$normalizedSdg);
+                    $normalizedSdg = trim($normalizedSdg);
+                    if (!isset($sdgMap[$normalizedSdg])) {
+                        $sdgMap[$normalizedSdg] = 0;
+                    }
+                    $sdgMap[$normalizedSdg]++;
                 }
             }
         }

@@ -39,22 +39,35 @@ class DashboardController extends Controller
         $userRole = $user->role->userRole ?? null;
 
         if (!$userRole) {
+            \Log::warning('DashboardController: User has no role', ['userID' => $user->userID]);
             return '/';
         }
 
-        // Map role names to their route prefixes
+        // Normalize role name to handle case variations
+        $normalizedRole = trim($userRole);
+        
+        // Map role names to their route prefixes (case-insensitive)
         $roleMap = [
-            'Administrator' => 'admin',
-            'Admin' => 'admin',
-            'RDD' => 'rdd',
-            'CM' => 'cm',
-            'Proponent' => 'proponent',
-            'OP' => 'op',
-            'OSUORU' => 'osuur',
-            'Reviewer' => 'reviewer',
+            'administrator' => 'admin',
+            'admin' => 'admin',
+            'rdd' => 'rdd',
+            'cm' => 'cm',
+            'proponent' => 'proponent',
+            'op' => 'op',
+            'osuoru' => 'osuur',
+            'reviewer' => 'reviewer',
         ];
 
-        $routePrefix = $roleMap[$userRole] ?? strtolower($userRole);
+        $roleKey = strtolower($normalizedRole);
+        $routePrefix = $roleMap[$roleKey] ?? strtolower($normalizedRole);
+
+        \Log::info('DashboardController: Redirecting user', [
+            'userID' => $user->userID,
+            'userRole' => $userRole,
+            'normalizedRole' => $normalizedRole,
+            'routePrefix' => $routePrefix,
+            'redirectPath' => "/{$routePrefix}"
+        ]);
 
         return "/{$routePrefix}";
     }

@@ -140,12 +140,15 @@ class ProgressReportController extends Controller
                 $user->load('role');
             }
 
-            // Load proposal user and department relationships
+            // Load proposal user, department, and proponents relationships
             if (!$proposal->relationLoaded('user')) {
                 $proposal->load('user');
             }
             if (!$proposal->user->relationLoaded('department')) {
                 $proposal->user->load('department');
+            }
+            if (!$proposal->relationLoaded('proponents')) {
+                $proposal->load('proponents');
             }
             if (!$user->relationLoaded('department')) {
                 $user->load('department');
@@ -166,12 +169,22 @@ class ProgressReportController extends Controller
                     ], 403);
                 }
             }
-            // Other users can only submit reports for their own proposals
-            else if ($proposal->userID !== $user->userID) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You can only submit reports for your own proposals'
-                ], 403);
+            // Other users (Proponents) can submit reports for proposals they're part of
+            else {
+                // Check if user is the primary proposer
+                $isPrimaryProposer = $proposal->userID === $user->userID;
+                
+                // Check if user is a proponent (co-author) of the proposal
+                $isProponent = $proposal->proponents()
+                    ->where('users.userID', $user->userID)
+                    ->exists();
+                
+                if (!$isPrimaryProposer && !$isProponent) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'You can only submit reports for proposals you are part of'
+                    ], 403);
+                }
             }
 
             // Create the progress report

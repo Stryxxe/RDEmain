@@ -5,29 +5,19 @@ import AppLayout from "../../../Components/Layouts/AppLayout";
 
 const CMSubmitReport = () => {
     return (
-        <div className="min-h-screen bg-gray-50 p-6">
-            <div className="max-w-4xl mx-auto">
-                {/* Header */}
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-800 mb-2">
-                        Progress Report Submission
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+            <div className="max-w-7xl mx-auto px-6 py-12">
+                <div className="text-center">
+                    <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
+                        Submit Progress Report
                     </h1>
-                    <p className="text-gray-600">
+                    <p className="text-gray-600 text-lg md:text-xl max-w-3xl mx-auto leading-relaxed">
                         Submit progress reports for projects in your department
                     </p>
                 </div>
+            </div>
 
-                {/* Important Notice */}
-                <div className="bg-gray-100 border-l-4 border-blue-500 p-4 mb-8">
-                    <h3 className="font-semibold text-gray-800 mb-2">
-                        Important Notice
-                    </h3>
-                    <p className="text-gray-700 text-sm">
-                        Fields marked with an asterisk (*) are mandatory and
-                        must be filled out before submission.
-                    </p>
-                </div>
-
+            <div className="max-w-4xl mx-auto p-6">
                 <SubmitProgressReport />
             </div>
         </div>

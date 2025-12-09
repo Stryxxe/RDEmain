@@ -28,20 +28,29 @@ use App\Models\ResearchCenter;
 use App\Models\Setting;
 // Get upload settings (max file size) - public endpoint for all authenticated users
 Route::get('/upload-settings', function () {
-    $allowedTypes = Setting::get('allowed_file_types', '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg');
-    $maxFileSize = Setting::get('max_file_size', 20);
-    
-    // Convert comma-separated string to array for frontend
-    $typesArray = array_map('trim', explode(',', $allowedTypes));
-    $typesArray = array_map(function($type) {
-        return str_replace('.', '', $type);
-    }, $typesArray);
-    
-    return response()->json([
-        'maxFileSizeMB' => (int) $maxFileSize,
-        'maxFileSizeKB' => (int) $maxFileSize * 1024,
-        'allowedFileTypes' => $typesArray,
-    ]);
+    try {
+        $allowedTypes = Setting::get('allowed_file_types', '.pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg');
+        $maxFileSize = Setting::get('max_file_size', 20);
+        
+        // Convert comma-separated string to array for frontend
+        $typesArray = array_map('trim', explode(',', $allowedTypes));
+        $typesArray = array_map(function($type) {
+            return str_replace('.', '', $type);
+        }, $typesArray);
+        
+        return response()->json([
+            'maxFileSizeMB' => (int) $maxFileSize,
+            'maxFileSizeKB' => (int) $maxFileSize * 1024,
+            'allowedFileTypes' => $typesArray,
+        ]);
+    } catch (\Exception $e) {
+        // Return default values if settings table doesn't exist or query fails
+        return response()->json([
+            'maxFileSizeMB' => 20,
+            'maxFileSizeKB' => 20480,
+            'allowedFileTypes' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'png', 'jpg', 'jpeg'],
+        ]);
+    }
 })->middleware('auth:web');
 
 // Get authenticated user
@@ -494,7 +503,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         
         // Return file with appropriate headers for viewing
         $path = Storage::disk('public')->path($file->filePath);
-        $mimeType = Storage::disk('public')->mimeType($file->filePath);
+        $mimeType = mime_content_type($path) ?: 'application/octet-stream';
         
         \Log::info("Serving file: fileID={$file->fileID}, filePath={$file->filePath}, mimeType={$mimeType}");
         
@@ -601,7 +610,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         
         // Return file with appropriate headers for viewing
         $path = Storage::disk('public')->path($file->filePath);
-        $mimeType = Storage::disk('public')->mimeType($file->filePath);
+        $mimeType = mime_content_type($path) ?: 'application/octet-stream';
         
         \Log::info("Serving file: fileID={$file->fileID}, filePath={$file->filePath}, mimeType={$mimeType}");
         
@@ -701,7 +710,8 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         }
         
         // Return file download response
-        return Storage::disk('public')->download($file->filePath, $file->fileName);
+        $path = Storage::disk('public')->path($file->filePath);
+        return response()->download($path, $file->fileName);
     })->name('files.download');
     
     // Review routes

@@ -48,6 +48,9 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('SubmitPage'))->name('dashboard');
         Route::get('/tracker', fn() => Inertia::render('Tracker'))->name('tracker');
         Route::get('/tracker/{id}', fn($id) => Inertia::render('TrackerDetail', ['id' => $id]))->name('tracker.detail');
+        Route::get('/progress-report', fn() => Inertia::render('RoleViews/Proponent/ProponentProgressReport'))->name('progress-report');
+        Route::get('/progress-report/{id}', fn($id) => Inertia::render('RoleViews/Proponent/ProponentProgressReportDetail', ['id' => $id]))->name('progress-report.detail');
+        Route::get('/submit-report', fn() => Inertia::render('RoleViews/Proponent/ProponentSubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('Resources'))->name('resources');
         Route::get('/account', fn() => Inertia::render('Account'))->name('account');
         Route::get('/notifications', fn() => Inertia::render('Notification'))->name('notifications');

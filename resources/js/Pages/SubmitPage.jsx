@@ -22,10 +22,12 @@ const SubmitPage = () => {
 
     // Validate authentication on mount
     useEffect(() => {
-        // Prevent redirect loop - check if we're already on login page
+        // Prevent redirect loop - check if we're already on login page or dashboard
+        const currentPath = window.location.pathname;
         if (
-            window.location.pathname === "/login" ||
-            window.location.pathname === "/"
+            currentPath === "/login" ||
+            currentPath === "/" ||
+            currentPath === "/dashboard"
         ) {
             return;
         }
@@ -37,8 +39,10 @@ const SubmitPage = () => {
                 return;
             }
 
-            // Check if user is a Proponent
-            if (currentUser.role?.userRole !== "Proponent") {
+            // Check if user is a Proponent - only redirect if NOT a proponent
+            // Don't redirect if already on a proponent route to prevent loops
+            if (currentUser.role?.userRole !== "Proponent" && 
+                !currentPath.startsWith("/proponent")) {
                 router.visit("/dashboard");
                 return;
             }
