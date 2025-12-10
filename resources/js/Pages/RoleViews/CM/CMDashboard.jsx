@@ -45,27 +45,97 @@ const CMDashboard = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => {
+        console.log("[CM Dashboard Debug] Component mounted, fetching proposals...");
         fetchProposals();
         fetchStatistics();
     }, []);
+    
+    // Debug: Log when proposals state changes
+    useEffect(() => {
+        console.log("[CM Dashboard Debug] Proposals state updated:", {
+            count: proposals.length,
+            proposals: proposals.map(p => ({
+                proposalID: p.proposalID,
+                title: p.researchTitle,
+                statusID: p.statusID,
+                statusName: p.status?.statusName,
+                user: p.user?.fullName
+            }))
+        });
+    }, [proposals]);
 
     const fetchProposals = async () => {
         try {
             setLoading(true);
+            console.log("[CM Dashboard Debug] Fetching proposals...");
             const response = await axiosInstance.get("/proposals", {
                 headers: { Accept: "application/json" },
                 withCredentials: true,
             });
+            console.log("[CM Dashboard Debug] API Response:", {
+                success: response.data.success,
+                dataLength: response.data.data?.length || 0,
+                data: response.data.data,
+                debug: response.data.debug || null
+            });
+            
+            // Log debug info if available
+            if (response.data.debug) {
+                console.log("[CM Dashboard Debug] Backend Debug Info:", response.data.debug);
+                console.log("[CM Dashboard Debug] Total proposals in center:", response.data.debug.total_proposals_in_center);
+                console.log("[CM Dashboard Debug] Under Review proposals:", response.data.debug.under_review_proposals_count);
+                console.log("[CM Dashboard Debug] Final proposals returned:", response.data.debug.final_proposals_count);
+                
+                // Show what statuses the proposals actually have
+                if (response.data.debug.all_center_proposals && response.data.debug.all_center_proposals.length > 0) {
+                    console.log("[CM Dashboard Debug] ⚠️ ISSUE FOUND: Proposals exist but don't have 'Under Review' status");
+                    console.log("[CM Dashboard Debug] All proposals in center with their statuses:", 
+                        response.data.debug.all_center_proposals.map(p => ({
+                            proposalID: p.proposalID,
+                            title: p.title,
+                            statusID: p.statusID,
+                            statusName: p.statusName || 'NULL'
+                        }))
+                    );
+                    console.log("[CM Dashboard Debug] 🔍 The query is looking for status: 'Under Review' (case-insensitive)");
+                    console.log("[CM Dashboard Debug] 💡 Possible solutions:");
+                    console.log("[CM Dashboard Debug]    1. Check if status name in database matches exactly 'Under Review'");
+                    console.log("[CM Dashboard Debug]    2. Or update the query to show proposals with the actual status these proposals have");
+                }
+                
+                if (response.data.debug.under_review_proposals && response.data.debug.under_review_proposals.length > 0) {
+                    console.log("[CM Dashboard Debug] Under Review proposals details:", response.data.debug.under_review_proposals);
+                }
+            }
+            
             if (response.data.success) {
+                console.log("[CM Dashboard Debug] Setting proposals in state:", {
+                    count: response.data.data.length,
+                    proposals: response.data.data.map(p => ({
+                        proposalID: p.proposalID,
+                        title: p.researchTitle,
+                        statusID: p.statusID,
+                        statusName: p.status?.statusName,
+                        user: p.user?.fullName,
+                        researchCenter: p.researchCenter
+                    }))
+                });
                 setProposals(response.data.data);
+                console.log("[CM Dashboard Debug] Proposals state updated. Current proposals count:", response.data.data.length);
+            } else {
+                console.warn("[CM Dashboard Debug] API returned success: false", response.data);
             }
         } catch (error) {
-            console.error("Error fetching proposals:", error);
+            console.error("[CM Dashboard Debug] Error fetching proposals:", error);
             if (error.response?.status === 401) {
-                console.error("Unauthorized - session may have expired");
+                console.error("[CM Dashboard Debug] Unauthorized - session may have expired");
+            }
+            if (error.response?.data) {
+                console.error("[CM Dashboard Debug] Error response data:", error.response.data);
             }
         } finally {
             setLoading(false);
+            console.log("[CM Dashboard Debug] Loading set to false");
         }
     };
 
@@ -114,6 +184,21 @@ const CMDashboard = () => {
                 .toLowerCase()
                 .includes(searchTerm.toLowerCase())
     );
+    
+    // Debug logging for filtering
+    useEffect(() => {
+        console.log("[CM Dashboard Debug] Proposals state changed:", {
+            totalProposals: proposals.length,
+            searchTerm: searchTerm,
+            filteredCount: filteredProposals.length,
+            proposals: proposals.map(p => ({
+                proposalID: p.proposalID,
+                title: p.researchTitle,
+                statusName: p.status?.statusName,
+                user: p.user?.fullName
+            }))
+        });
+    }, [proposals, searchTerm, filteredProposals.length]);
 
     const sortedProposals = filteredProposals.sort((a, b) => {
         switch (sortBy) {
@@ -135,6 +220,20 @@ const CMDashboard = () => {
                 return a.proposalID - b.proposalID; // Default to ID sorting (oldest first)
         }
     });
+    
+    // Debug logging for sorted proposals
+    useEffect(() => {
+        console.log("[CM Dashboard Debug] Sorted proposals for rendering:", {
+            sortedCount: sortedProposals.length,
+            sortBy: sortBy,
+            sortedProposals: sortedProposals.map(p => ({
+                proposalID: p.proposalID,
+                title: p.researchTitle,
+                statusName: p.status?.statusName,
+                statusID: p.statusID
+            }))
+        });
+    }, [sortedProposals.length, sortBy]);
 
     const getStatusClass = (statusName) => getStatusBadgeClass(statusName);
     const getProgressColor = (statusName) => getProgressBarClass(statusName);
@@ -404,9 +503,28 @@ const CMDashboard = () => {
                         {sortedProposals.length === 0 ? (
                             <div className="p-8 text-center text-gray-500">
                                 No proposals found
+                                {console.log("[CM Dashboard Debug] No proposals to display. State check:", {
+                                    proposalsLength: proposals.length,
+                                    filteredLength: filteredProposals.length,
+                                    sortedLength: sortedProposals.length,
+                                    searchTerm: searchTerm,
+                                    loading: loading
+                                })}
                             </div>
                         ) : (
-                            sortedProposals.map((proposal, index) => (
+                            sortedProposals.map((proposal, index) => {
+                                // Debug log for each proposal being rendered
+                                if (index === 0) {
+                                    console.log("[CM Dashboard Debug] Rendering table body:", {
+                                        sortedProposalsLength: sortedProposals.length,
+                                        firstProposal: {
+                                            proposalID: proposal.proposalID,
+                                            title: proposal.researchTitle,
+                                            statusName: proposal.status?.statusName
+                                        }
+                                    });
+                                }
+                                return (
                                 <div
                                     key={proposal.proposalID}
                                     className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
@@ -471,7 +589,8 @@ const CMDashboard = () => {
                                         </Link>
                                     </div>
                                 </div>
-                            ))
+                            );
+                            })
                         )}
                     </div>
                 </div>

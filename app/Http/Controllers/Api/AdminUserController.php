@@ -114,7 +114,7 @@ class AdminUserController extends Controller
         }
         // Persist status if column exists
         if (Schema::hasColumn((new User())->getTable(), 'status')) {
-            $createData['status'] = $validated['status'] ?? 'inactive';
+            $createData['status'] = $validated['status'] ?? 'pending';
         }
         if (Schema::hasColumn((new User())->getTable(), 'phone')) {
             $createData['phone'] = $validated['phone'] ?? null;
@@ -166,7 +166,7 @@ class AdminUserController extends Controller
             'role' => ['required', 'string'],
             'department' => ['nullable', 'string', 'max:255'],
             'researchCenter' => ['sometimes', 'nullable', 'string', 'max:255'],
-            'status' => ['sometimes', 'string'],
+            'status' => ['nullable', 'string', 'in:pending,active,inactive'],
             'phone' => ['sometimes', 'nullable', 'string', 'max:50'],
             'password' => ['sometimes', 'nullable', 'string', 'min:8'],
         ]);
@@ -205,9 +205,37 @@ class AdminUserController extends Controller
         $user->firstName = $validated['firstName'];
         $user->lastName = $validated['lastName'];
         $user->email = $validated['email'];
-        // Persist status if column exists
+        // Persist status if column exists - always update status if provided in request
         if (Schema::hasColumn((new User())->getTable(), 'status')) {
-            $user->status = $validated['status'] ?? $user->status ?? 'inactive';
+            // Check request input first (before validation), then validated array
+            // This ensures we get the status even if validation didn't include it
+            $statusValue = $request->input('status');
+            
+            // If not in request, check validated array
+            if ($statusValue === null) {
+                $statusValue = $validated['status'] ?? null;
+            }
+            
+            // Only update if status is explicitly provided and is valid
+            if ($statusValue !== null && $statusValue !== '' && in_array($statusValue, ['pending', 'active', 'inactive'])) {
+                $oldStatus = $user->status;
+                $user->status = $statusValue;
+                \Log::info('User status updated', [
+                    'userID' => $user->userID,
+                    'oldStatus' => $oldStatus,
+                    'newStatus' => $statusValue,
+                    'requestStatus' => $request->input('status'),
+                    'validatedStatus' => $validated['status'] ?? 'not in validated'
+                ]);
+            } else {
+                \Log::warning('User status not updated', [
+                    'userID' => $user->userID,
+                    'statusValue' => $statusValue,
+                    'requestStatus' => $request->input('status'),
+                    'validatedStatus' => $validated['status'] ?? 'not in validated',
+                    'currentStatus' => $user->status
+                ]);
+            }
         }
         if (Schema::hasColumn((new User())->getTable(), 'phone')) {
             $user->phone = $validated['phone'] ?? null;
@@ -259,6 +287,42 @@ class AdminUserController extends Controller
         return response()->json([
             'message' => 'Password reset successfully.',
             'temporaryPassword' => $defaultPassword,
+        ]);
+    }
+
+    public function activate(Request $request, User $user)
+    {
+        // Prevent activating admin users (they should always be active)
+        if ($user->role && $user->role->userRole === 'Admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Admin users are always active'
+            ], 422);
+        }
+
+        $oldStatus = $user->status ?? 'pending';
+        
+        if (Schema::hasColumn((new User())->getTable(), 'status')) {
+            $user->status = 'active';
+            $user->save();
+        }
+
+        // Log activity
+        ActivityService::logUserUpdate(
+            $user->userID,
+            ['status' => $oldStatus],
+            ['status' => 'active']
+        );
+
+        $user->load(['role', 'department', 'researchCenter']);
+        $responseUser = $this->formatUserResponse($user, [
+            'status' => 'active',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User activated successfully.',
+            'user' => $responseUser,
         ]);
     }
 

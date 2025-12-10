@@ -160,8 +160,8 @@ export default function Register() {
                 setData('researchCenter', '');
             }
         } else {
-            // If no department selected, show all research centers
-            setFilteredResearchCenters(researchCenters);
+            // If no department selected, clear research centers and selection
+            setFilteredResearchCenters([]);
             setData('researchCenter', '');
         }
     };
@@ -205,9 +205,25 @@ export default function Register() {
         setError('');
 
         post('/register', {
-            onSuccess: () => {
-                // Redirect to login page after successful registration
-                router.visit('/login');
+            onSuccess: async () => {
+                // Show popup about pending account status
+                try {
+                    if (window.customAlert) {
+                        await window.customAlert(
+                            'Your account has been registered successfully! Your account is now pending approval. You will be able to log in once an administrator activates your account.',
+                            'Account Pending Approval',
+                            5000
+                        );
+                    } else {
+                        // Fallback if customAlert is not available
+                        alert('Your account has been registered successfully! Your account is now pending approval. You will be able to log in once an administrator activates your account.');
+                    }
+                } catch (error) {
+                    console.error('Error showing alert:', error);
+                } finally {
+                    // Redirect to login page after user acknowledges the message
+                    router.visit('/login');
+                }
             },
             onError: (errors) => {
                 if (errors.email) {
@@ -442,9 +458,13 @@ export default function Register() {
                                         <div className="mb-4">
                                             <select
                                                 name="researchCenter"
-                                                value={data.researchCenter}
+                                                value={data.researchCenter || ''}
                                                 onChange={handleResearchCenterChange}
-                                                className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                                                className={`w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 ${
+                                                    !data.department 
+                                                        ? 'bg-gray-100 cursor-not-allowed opacity-60' 
+                                                        : 'bg-white'
+                                                }`}
                                                 disabled={!data.department}
                                             >
                                                 <option value="">
@@ -452,7 +472,7 @@ export default function Register() {
                                                         ? 'Select Research Center'
                                                         : 'Select Department first'}
                                                 </option>
-                                                {filteredResearchCenters.map((rc) => (
+                                                {data.department && filteredResearchCenters.map((rc) => (
                                                     <option
                                                         key={rc.centerID || rc.id}
                                                         value={rc.name || rc.centerName}

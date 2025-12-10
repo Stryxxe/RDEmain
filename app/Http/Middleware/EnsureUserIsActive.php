@@ -13,7 +13,9 @@ class EnsureUserIsActive
         $user = $request->user();
         if ($user && method_exists($user, 'getAttribute')) {
             $status = $user->getAttribute('status');
-            if (is_string($status) && strtolower($status) === 'inactive') {
+            $statusLower = is_string($status) ? strtolower($status) : '';
+            
+            if ($statusLower === 'inactive') {
                 auth()->logout();
                 if ($request->expectsJson()) {
                     return response()->json([
@@ -22,6 +24,17 @@ class EnsureUserIsActive
                     ], 403);
                 }
                 return redirect()->route('login')->withErrors(['email' => 'Account is inactive. Please contact administrator.']);
+            }
+            
+            if ($statusLower === 'pending') {
+                auth()->logout();
+                if ($request->expectsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Your account is pending approval. Please wait for administrator approval.'
+                    ], 403);
+                }
+                return redirect()->route('login')->withErrors(['email' => 'Your account is pending approval. Please wait for administrator approval.']);
             }
         }
         return $next($request);

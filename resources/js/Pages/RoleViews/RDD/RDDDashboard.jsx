@@ -24,11 +24,8 @@ const RDDDashboard = () => {
     const [searchTerm, setSearchTerm] = useState("");
     const [sortBy, setSortBy] = useState("Date"); // Default to Date (Latest to Oldest)
     const [selectedCenter, setSelectedCenter] = useState(null);
-    const [selectedDepartment, setSelectedDepartment] = useState(null);
     const [researchCenters, setResearchCenters] = useState([]);
-    const [departments, setDepartments] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
-    const [loadingDepartments, setLoadingDepartments] = useState(true);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [statsData, setStatsData] = useState([]);
@@ -39,12 +36,11 @@ const RDDDashboard = () => {
 
     useEffect(() => {
         fetchResearchCenters();
-        fetchDepartments();
     }, []);
 
     useEffect(() => {
         fetchDashboardData();
-    }, [selectedCenter, selectedDepartment]);
+    }, [selectedCenter]);
 
     const fetchResearchCenters = async () => {
         try {
@@ -63,22 +59,6 @@ const RDDDashboard = () => {
         }
     };
 
-    const fetchDepartments = async () => {
-        try {
-            setLoadingDepartments(true);
-            const response = await axiosInstance.get("/admin/departments", {
-                headers: { Accept: "application/json" },
-                withCredentials: true,
-            });
-            if (response.data.success) {
-                setDepartments(response.data.data || []);
-            }
-        } catch (err) {
-            console.error("Error fetching departments:", err);
-        } finally {
-            setLoadingDepartments(false);
-        }
-    };
 
     const fetchDashboardData = async () => {
         try {
@@ -90,7 +70,7 @@ const RDDDashboard = () => {
             // Fetch statistics and proposals data in parallel
             const [statsResponse, proposalsResponse] = await Promise.all([
                 rddService.getProposalStatistics(),
-                rddService.getProposalsForReview(selectedCenter, selectedDepartment),
+                rddService.getProposalsForReview(selectedCenter, null),
             ]);
 
             console.log("Stats response:", statsResponse);
@@ -422,27 +402,6 @@ const RDDDashboard = () => {
                                 {researchCenters.map((center) => (
                                     <option key={center.centerID} value={center.centerID}>
                                         {center.centerName || center.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="flex items-center gap-2">
-                            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
-                                Department:
-                            </label>
-                            <select
-                                value={selectedDepartment || ""}
-                                onChange={(e) => {
-                                    setSelectedDepartment(e.target.value ? parseInt(e.target.value) : null);
-                                    setCurrentPage(1); // Reset to first page when filter changes
-                                }}
-                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 min-w-[200px]"
-                                disabled={loadingDepartments}
-                            >
-                                <option value="">All Departments</option>
-                                {departments.map((dept) => (
-                                    <option key={dept.departmentID} value={dept.departmentID}>
-                                        {dept.name || dept.departmentName}
                                     </option>
                                 ))}
                             </select>

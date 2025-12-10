@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
-import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiEye } from "react-icons/fi";
+import { FiSearch, FiPlus, FiEdit2, FiTrash2, FiEye, FiCheckCircle } from "react-icons/fi";
 import { format } from "date-fns";
 import UserForm from "../../../Components/Admin/UserFormFixed";
 import UserDetails from "../../../Components/Admin/UserDetails";
@@ -99,6 +99,31 @@ const UserManagement = () => {
     };
 
 
+
+    const handleActivateUser = async (userId) => {
+        try {
+            const response = await fetch(`/api/admin/users/${userId}/activate`, {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                credentials: 'include'
+            });
+            
+            if (response.ok) {
+                await window.customAlert('', 'User activated successfully!', 3000);
+                await fetchUsers();
+            } else {
+                const errorData = await response.json();
+                const errorMessage = errorData?.message || "Error activating user. Please try again.";
+                await window.customAlert(errorMessage, 'Error');
+            }
+        } catch (error) {
+            console.error('Error activating user:', error);
+            await window.customAlert("Error activating user. Please try again.", 'Error');
+        }
+    };
 
     const handleDeleteUser = async (userId) => {
         const confirmed = await window.customConfirm(
@@ -518,6 +543,17 @@ const UserManagement = () => {
                                             >
                                                 <FiEdit2 className="w-4 h-4" />
                                             </button>
+                                            {user.status === 'pending' && (
+                                                <button
+                                                    onClick={() =>
+                                                        handleActivateUser(user.id)
+                                                    }
+                                                    className="p-1 text-gray-400 hover:text-green-600"
+                                                    title="Activate"
+                                                >
+                                                    <FiCheckCircle className="w-4 h-4" />
+                                                </button>
+                                            )}
                                             <button
                                                 onClick={() =>
                                                     handleDeleteUser(user.id)

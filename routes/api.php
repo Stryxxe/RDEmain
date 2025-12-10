@@ -955,6 +955,7 @@ Route::middleware(['auth:web'])->group(function () {
     Route::post('/admin/users', [AdminUserController::class, 'store']);
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
     Route::post('/admin/users/{user:userID}/reset-password', [AdminUserController::class, 'resetPassword']);
+    Route::post('/admin/users/{user:userID}/activate', [AdminUserController::class, 'activate']);
     Route::delete('/admin/users/{userId}', [AdminUserController::class, 'destroy']);
     
     // Department management

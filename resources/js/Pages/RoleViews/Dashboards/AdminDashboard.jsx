@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { usePage } from '@inertiajs/react';
-import { FiUsers, FiUserCheck, FiUserX, FiClock, FiFileText, FiSettings, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiUsers, FiUserCheck, FiUserX, FiClock, FiFileText, FiSettings, FiChevronLeft, FiChevronRight, FiAlertCircle } from 'react-icons/fi';
 import AdminLayout from '../../../Components/Layouts/AdminLayout';
 import axios from 'axios';
 
@@ -242,10 +242,12 @@ const AdminDashboard = () => {
 
   const totalUsers = users.length;
   const activeUsers = users.filter((u) => u.status === 'active').length;
+  const pendingUsers = users.filter((u) => u.status === 'pending').length;
   const inactiveUsers = users.filter((u) => u.status === 'inactive').length;
 
   const pct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0);
   const activePct = pct(activeUsers, totalUsers);
+  const pendingPct = pct(pendingUsers, totalUsers);
   const inactivePct = pct(inactiveUsers, totalUsers);
 
   return (
@@ -260,9 +262,10 @@ const AdminDashboard = () => {
         </div>
 
         {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Users" value={totalUsers} change={null} icon={FiUsers} color="blue" />
         <StatCard title="Active Users" value={`${activeUsers} (${activePct}%)`} change={activePct} icon={FiUserCheck} color="green" />
+        <StatCard title="Pending Users" value={`${pendingUsers} (${pendingPct}%)`} change={pendingPct} icon={FiClock} color="yellow" />
         <StatCard title="Inactive Users" value={`${inactiveUsers} (${inactivePct}%)`} change={inactivePct} icon={FiUserX} color="red" />
       </div>
 

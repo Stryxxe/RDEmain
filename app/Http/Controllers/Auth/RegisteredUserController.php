@@ -105,9 +105,9 @@ class RegisteredUserController extends Controller
                 $createData['researchCenterID'] = $researchCenterID;
             }
 
-            // Set status to inactive by default for new registrations
+            // Set status to pending by default for new registrations
             if (Schema::hasColumn((new User())->getTable(), 'status')) {
-                $createData['status'] = 'inactive';
+                $createData['status'] = 'pending';
             }
 
             $user = User::create($createData);

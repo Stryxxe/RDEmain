@@ -22,6 +22,7 @@ const UserFormFixed = ({ user, onClose }) => {
         role: "proponent",
         department: "",
         researchCenter: "",
+        status: "active",
     });
     const [errors, setErrors] = useState({});
     const [resetting, setResetting] = useState(false);
@@ -108,6 +109,7 @@ const UserFormFixed = ({ user, onClose }) => {
                 role: user.role || "proponent",
                 department: departmentValue,
                 researchCenter: researchCenterValue,
+                status: user.status || "active",
             });
         }
     }, [user, departments]);
@@ -152,21 +154,27 @@ const UserFormFixed = ({ user, onClose }) => {
 
         try {
             if (user) {
-                // Update existing user via API
+                // Update existing user via API - ensure status is included
+                const updateData = {
+                    ...formData,
+                    status: formData.status || user.status || 'active', // Ensure status is always included
+                };
                 await axiosInstance.put(
                     `/admin/users/${user.id || user.userID}`,
-                    formData,
+                    updateData,
                     {
-                        headers: { Accept: "application/json" },
+                        headers: { 
+                            Accept: "application/json",
+                            'Content-Type': 'application/json'
+                        },
                         withCredentials: true,
                     }
                 );
                 await window.customAlert("", "User Updated Successfully!");
             } else {
-                // Create new user via API - status defaults to 'active' for new users
+                // Create new user via API - use status from form
                 const userData = {
                     ...formData,
-                    status: "active",
                 };
                 const response = await axiosInstance.post(
                     "/admin/users",
@@ -248,8 +256,14 @@ const UserFormFixed = ({ user, onClose }) => {
                     return;
                 }
             } else {
-                // If no department selected, show all research centers
-                setResearchCenters(allResearchCenters);
+                // If no department selected, clear research centers and selection
+                setResearchCenters([]);
+                setFormData((prev) => ({
+                    ...prev,
+                    [name]: value,
+                    researchCenter: "",
+                }));
+                return;
             }
         } else if (name === "researchCenter") {
             // When research center changes, auto-select its department
@@ -528,16 +542,21 @@ const UserFormFixed = ({ user, onClose }) => {
                                         ) : researchCenters.length > 0 ? (
                                             <select
                                                 name="researchCenter"
-                                                value={formData.researchCenter}
+                                                value={formData.researchCenter || ''}
                                                 onChange={handleChange}
-                                                className={`admin-input !pl-8`}
+                                                className={`admin-input !pl-8 ${
+                                                    !formData.department 
+                                                        ? 'bg-gray-100 cursor-not-allowed opacity-60' 
+                                                        : ''
+                                                }`}
+                                                disabled={!formData.department}
                                             >
                                                 <option value="">
                                                     {formData.department 
                                                         ? "Select a research center for this department"
-                                                        : "Select a research center"}
+                                                        : "Select Department first"}
                                                 </option>
-                                                {researchCenters.map((rc) => (
+                                                {formData.department && researchCenters.map((rc) => (
                                                     <option
                                                         key={
                                                             rc.id || rc.centerID
@@ -556,10 +575,15 @@ const UserFormFixed = ({ user, onClose }) => {
                                             <input
                                                 type="text"
                                                 name="researchCenter"
-                                                value={formData.researchCenter}
+                                                value={formData.researchCenter || ''}
                                                 onChange={handleChange}
-                                                className={`admin-input pl-14 placeholder-gray-400`}
-                                                placeholder="Enter research center"
+                                                className={`admin-input pl-14 placeholder-gray-400 ${
+                                                    !formData.department 
+                                                        ? 'bg-gray-100 cursor-not-allowed opacity-60' 
+                                                        : ''
+                                                }`}
+                                                placeholder={formData.department ? "Enter research center" : "Select Department first"}
+                                                disabled={!formData.department}
                                             />
                                         )}
                                     </div>
@@ -592,6 +616,28 @@ const UserFormFixed = ({ user, onClose }) => {
                                     {errors.role && (
                                         <p className="mt-1 text-sm text-red-600">
                                             {errors.role}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                        Status *
+                                    </label>
+                                    <select
+                                        name="status"
+                                        value={formData.status}
+                                        onChange={handleChange}
+                                        className={`admin-input ${
+                                            errors.status ? "border-red-500" : ""
+                                        }`}
+                                    >
+                                        <option value="pending">Pending</option>
+                                        <option value="active">Active</option>
+                                        <option value="inactive">Inactive</option>
+                                    </select>
+                                    {errors.status && (
+                                        <p className="mt-1 text-sm text-red-600">
+                                            {errors.status}
                                         </p>
                                     )}
                                 </div>

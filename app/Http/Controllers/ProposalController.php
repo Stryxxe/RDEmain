@@ -63,16 +63,77 @@ class ProposalController extends Controller
                     });
                 }
             } elseif ($role === 'CM') {
-                // Show proposals whose submitting user is in same research center
-                // but exclude proposals that this CM has already endorsed
+                // Show submitted proposals (Under Review status) from same research center
+                // that haven't been endorsed by this CM yet, or were rejected by this CM
                 if ($user->researchCenterID) {
+                    // Debug: Check all proposals from this research center first
+                    $allCenterProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))->get();
+                    Log::info('CM Debug: All proposals from research center', [
+                        'user_id' => $user->userID,
+                        'research_center_id' => $user->researchCenterID,
+                        'total_proposals' => $allCenterProposals->count(),
+                        'proposals' => $allCenterProposals->map(function($p) {
+                            return [
+                                'proposalID' => $p->proposalID,
+                                'statusID' => $p->statusID,
+                                'statusName' => $p->status?->statusName,
+                                'title' => $p->researchTitle,
+                                'userID' => $p->userID,
+                                'endorsements_count' => $p->endorsements()->count()
+                            ];
+                        })->toArray()
+                    ]);
+                    
+                    // Debug: Check proposals with "Under Review" status
+                    $underReviewProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                        ->whereHas('status', fn($q) => $q->whereRaw('LOWER(statusName) = ?', ['under review']))
+                        ->get();
+                    Log::info('CM Debug: Proposals with Under Review status', [
+                        'user_id' => $user->userID,
+                        'under_review_count' => $underReviewProposals->count(),
+                        'proposals' => $underReviewProposals->map(function($p) {
+                            return [
+                                'proposalID' => $p->proposalID,
+                                'statusID' => $p->statusID,
+                                'statusName' => $p->status?->statusName,
+                                'title' => $p->researchTitle,
+                                'endorsements' => $p->endorsements()->where('endorserID', $user->userID)->get()->map(function($e) {
+                                    return [
+                                        'endorsementID' => $e->endorsementID,
+                                        'endorserID' => $e->endorserID,
+                                        'status' => $e->endorsementStatus
+                                    ];
+                                })->toArray()
+                            ];
+                        })->toArray()
+                    ]);
+                    
+                    // Show proposals that are "Under Review" - check both by status name and statusID
+                    // statusID = 1 is typically "Under Review" when proposals are first submitted
                     $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                        ->where(function($q) {
+                            // Check by status name (case-insensitive) OR by statusID = 1
+                            $q->whereHas('status', fn($subQ) => $subQ->whereRaw('LOWER(statusName) = ?', ['under review']))
+                              ->orWhere('statusID', 1); // Fallback: statusID 1 is usually "Under Review"
+                        })
                         ->whereDoesntHave('endorsements', function ($q) use ($user) {
-                            $q->where('endorserID', $user->userID);
+                            // Exclude proposals that this CM has already approved
+                            $q->where('endorserID', $user->userID)
+                              ->where('endorsementStatus', 'approved');
                         });
+                    
+                    // Log for debugging
+                    Log::info('CM Dashboard Query Applied', [
+                        'user_id' => $user->userID,
+                        'research_center_id' => $user->researchCenterID,
+                        'role' => $role
+                    ]);
                 } else {
                     // If CM has no research center assigned, return empty set
                     $query->whereRaw('1=0');
+                    Log::warning('CM user has no research center assigned', [
+                        'user_id' => $user->userID
+                    ]);
                 }
             } elseif ($role === 'Proponent') {
                 // Show proposals where this user is one of the proponents
@@ -89,10 +150,80 @@ class ProposalController extends Controller
                 ->orderByDesc('uploadedAt')
                 ->get();
 
-            return response()->json([
+            // Log query results for CM users for debugging
+            $debugInfo = null;
+            if ($role === 'CM') {
+                // Get debug information
+                $allCenterProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                    ->with('status')
+                    ->get();
+                $underReviewProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                    ->whereHas('status', fn($q) => $q->whereRaw('LOWER(statusName) = ?', ['under review']))
+                    ->get();
+                $statusID1Proposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
+                    ->where('statusID', 1)
+                    ->get();
+                
+                $debugInfo = [
+                    'user_id' => $user->userID,
+                    'research_center_id' => $user->researchCenterID,
+                    'total_proposals_in_center' => $allCenterProposals->count(),
+                    'under_review_proposals_count' => $underReviewProposals->count(),
+                    'statusID_1_proposals_count' => $statusID1Proposals->count(),
+                    'final_proposals_count' => $proposals->count(),
+                    'all_center_proposals' => $allCenterProposals->map(function($p) {
+                        return [
+                            'proposalID' => $p->proposalID,
+                            'statusID' => $p->statusID,
+                            'statusName' => $p->status?->statusName ?? 'NULL',
+                            'title' => $p->researchTitle,
+                        ];
+                    })->toArray(),
+                    'statusID_1_proposals' => $statusID1Proposals->map(function($p) {
+                        return [
+                            'proposalID' => $p->proposalID,
+                            'statusID' => $p->statusID,
+                            'statusName' => $p->status?->statusName ?? 'NULL',
+                            'title' => $p->researchTitle,
+                        ];
+                    })->toArray(),
+                    'under_review_proposals' => $underReviewProposals->map(function($p) use ($user) {
+                        return [
+                            'proposalID' => $p->proposalID,
+                            'statusID' => $p->statusID,
+                            'statusName' => $p->status?->statusName,
+                            'title' => $p->researchTitle,
+                            'has_cm_endorsement' => $p->endorsements()->where('endorserID', $user->userID)->exists(),
+                            'cm_endorsements' => $p->endorsements()->where('endorserID', $user->userID)->get()->map(function($e) {
+                                return [
+                                    'endorsementID' => $e->endorsementID,
+                                    'status' => $e->endorsementStatus
+                                ];
+                            })->toArray()
+                        ];
+                    })->toArray()
+                ];
+                
+                Log::info('CM Dashboard Query Results - Final', [
+                    'user_id' => $user->userID,
+                    'research_center_id' => $user->researchCenterID,
+                    'proposal_count' => $proposals->count(),
+                    'proposal_ids' => $proposals->pluck('proposalID')->toArray(),
+                    'debug_info' => $debugInfo
+                ]);
+            }
+
+            $response = [
                 'success' => true,
                 'data' => $proposals
-            ]);
+            ];
+            
+            // Include debug info in response for CM users (only in debug mode)
+            if ($role === 'CM' && config('app.debug')) {
+                $response['debug'] = $debugInfo;
+            }
+            
+            return response()->json($response);
         } catch (\Exception $e) {
             Log::error('Error fetching proposals: ' . $e->getMessage(), [
                 'trace' => $e->getTraceAsString(),
@@ -144,13 +275,11 @@ class ProposalController extends Controller
             if ($userRole === 'RDD') {
                 // RDD users can see all proposals including archived ones - no filter needed
             } elseif ($userRole === 'CM') {
-                // CM users can only see proposals from their research center
-                // and exclude proposals they've already endorsed (consistent with index method)
+                // CM users can see proposals from their research center
+                // Allow viewing proposals even if already endorsed (for reference)
+                // But in dashboard (index), we filter to only show submitted proposals needing endorsement
                 if ($user->researchCenterID) {
-                    $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                        ->whereDoesntHave('endorsements', function ($q) use ($user) {
-                            $q->where('endorserID', $user->userID);
-                        });
+                    $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
                 } else {
                     // If CM has no research center assigned, return empty set
                     $query->whereRaw('1=0');
@@ -718,26 +847,50 @@ class ProposalController extends Controller
         $user = Auth::user();
         $user->loadMissing('role');
 
-        // For RDD users, count only archived (endorsed) proposals; for CM users, show proposals from their department; for others, show only their own
+        // For RDD users, count ALL proposals (both archived and non-archived) for total statistics
+        // For CM users, show proposals from their research center; for others, show only their own
         $query = Proposal::query();
 
         // Apply authorization filters based on user role
         $userRole = $user->role?->userRole;
         if ($userRole === 'RDD') {
-            $query->whereNotNull('archivedByRDD'); // RDD users see statistics for archived (endorsed) proposals only
+            // RDD users see ALL proposals for statistics (not just archived ones)
+            // This gives them the total count of all submitted proposals
+            // No filter needed - show all proposals
         } elseif ($userRole === 'CM') {
             $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
         } else {
             $query->where('userID', $user->userID);
         }
 
+        // For status-based counts, we need to check by status name or statusID
+        // Use a base query that can be cloned for each status count
+        $baseQuery = clone $query;
+        
+        // Get all statuses to map names to IDs
+        $underReviewStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['under review'])->first();
+        $approvedStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['approved'])->first();
+        $rejectedStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['rejected'])->first();
+        $ongoingStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['ongoing'])->first();
+        $completedStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['completed'])->first();
+
         $stats = [
-            'total' => $query->count(),
-            'under_review' => (clone $query)->where('statusID', 1)->count(),
-            'approved' => (clone $query)->where('statusID', 2)->count(),
-            'rejected' => (clone $query)->where('statusID', 3)->count(),
-            'ongoing' => (clone $query)->where('statusID', 4)->count(),
-            'completed' => (clone $query)->where('statusID', 5)->count()
+            'total' => $baseQuery->count(),
+            'under_review' => $underReviewStatus 
+                ? (clone $query)->where('statusID', $underReviewStatus->statusID)->count()
+                : (clone $query)->where('statusID', 1)->count(), // Fallback to statusID 1
+            'approved' => $approvedStatus
+                ? (clone $query)->where('statusID', $approvedStatus->statusID)->count()
+                : (clone $query)->where('statusID', 2)->count(), // Fallback to statusID 2
+            'rejected' => $rejectedStatus
+                ? (clone $query)->where('statusID', $rejectedStatus->statusID)->count()
+                : (clone $query)->where('statusID', 3)->count(), // Fallback to statusID 3
+            'ongoing' => $ongoingStatus
+                ? (clone $query)->where('statusID', $ongoingStatus->statusID)->count()
+                : (clone $query)->where('statusID', 4)->count(), // Fallback to statusID 4
+            'completed' => $completedStatus
+                ? (clone $query)->where('statusID', $completedStatus->statusID)->count()
+                : (clone $query)->where('statusID', 5)->count() // Fallback to statusID 5
         ];
 
         return response()->json([

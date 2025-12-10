@@ -21,11 +21,8 @@ const RDDStatistics = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [selectedCenter, setSelectedCenter] = useState(null);
-    const [selectedDepartment, setSelectedDepartment] = useState(null);
     const [researchCenters, setResearchCenters] = useState([]);
-    const [departments, setDepartments] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
-    const [loadingDepartments, setLoadingDepartments] = useState(true);
     const [analyticsData, setAnalyticsData] = useState({
         overview: {
             totalProposals: 0,
@@ -43,12 +40,11 @@ const RDDStatistics = () => {
 
     useEffect(() => {
         fetchResearchCenters();
-        fetchDepartments();
     }, []);
 
     useEffect(() => {
         fetchAnalyticsData();
-    }, [selectedCenter, selectedDepartment]);
+    }, [selectedCenter]);
 
     const fetchResearchCenters = async () => {
         try {
@@ -67,28 +63,12 @@ const RDDStatistics = () => {
         }
     };
 
-    const fetchDepartments = async () => {
-        try {
-            setLoadingDepartments(true);
-            const response = await axiosInstance.get("/admin/departments", {
-                headers: { Accept: "application/json" },
-                withCredentials: true,
-            });
-            if (response.data.success) {
-                setDepartments(response.data.data || []);
-            }
-        } catch (err) {
-            console.error("Error fetching departments:", err);
-        } finally {
-            setLoadingDepartments(false);
-        }
-    };
 
     const fetchAnalyticsData = async () => {
         try {
             setLoading(true);
             setError(null);
-            const response = await rddService.getRddAnalytics(selectedCenter, selectedDepartment);
+            const response = await rddService.getRddAnalytics(selectedCenter, null);
             if (response.success) {
                 setAnalyticsData(response.data);
             } else {
@@ -260,24 +240,6 @@ const RDDStatistics = () => {
                                     {researchCenters.map((center) => (
                                         <option key={center.centerID} value={center.centerID}>
                                             {center.centerName || center.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">
-                                    Department:
-                                </label>
-                                <select
-                                    value={selectedDepartment || ""}
-                                    onChange={(e) => setSelectedDepartment(e.target.value ? parseInt(e.target.value) : null)}
-                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900"
-                                    disabled={loadingDepartments}
-                                >
-                                    <option value="">All Departments</option>
-                                    {departments.map((dept) => (
-                                        <option key={dept.departmentID} value={dept.departmentID}>
-                                            {dept.name || dept.departmentName}
                                         </option>
                                     ))}
                                 </select>
