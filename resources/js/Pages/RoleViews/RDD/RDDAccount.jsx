@@ -49,7 +49,7 @@ const RDDAccount = () => {
 
             const roleNameMap = {
                 Admin: "Administrator",
-                CM: "Central Manager",
+                CM: "Center Manager",
                 RDD: "Research & Development Division",
                 RDE: "Research, Development & Extension",
                 OP: "Office of the President",

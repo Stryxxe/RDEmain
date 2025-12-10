@@ -7,7 +7,7 @@ const UserDetails = ({ user, onClose }) => {
     const roleMap = {
       admin: 'Admin',
       proponent: 'Proponent',
-      central_manager: 'Central Manager',
+      central_manager: 'Center Manager',
       rdd: 'RDD',
       rde: 'RDE',
       op: 'OP',

@@ -365,7 +365,7 @@ class AdminUserController extends Controller
         return match (strtolower($name)) {
             'administrator', 'admin' => 'admin',
             'proponent' => 'proponent',
-            'center manager', 'cm', 'central manager' => 'central_manager',
+            'center manager', 'cm', 'central manager' => 'central_manager', // Note: accepts both 'center manager' and 'central manager' but maps to 'central_manager'
             'rdd' => 'rdd',
             'rde' => 'rde',
             'op', 'office of the president' => 'op',

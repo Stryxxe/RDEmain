@@ -329,7 +329,7 @@ const UserManagement = () => {
         const roleMap = {
             admin: "Admin",
             proponent: "Proponent",
-            central_manager: "Central Manager",
+            central_manager: "Center Manager",
             rdd: "RDD",
             rde: "RDE",
             op: "OP",
@@ -402,7 +402,7 @@ const UserManagement = () => {
                             <option value="all">All Roles</option>
                             <option value="proponent">Proponent</option>
                             <option value="central_manager">
-                                Central Manager
+                                Center Manager
                             </option>
                             <option value="rdd">RDD</option>
                             <option value="rde">RDE</option>

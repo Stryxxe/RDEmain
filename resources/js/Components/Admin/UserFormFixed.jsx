@@ -606,7 +606,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                             Proponent
                                         </option>
                                         <option value="central_manager">
-                                            Central Manager
+                                            Center Manager
                                         </option>
                                         <option value="rdd">RDD</option>
                                         <option value="rde">RDE</option>

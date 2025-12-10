@@ -125,7 +125,7 @@ const UserRoleChart = ({ users }) => {
   const roles = [
     { name: 'Admin', count: roleCounts.admin || 0, color: 'bg-red-500' },
     { name: 'Proponent', count: roleCounts.proponent || 0, color: 'bg-green-500' },
-    { name: 'Central Manager', count: roleCounts.central_manager || 0, color: 'bg-blue-500' },
+    { name: 'Center Manager', count: roleCounts.central_manager || 0, color: 'bg-blue-500' },
     { name: 'RDD', count: roleCounts.rdd || 0, color: 'bg-yellow-500' },
     { name: 'RDE', count: roleCounts.rde || 0, color: 'bg-purple-500' },
     { name: 'OP', count: roleCounts.op || 0, color: 'bg-orange-500' },
