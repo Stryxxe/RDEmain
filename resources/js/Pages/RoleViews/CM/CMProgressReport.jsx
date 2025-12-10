@@ -76,18 +76,40 @@ const CMProgressReport = () => {
 
             // Handle proposals response
             if (proposalsResponse.status === 'fulfilled' && proposalsResponse.value?.data?.success) {
-                // Filter proposals from the same research center (CM scope)
-                const filteredProposals = proposalsResponse.value.data.data.filter(
-                    (proposal) => {
-                        return (
-                            proposal.user?.researchCenterID &&
-                            proposal.user.researchCenterID === user?.researchCenterID
-                        );
-                    }
-                );
+                // The backend already filters proposals for CM role (same research center, not yet endorsed)
+                // So we can use the proposals directly without additional filtering
+                const proposalsData = proposalsResponse.value.data.data || [];
+                
+                // Only do additional filtering if user object has researchCenterID and we want extra safety
+                const filteredProposals = user?.researchCenterID
+                    ? proposalsData.filter((proposal) => {
+                          return (
+                              proposal.user?.researchCenterID &&
+                              proposal.user.researchCenterID === user.researchCenterID
+                          );
+                      })
+                    : proposalsData;
+                
+                console.log(`CM Progress Report: Loaded ${filteredProposals.length} proposals for CM user`, {
+                    userID: user?.userID,
+                    researchCenterID: user?.researchCenterID,
+                    totalProposals: proposalsData.length,
+                    filteredProposals: filteredProposals.length
+                });
+                
                 setProposals(filteredProposals);
             } else if (proposalsResponse.status === 'rejected') {
                 console.error("Error fetching proposals:", proposalsResponse.reason);
+                // Log more details for debugging
+                if (proposalsResponse.reason?.response) {
+                    console.error("Proposals API error details:", {
+                        status: proposalsResponse.reason.response.status,
+                        data: proposalsResponse.reason.response.data,
+                        url: proposalsResponse.reason.config?.url
+                    });
+                }
+            } else if (proposalsResponse.status === 'fulfilled' && !proposalsResponse.value?.data?.success) {
+                console.error("Proposals API returned unsuccessful response:", proposalsResponse.value?.data);
             }
 
             // Handle progress reports response
@@ -98,6 +120,11 @@ const CMProgressReport = () => {
                 const filteredReports = reports.filter((report) => {
                     const centerId = report.proposal?.user?.researchCenterID;
                     return centerId && centerId === user?.researchCenterID;
+                });
+
+                console.log(`CM Progress Report: Loaded ${filteredReports.length} progress reports`, {
+                    totalReports: reports.length,
+                    filteredReports: filteredReports.length
                 });
 
                 setProgressReports(filteredReports);
@@ -116,6 +143,14 @@ const CMProgressReport = () => {
                 }
             } else if (reportsResponse.status === 'rejected') {
                 console.error("Error fetching progress reports:", reportsResponse.reason);
+                // Log more details for debugging
+                if (reportsResponse.reason?.response) {
+                    console.error("Progress Reports API error details:", {
+                        status: reportsResponse.reason.response.status,
+                        data: reportsResponse.reason.response.data,
+                        url: reportsResponse.reason.config?.url
+                    });
+                }
                 setProgressReports([]);
             } else if (reportsResponse.status === 'fulfilled' && !reportsResponse.value?.data?.success) {
                 console.error("Failed to fetch progress reports:", reportsResponse.value?.data);
@@ -189,12 +224,38 @@ const CMProgressReport = () => {
         return proposal.custom_proposal_id || `PRO-${String(proposal.proposalID || 0).padStart(6, "0")}`;
     };
 
-    const sortedRows = progressReports
-        .map((report) => ({
-            report,
-            proposal: report.proposal,
-            status: report.proposal?.status?.statusName || "Unknown",
-        }))
+    // Create a map of proposals with their latest progress report
+    const proposalsWithLatestReport = new Map();
+    
+    // Add proposals with progress reports
+    progressReports.forEach((report) => {
+        const proposalId = report.proposalID || report.proposal?.proposalID;
+        if (proposalId) {
+            const existing = proposalsWithLatestReport.get(proposalId);
+            if (!existing || new Date(report.submittedAt || report.created_at) > new Date(existing.report.submittedAt || existing.report.created_at)) {
+                proposalsWithLatestReport.set(proposalId, {
+                    report,
+                    proposal: report.proposal,
+                    status: report.proposal?.status?.statusName || "Unknown",
+                });
+            }
+        }
+    });
+    
+    // Add proposals without progress reports
+    proposals.forEach((proposal) => {
+        const proposalId = proposal.proposalID;
+        if (proposalId && !proposalsWithLatestReport.has(proposalId)) {
+            proposalsWithLatestReport.set(proposalId, {
+                report: null, // No progress report yet
+                proposal: proposal,
+                status: proposal.status?.statusName || "Unknown",
+            });
+        }
+    });
+    
+    // Convert to array and filter/sort
+    const sortedRows = Array.from(proposalsWithLatestReport.values())
         .filter(({ report, proposal }) => {
             const search = searchTerm.toLowerCase();
             const title = proposal?.researchTitle?.toLowerCase() || "";
@@ -213,8 +274,13 @@ const CMProgressReport = () => {
             return matchesSearch && matchesStatus;
         })
         .sort((a, b) => {
-            const dateA = new Date(a.report.submittedAt || a.report.created_at || 0).getTime();
-            const dateB = new Date(b.report.submittedAt || b.report.created_at || 0).getTime();
+            // Sort by latest report date if available, otherwise by proposal date
+            const dateA = a.report 
+                ? new Date(a.report.submittedAt || a.report.created_at || 0).getTime()
+                : new Date(a.proposal?.uploadedAt || a.proposal?.created_at || 0).getTime();
+            const dateB = b.report
+                ? new Date(b.report.submittedAt || b.report.created_at || 0).getTime()
+                : new Date(b.proposal?.uploadedAt || b.proposal?.created_at || 0).getTime();
             return dateB - dateA;
         });
 
@@ -233,7 +299,7 @@ const CMProgressReport = () => {
         }
     };
 
-    // Group progress reports by proposal ID
+    // Group progress reports by proposal ID (for reference, though we now show all proposals)
     const reportsByProposal = progressReports.reduce((acc, report) => {
         const proposalId = report.proposalID || report.proposal?.proposalID;
         if (!acc[proposalId]) {
@@ -242,28 +308,6 @@ const CMProgressReport = () => {
         acc[proposalId].push(report);
         return acc;
     }, {});
-
-    // Only show proposals that actually have progress reports
-    const proposalsWithReports = proposals.filter((proposal) => {
-        const proposalId = proposal.proposalID;
-        const reports = reportsByProposal[proposalId] || [];
-        return reports.length > 0;
-    });
-
-    // Filter proposals based on search
-    const filteredProposals = proposalsWithReports.filter((proposal) => {
-        const matchesSearch =
-            proposal.researchTitle
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase()) ||
-            proposal.user?.fullName
-                .toLowerCase()
-                .includes(searchTerm.toLowerCase());
-        const matchesStatus =
-            filterStatus === "all" ||
-            proposal.status?.statusName === filterStatus;
-        return matchesSearch && matchesStatus;
-    });
 
     // Toggle proposal expansion
     const toggleProposal = (proposalId) => {
@@ -426,13 +470,23 @@ const CMProgressReport = () => {
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="px-6 py-5 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
                         <h2 className="text-xl font-semibold text-gray-900">Projects and Progress Reports</h2>
-                        <p className="text-sm text-gray-600 mt-1">{sortedRows.length} reports found</p>
+                        <p className="text-sm text-gray-600 mt-1">
+                            {sortedRows.length} {sortedRows.length === 1 ? 'proposal' : 'proposals'} found
+                            {progressReports.length > 0 && ` (${progressReports.length} with progress reports)`}
+                        </p>
                     </div>
 
                     <FilterBar />
 
                     {sortedRows.length === 0 ? (
-                        <div className="p-10 text-center text-gray-500">No reports found</div>
+                        <div className="p-10 text-center text-gray-500">
+                            <p className="mb-2">No proposals found</p>
+                            <p className="text-xs text-gray-400">
+                                {user?.researchCenterID 
+                                    ? "No proposals in your research center match the current filters."
+                                    : "Unable to load proposals. Please check your research center assignment."}
+                            </p>
+                        </div>
                     ) : (
                         <div className="overflow-x-auto">
                             <table className="min-w-full divide-y divide-gray-200">
@@ -440,36 +494,57 @@ const CMProgressReport = () => {
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Proposal</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Name</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Submitted</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Last Report</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200 bg-white">
-                                    {sortedRows.map(({ report, proposal }) => (
-                                        <tr key={report.reportID} className="hover:bg-gray-50">
-                                            <td className="px-6 py-4 align-top">
-                                                <div className="text-sm font-semibold text-gray-900">{proposal?.researchTitle || "Untitled"}</div>
-                                                <div className="text-xs text-gray-600">{formatProposalId(proposal)}</div>
-                                            </td>
-                                            <td className="px-6 py-4 align-top text-sm text-gray-900">
-                                                {proposal?.user?.fullName || "Unknown proponent"}
-                                            </td>
-                                            <td className="px-6 py-4 align-top text-sm text-gray-900">
-                                                {new Date(report.submittedAt || report.created_at).toLocaleString()}
-                                            </td>
-                                            <td className="px-6 py-4 align-top">
-                                                <button
-                                                    onClick={() => openReportDetails(report)}
-                                                    className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-800 to-red-900 hover:from-red-900 hover:to-red-950 rounded-lg transition-colors shadow-sm"
-                                                >
-                                                    View details
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                    </svg>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                    {sortedRows.map(({ report, proposal }) => {
+                                        const hasReport = !!report;
+                                        const reportDate = report 
+                                            ? new Date(report.submittedAt || report.created_at).toLocaleString()
+                                            : "No reports yet";
+                                        
+                                        return (
+                                            <tr key={proposal?.proposalID || `proposal-${proposal?.proposalID}`} className="hover:bg-gray-50">
+                                                <td className="px-6 py-4 align-top">
+                                                    <div className="text-sm font-semibold text-gray-900">{proposal?.researchTitle || "Untitled"}</div>
+                                                    <div className="text-xs text-gray-600">{formatProposalId(proposal)}</div>
+                                                </td>
+                                                <td className="px-6 py-4 align-top text-sm text-gray-900">
+                                                    {proposal?.user?.fullName || "Unknown proponent"}
+                                                </td>
+                                                <td className="px-6 py-4 align-top">
+                                                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(proposal?.status?.statusName || "Unknown")}`}>
+                                                        {proposal?.status?.statusName || "Unknown"}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 align-top text-sm text-gray-900">
+                                                    {hasReport ? (
+                                                        <span className="text-green-600">{reportDate}</span>
+                                                    ) : (
+                                                        <span className="text-gray-400 italic">{reportDate}</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 align-top">
+                                                    {hasReport ? (
+                                                        <button
+                                                            onClick={() => openReportDetails(report)}
+                                                            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-white bg-gradient-to-r from-red-800 to-red-900 hover:from-red-900 hover:to-red-950 rounded-lg transition-colors shadow-sm"
+                                                        >
+                                                            View report
+                                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400 italic">No reports</span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                                 </tbody>
                             </table>
                         </div>

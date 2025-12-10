@@ -34,16 +34,14 @@ class ApiService {
   }
   // Helper method to handle responses
   async handleResponse(response) {
-    // Handle 401 Unauthorized - redirect to login
+    // Handle 401 Unauthorized - but let the global axios interceptor handle redirects
+    // to prevent redirect loops
     if (response.status === 401) {
       // Clear any stored auth data
       localStorage.removeItem('dismissedNotifications');
       
-      // Redirect to login page
-      if (window.location.pathname !== '/login') {
-        window.location.href = '/login';
-      }
-      
+      // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+      // This prevents duplicate redirects and loops
       throw new Error('Unauthenticated. Please log in again.');
     }
     
@@ -227,16 +225,14 @@ class ApiService {
             const errorData = axiosError.response.data;
             console.error('Proposal submission failed:', errorData);
             
-            // Handle 401 specifically
+            // Handle 401 specifically - but let the global axios interceptor handle redirects
+            // to prevent redirect loops
             if (axiosError.response.status === 401) {
               // Clear any stored auth data
               localStorage.removeItem('dismissedNotifications');
               
-              // Redirect to login page
-              if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
-              }
-              
+              // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+              // This prevents duplicate redirects and loops
               throw new Error('Unauthenticated. Please log in again.');
             }
             
@@ -271,12 +267,12 @@ class ApiService {
           const errorData = await response.json();
           console.error('Proposal submission failed:', errorData);
           
-          // Handle 401 specifically
+          // Handle 401 specifically - but let the global axios interceptor handle redirects
+          // to prevent redirect loops
           if (response.status === 401) {
             localStorage.removeItem('dismissedNotifications');
-            if (window.location.pathname !== '/login') {
-              window.location.href = '/login';
-            }
+            // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+            // This prevents duplicate redirects and loops
             throw new Error('Unauthenticated. Please log in again.');
           }
           
@@ -466,13 +462,45 @@ class ApiService {
   // Generic HTTP methods for compatibility with components
   async get(url) {
     try {
-      const response = await fetch(`${this.baseURL}${url}`, {
-        method: 'GET',
-        headers: this.getHeaders(false), // GET requests don't need CSRF
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
+      // Use window.axios if available (properly configured with session cookies and CSRF)
+      if (window.axios) {
+        try {
+          const response = await window.axios.get(url, {
+            headers: {
+              'Accept': 'application/json'
+            },
+            withCredentials: true
+          });
+          
+          return response.data;
+        } catch (axiosError) {
+          // Handle axios errors
+          if (axiosError.response) {
+            const errorData = axiosError.response.data;
+            
+            // Handle 401 specifically - but let the global axios interceptor handle redirects
+            // to prevent redirect loops
+            if (axiosError.response.status === 401) {
+              localStorage.removeItem('dismissedNotifications');
+              // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+              // This prevents duplicate redirects and loops
+              throw new Error('Unauthenticated. Please log in again.');
+            }
+            
+            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
+          }
+          throw axiosError;
+        }
+      } else {
+        // Fallback to fetch if axios is not available
+        const response = await fetch(`${this.baseURL}${url}`, {
+          method: 'GET',
+          headers: this.getHeaders(false), // GET requests don't need CSRF
+          credentials: 'include'
+        });
+        
+        return await this.handleResponse(response);
+      }
     } catch (error) {
       throw error;
     }

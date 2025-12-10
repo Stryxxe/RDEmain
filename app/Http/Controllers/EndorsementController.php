@@ -149,7 +149,7 @@ class EndorsementController extends Controller
             ]);
 
             // If RDD user approves, archive the proposal
-            if ($user->role->userRole === 'RDD' && $request->endorsementStatus === 'approved') {
+            if ($user->role && $user->role->userRole === 'RDD' && $request->endorsementStatus === 'approved') {
                 $proposal->update(['archivedByRDD' => now()]);
             }
 

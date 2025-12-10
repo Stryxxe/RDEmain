@@ -60,3 +60,73 @@ window.axios.interceptors.request.use((config) => {
     
     return config;
 });
+
+// Global response interceptor to handle 401 errors and prevent redirect loops
+let isRedirecting = false;
+let redirectTimeout = null;
+let lastRedirectTime = 0;
+const REDIRECT_COOLDOWN = 3000; // 3 seconds cooldown between redirects
+
+window.axios.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        // Only handle 401 errors
+        if (error.response && error.response.status === 401) {
+            const currentPath = window.location.pathname;
+            const now = Date.now();
+            
+            // Prevent redirect loops:
+            // 1. Don't redirect if already on login page
+            // 2. Don't redirect if already redirecting
+            // 3. Don't redirect if we just redirected recently (cooldown)
+            if (currentPath === '/login' || isRedirecting || (now - lastRedirectTime < REDIRECT_COOLDOWN)) {
+                return Promise.reject(error);
+            }
+            
+            // Skip redirect for certain endpoints if we're already authenticated (might be a temporary issue)
+            // This prevents redirect loops when the user is authenticated but a specific endpoint fails
+            const skipRedirectEndpoints = ['/user', '/project-roles/active'];
+            const shouldSkipRedirect = error.config && error.config.url && 
+                skipRedirectEndpoints.some(endpoint => error.config.url.includes(endpoint));
+            
+            if (shouldSkipRedirect) {
+                // Check if we have user data in the page props (Inertia)
+                // Inertia stores page data in window.__INERTIA__ or we can check localStorage
+                try {
+                    const inertiaData = window.__INERTIA__?.page?.props;
+                    if (inertiaData?.auth?.user) {
+                        // User is authenticated, this might be a temporary API issue or permission problem
+                        // Don't redirect, just reject the error
+                        if (!import.meta.env.PROD) {
+                            console.warn(`401 error on ${error.config.url} but user appears authenticated. Not redirecting.`);
+                        }
+                        return Promise.reject(error);
+                    }
+                } catch (e) {
+                    // If we can't check, proceed with redirect
+                }
+            }
+            
+            // Set redirect flag to prevent multiple redirects
+            isRedirecting = true;
+            lastRedirectTime = now;
+            
+            // Clear any stored auth data
+            localStorage.removeItem('dismissedNotifications');
+            
+            // Clear redirect flag after a delay to allow navigation
+            if (redirectTimeout) {
+                clearTimeout(redirectTimeout);
+            }
+            redirectTimeout = setTimeout(() => {
+                isRedirecting = false;
+            }, REDIRECT_COOLDOWN);
+            
+            // Use window.location.href for reliable redirect
+            // This ensures a full page reload which clears any state issues
+            window.location.href = '/login';
+        }
+        
+        return Promise.reject(error);
+    }
+);
