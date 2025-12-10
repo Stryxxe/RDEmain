@@ -1,9 +1,10 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import bg from '../../../assets/bg.png';
 import logo from '../../../assets/logo.png';
 import google from '../../../assets/google.png';
 
 export default function Login({ status, canResetPassword }) {
+    const { flash } = usePage().props;
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -47,9 +48,9 @@ export default function Login({ status, canResetPassword }) {
                             />
                         </div>
                         
-                        {status && (
-                            <div className="mb-4 text-sm font-medium text-green-600 text-center">
-                                {status}
+                        {(status || flash?.status) && (
+                            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded text-sm text-center">
+                                {status || flash?.status}
                             </div>
                         )}
 
@@ -94,6 +95,16 @@ export default function Login({ status, canResetPassword }) {
                                 {processing ? 'Logging in...' : 'Log In'}
                             </button>
                         </form>
+
+                        <div className="text-center mt-6">
+                            <span className="text-gray-600">Don't have an account? </span>
+                            <Link
+                                href="/register"
+                                className="text-orange-500 hover:text-orange-600 underline font-semibold transition duration-300"
+                            >
+                                Create Account
+                            </Link>
+                        </div>
                         
                         {/* Temporarily hidden */}
                         {false && (

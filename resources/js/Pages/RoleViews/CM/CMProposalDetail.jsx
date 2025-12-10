@@ -193,9 +193,7 @@ const CMProposalDetail = () => {
 
     // Dynamic timeline based on actual proposal status and endorsement status
     const getTimelineStages = () => {
-        if (!proposal || activeTimelineStages.length === 0) return [];
-
-        const statusId = proposal.statusID;
+        if (!proposal) return [];
 
         // Check for actual endorsements from the database
         const cmEndorsement = proposal.endorsements?.find(
@@ -205,44 +203,52 @@ const CMProposalDetail = () => {
             (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
         );
 
-        // Map database timeline stages to display format
-        const allStages = activeTimelineStages.map((stage, index) => ({
-            id: stage.timelineStageID,
-            name: stage.stageName,
-            description: stage.stageDescription,
+        // For Center Manager, only show 3 stages
+        // Define the 3 stages we want to show
+        const threeStages = [
+            { name: "Proposal Submitted", id: 1 },
+            { name: "College Endorsement", id: 2 },
+            { name: "R&D Division", id: 3 }
+        ];
+
+        // Map to display format
+        const allStages = threeStages.map((stage) => ({
+            id: stage.id,
+            name: stage.name,
+            description: "",
             status: "pending",
-            color: stage.color || 'blue',
-            statusName: stage.status?.statusName || null,
-            statusID: stage.statusID
+            color: 'blue',
+            statusName: null,
+            statusID: null
         }));
 
-        if (allStages.length === 0) return [];
+        // Stage 1: Proposal Submitted - always completed after submission
+        allStages[0].status = "completed";
 
-        // Determine which stage is current based on proposal's status
-        const currentStageIndex = allStages.findIndex(
-            (stage) => stage.statusID === statusId
-        );
+        // Stage 2: College Endorsement - completed if CM has endorsed
+        if (cmEndorsement) {
+            allStages[1].status = "completed";
+        } else {
+            allStages[1].status = "current";
+        }
 
-        // Update stages based on current proposal status
-        allStages.forEach((stage, index) => {
-            if (currentStageIndex === -1) {
-                // No matching status, mark first stage as current
-                if (index === 0) {
-                    stage.status = "current";
-                }
-            } else if (index < currentStageIndex) {
-                // Stages before current are completed
-                stage.status = "completed";
-            } else if (index === currentStageIndex) {
-                // Current stage
-                stage.status = "current";
-                // Check if proposal is rejected
-                if (proposal.status?.statusName?.toLowerCase().includes('reject')) {
-                    stage.status = "rejected";
-                }
+        // Stage 3: R&D Division - completed if RDD has endorsed, otherwise pending/current
+        if (rddEndorsement) {
+            allStages[2].status = "completed";
+        } else if (cmEndorsement) {
+            allStages[2].status = "current";
+        } else {
+            allStages[2].status = "pending";
+        }
+
+        // Handle rejection
+        if (proposal.status?.statusName?.toLowerCase().includes('reject')) {
+            if (cmEndorsement) {
+                allStages[2].status = "rejected";
+            } else {
+                allStages[1].status = "rejected";
             }
-            // Remaining stages stay as "pending"
-        });
+        }
 
         return allStages;
     };
@@ -506,14 +512,15 @@ const CMProposalDetail = () => {
     };
 
     const getCompletionPercentage = () => {
+        const timelineStages = getTimelineStages();
+        
+        if (!timelineStages || timelineStages.length === 0) {
+            return 0;
+        }
+        
         const completedStages = timelineStages.filter(
             (stage) => stage.status === "completed"
         ).length;
-        const currentStage = timelineStages.find(
-            (stage) => stage.status === "current"
-        )
-            ? 1
-            : 0;
         const rejectedStage = timelineStages.find(
             (stage) => stage.status === "rejected"
         )
@@ -523,10 +530,19 @@ const CMProposalDetail = () => {
         // If rejected, return 0%
         if (rejectedStage) return 0;
 
-        return Math.round(
-            ((completedStages + currentStage * 0.5) / timelineStages.length) *
-                100
-        );
+        // For Center Manager with 3 stages:
+        // Stage 1 (Proposal Submitted) = 30%
+        // Stage 2 (College Endorsement) = 67%
+        // Stage 3 (R&D Division) = 100%
+        if (completedStages === 3) {
+            return 100; // All 3 stages completed
+        } else if (completedStages === 2) {
+            return 67; // 2 stages completed (Proposal Submitted + College Endorsement)
+        } else if (completedStages === 1) {
+            return 30; // 1 stage completed (Proposal Submitted)
+        } else {
+            return 0;
+        }
     };
 
     return (
@@ -822,13 +838,6 @@ const CMProposalDetail = () => {
                                         <div className="overflow-x-auto pb-4">
                                             <div className="flex justify-between items-start relative min-w-max px-4">
                                                 {timelineStages.map((stage, index) => {
-                                            // Get date for this stage from status history
-                                            const stageEntry = statusHistory.find(
-                                                (e) => e.status === stage.name
-                                            );
-                                            const stageDate =
-                                                stageEntry?.dateObj || null;
-
                                             return (
                                                 <div
                                                     key={`timeline-stage-${stage.id}-${index}`}
@@ -894,21 +903,10 @@ const CMProposalDetail = () => {
                                                         <span
                                                             className={`text-xs sm:text-sm font-medium ${getStatusTextColor(
                                                                 stage.status
-                                                            )} leading-tight block mb-1`}
+                                                            )} leading-tight block`}
                                                         >
                                                             {stage.name}
                                                         </span>
-                                                        {stageDate && (
-                                                            <span className="text-xs text-gray-500 block">
-                                                                {stageDate.toLocaleDateString(
-                                                                    "en-US",
-                                                                    {
-                                                                        month: "short",
-                                                                        day: "numeric",
-                                                                    }
-                                                                )}
-                                                            </span>
-                                                        )}
                                                     </div>
                                                 </div>
                                             );

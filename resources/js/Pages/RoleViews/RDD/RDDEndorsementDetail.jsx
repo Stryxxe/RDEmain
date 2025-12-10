@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
 import RDDEditProposal from './RDDEditProposal';
 import { updateProposal } from '../../../services/proposalService';
 import RDDLayout from '../../../Components/Layouts/RDDLayout';
@@ -17,6 +18,7 @@ if (!window.axios) {
 
 const RDDEndorsementDetail = ({ id: proposalId }) => {
   const { user } = useAuth();
+  const { refreshAllNotifications } = useNotifications();
   const [proposal, setProposal] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -204,6 +206,10 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
       if (responseData.success) {
         const proposalTitle = fullProposal.researchTitle || fullProposal.title || 'Untitled';
         const proponentName = fullProposal.user?.fullName || fullProposal.user?.firstName + ' ' + fullProposal.user?.lastName || 'Unknown';
+        
+        // Immediately refresh notifications to show new notification
+        refreshAllNotifications();
+        
         await window.customAlert('', 'Endorsed Successfully!', 3000);
         setIsEndorsed(true);
         setEndorsementData(responseData.data);

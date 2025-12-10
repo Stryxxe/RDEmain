@@ -7,6 +7,7 @@ use App\Models\Status;
 use App\Services\ActivityService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 
 class TimelineStageController extends Controller
@@ -30,12 +31,28 @@ class TimelineStageController extends Controller
      */
     public function getActiveStages()
     {
-        $stages = TimelineStage::active()->ordered()->with('status')->get();
-        
-        return response()->json([
-            'success' => true,
-            'stages' => $stages
-        ]);
+        try {
+            // Check if timeline_stages table exists
+            if (!\Schema::hasTable('timeline_stages')) {
+                return response()->json([
+                    'success' => true,
+                    'stages' => []
+                ]);
+            }
+            
+            $stages = TimelineStage::active()->ordered()->with('status')->get();
+            
+            return response()->json([
+                'success' => true,
+                'stages' => $stages
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to fetch active timeline stages: ' . $e->getMessage());
+            return response()->json([
+                'success' => true,
+                'stages' => []
+            ]);
+        }
     }
 
     /**

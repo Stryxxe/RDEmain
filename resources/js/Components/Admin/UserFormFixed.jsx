@@ -13,6 +13,7 @@ const UserFormFixed = ({ user, onClose }) => {
     const [departments, setDepartments] = useState([]);
     const [loadingDepartments, setLoadingDepartments] = useState(true);
     const [researchCenters, setResearchCenters] = useState([]);
+    const [allResearchCenters, setAllResearchCenters] = useState([]);
     const [loadingResearchCenters, setLoadingResearchCenters] = useState(true);
     const [formData, setFormData] = useState({
         firstName: "",
@@ -47,22 +48,32 @@ const UserFormFixed = ({ user, onClose }) => {
             }
         };
 
-        const fetchResearchCenters = async () => {
+        const fetchResearchCenters = async (departmentID = null) => {
             try {
                 setLoadingResearchCenters(true);
+                const params = departmentID ? { departmentID } : {};
                 const response = await axiosInstance.get(
                     "/admin/research-centers",
                     {
+                        params,
                         headers: { Accept: "application/json" },
                         withCredentials: true,
                     }
                 );
                 if (response.data.success) {
-                    setResearchCenters(response.data.data || []);
+                    const centers = response.data.data || [];
+                    setAllResearchCenters(centers);
+                    // Filter by department if provided
+                    if (departmentID) {
+                        setResearchCenters(centers.filter(rc => String(rc.departmentID) === String(departmentID)));
+                    } else {
+                        setResearchCenters(centers);
+                    }
                 }
             } catch (error) {
                 console.error("Error fetching research centers:", error);
                 setResearchCenters([]);
+                setAllResearchCenters([]);
             } finally {
                 setLoadingResearchCenters(false);
             }
@@ -204,35 +215,45 @@ const UserFormFixed = ({ user, onClose }) => {
 
         // Auto-link logic
         if (name === "department") {
-            // When department changes, find research centers linked to this department
+            // When department changes, filter research centers for this department
             const selectedDept = departments.find(
                 (d) =>
                     (d.name || d.departmentName) === value ||
                     String(d.departmentID || d.id) === String(value)
             );
 
-            if (selectedDept && researchCenters.length > 0) {
-                // Find centers belonging to this department
-                const linkedCenter = researchCenters.find(
-                    (rc) =>
-                        String(rc.departmentID) ===
-                        String(selectedDept.departmentID || selectedDept.id)
+            if (selectedDept) {
+                const departmentID = selectedDept.departmentID || selectedDept.id;
+                // Filter research centers for this department
+                const filteredCenters = allResearchCenters.filter(
+                    (rc) => String(rc.departmentID) === String(departmentID)
                 );
-
-                if (linkedCenter) {
-                    // Auto-select the linked research center
+                setResearchCenters(filteredCenters);
+                
+                // Auto-select the first linked research center if only one exists
+                if (filteredCenters.length === 1) {
                     setFormData((prev) => ({
                         ...prev,
                         [name]: value,
-                        researchCenter:
-                            linkedCenter.name || linkedCenter.centerName,
+                        researchCenter: filteredCenters[0].name || filteredCenters[0].centerName,
+                    }));
+                    return;
+                } else if (filteredCenters.length === 0) {
+                    // Clear research center if no centers for this department
+                    setFormData((prev) => ({
+                        ...prev,
+                        [name]: value,
+                        researchCenter: "",
                     }));
                     return;
                 }
+            } else {
+                // If no department selected, show all research centers
+                setResearchCenters(allResearchCenters);
             }
         } else if (name === "researchCenter") {
             // When research center changes, auto-select its department
-            const selectedCenter = researchCenters.find(
+            const selectedCenter = allResearchCenters.find(
                 (rc) =>
                     (rc.name || rc.centerName) === value ||
                     String(rc.centerID || rc.id) === String(value)
@@ -250,6 +271,13 @@ const UserFormFixed = ({ user, onClose }) => {
                 );
 
                 if (linkedDept) {
+                    // Filter research centers for the linked department
+                    const departmentID = linkedDept.departmentID || linkedDept.id;
+                    const filteredCenters = allResearchCenters.filter(
+                        (rc) => String(rc.departmentID) === String(departmentID)
+                    );
+                    setResearchCenters(filteredCenters);
+                    
                     // Auto-select the linked department
                     setFormData((prev) => ({
                         ...prev,
@@ -505,7 +533,9 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 className={`admin-input !pl-8`}
                                             >
                                                 <option value="">
-                                                    Select a research center
+                                                    {formData.department 
+                                                        ? "Select a research center for this department"
+                                                        : "Select a research center"}
                                                 </option>
                                                 {researchCenters.map((rc) => (
                                                     <option

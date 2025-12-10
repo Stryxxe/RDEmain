@@ -446,14 +446,15 @@ const RDDProposalDetail = ({ id: proposalId }) => {
     };
 
     const getCompletionPercentage = () => {
+        const timelineStages = getTimelineStages();
+        
+        if (!timelineStages || timelineStages.length === 0) {
+            return 0;
+        }
+        
         const completedStages = timelineStages.filter(
             (stage) => stage.status === "completed"
         ).length;
-        const currentStage = timelineStages.find(
-            (stage) => stage.status === "current"
-        )
-            ? 1
-            : 0;
         const rejectedStage = timelineStages.find(
             (stage) => stage.status === "rejected"
         )
@@ -463,10 +464,19 @@ const RDDProposalDetail = ({ id: proposalId }) => {
         // If rejected, return 0%
         if (rejectedStage) return 0;
 
-        return Math.round(
-            ((completedStages + currentStage * 0.5) / timelineStages.length) *
-                100
-        );
+        // For RDD with 3 stages:
+        // Stage 1 (Proposal Submitted) = 33%
+        // Stage 2 (College Endorsement) = 67%
+        // Stage 3 (R&D Division Endorsement) = 100%
+        if (completedStages === 3) {
+            return 100; // All 3 stages completed
+        } else if (completedStages === 2) {
+            return 67; // 2 stages completed (Proposal Submitted + College Endorsement)
+        } else if (completedStages === 1) {
+            return 33; // 1 stage completed (Proposal Submitted)
+        } else {
+            return 0;
+        }
     };
 
     return (
@@ -743,13 +753,6 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                         <div className="overflow-x-auto pb-4">
                                             <div className="flex justify-between items-start relative min-w-max px-4">
                                                 {timelineStages.map((stage, index) => {
-                                            // Get date for this stage from status history
-                                            const stageEntry = statusHistory.find(
-                                                (e) => e.status === stage.name
-                                            );
-                                            const stageDate =
-                                                stageEntry?.dateObj || null;
-
                                             return (
                                                 <div
                                                     key={`timeline-stage-${stage.id}-${index}`}
@@ -784,7 +787,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                         {index <
                                                             timelineStages.length -
                                                                 1 && (
-                                                            <div className="absolute top-1/2 -translate-y-1/2 left-10 sm:left-12 w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
+                                                            <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
                                                                 <div
                                                                     className="h-full bg-green-500 transition-all duration-500"
                                                                     style={{
@@ -799,7 +802,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                         )}
                                                     </div>
 
-                                                    {/* Stage Label with Date */}
+                                                    {/* Stage Label */}
                                                     <div
                                                         className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
                                                             stage.status ===
@@ -817,21 +820,10 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                         <span
                                                             className={`text-xs sm:text-sm font-medium ${getStatusTextColor(
                                                                 stage.status
-                                                            )} leading-tight block mb-1`}
+                                                            )} leading-tight block`}
                                                         >
                                                             {stage.name}
                                                         </span>
-                                                        {stageDate && (
-                                                            <span className="text-xs text-gray-500 block">
-                                                                {stageDate.toLocaleDateString(
-                                                                    "en-US",
-                                                                    {
-                                                                        month: "short",
-                                                                        day: "numeric",
-                                                                    }
-                                                                )}
-                                                            </span>
-                                                        )}
                                                     </div>
                                                 </div>
                                             );

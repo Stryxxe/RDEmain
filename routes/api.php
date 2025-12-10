@@ -21,11 +21,87 @@ use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\SettingController;
 use App\Http\Middleware\RequestDeduplication;
 
+use App\Models\Department;
+use App\Models\ResearchCenter;
+
 Route::post('/login', [AuthenticatedSessionController::class, 'store']);
 Route::post('/logout', [AuthenticatedSessionController::class, 'destroy'])->middleware('auth:web');
 
-use App\Models\Department;
-use App\Models\ResearchCenter;
+// Public endpoints for registration (no auth required)
+Route::get('/public/departments', function () {
+    try {
+        $departments = Department::query()
+            ->orderBy('name', 'asc')
+            ->get()
+            ->map(function ($dept) {
+                return [
+                    'departmentID' => $dept->departmentID,
+                    'name' => $dept->name,
+                    'departmentName' => $dept->name,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'data' => $departments,
+        ]);
+    } catch (\Throwable $e) {
+        \Log::error('Public departments endpoint error: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load departments: ' . $e->getMessage(),
+        ], 500);
+    }
+});
+
+Route::get('/public/research-centers', function (Request $request) {
+    try {
+        $query = ResearchCenter::query();
+        
+        // Try to load department relationship, but don't fail if it doesn't exist
+        try {
+            $query->with('department');
+        } catch (\Exception $e) {
+            // Continue without the relationship if it fails
+        }
+        
+        if ($request->has('departmentID')) {
+            $query->where('departmentID', $request->integer('departmentID'));
+        }
+        
+        $centers = $query->orderBy('name', 'asc')->get()->map(function ($center) {
+            $departmentName = null;
+            try {
+                if ($center->department) {
+                    $departmentName = $center->department->name ?? null;
+                }
+            } catch (\Exception $e) {
+                // Ignore if department relationship fails
+            }
+            
+            return [
+                'centerID' => $center->centerID,
+                'name' => $center->name,
+                'centerName' => $center->name,
+                'departmentID' => $center->departmentID,
+                'departmentName' => $departmentName,
+            ];
+        });
+
+        return response()->json([
+            'success' => true,
+            'data' => $centers,
+        ]);
+    } catch (\Throwable $e) {
+        \Log::error('Public research centers endpoint error: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to load research centers: ' . $e->getMessage(),
+        ], 500);
+    }
+});
+
 use App\Models\Setting;
 use App\Models\Status;
 
@@ -214,43 +290,89 @@ Route::post('/admin/research-centers', function (Request $request) {
         'departmentID' => 'nullable|exists:departments,departmentID'
     ]);
     
-    $center = ResearchCenter::create([
-        'name' => $request->name,
-        'departmentID' => $request->departmentID
-    ]);
-    
-    // Log activity
-    ActivityService::logResearchCenterCreate($center->researchCenterID, $center->name);
-    
-    return response()->json(['success' => true, 'data' => $center]);
+    try {
+        $center = ResearchCenter::create([
+            'name' => $request->name,
+            'departmentID' => $request->departmentID
+        ]);
+        
+        // Log activity (fail gracefully if activities table doesn't exist)
+        try {
+            ActivityService::logResearchCenterCreate($center->centerID, $center->name);
+        } catch (\Exception $e) {
+            \Log::warning('Failed to log research center creation activity: ' . $e->getMessage());
+        }
+        
+        return response()->json([
+            'success' => true, 
+            'data' => [
+                'centerID' => $center->centerID,
+                'name' => $center->name,
+                'departmentID' => $center->departmentID
+            ]
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Failed to create research center: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to create research center: ' . $e->getMessage()
+        ], 500);
+    }
 })->middleware('auth:web');
 
 // Admin: Update research center
 Route::put('/admin/research-centers/{id}', function (Request $request, $id) {
-    $request->validate([
-        'name' => 'required|string|max:255',
-        'departmentID' => 'nullable|exists:departments,departmentID'
-    ]);
-    
-    $center = ResearchCenter::findOrFail($id);
-    $center->update([
-        'name' => $request->name,
-        'departmentID' => $request->departmentID
-    ]);
-    
-    return response()->json(['success' => true, 'data' => $center]);
+    try {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'departmentID' => 'nullable|exists:departments,departmentID'
+        ]);
+        
+        $center = ResearchCenter::findOrFail($id);
+        $center->update([
+            'name' => $request->name,
+            'departmentID' => $request->departmentID
+        ]);
+        
+        return response()->json([
+            'success' => true, 
+            'data' => [
+                'centerID' => $center->centerID,
+                'name' => $center->name,
+                'departmentID' => $center->departmentID
+            ]
+        ]);
+    } catch (\Exception $e) {
+        \Log::error('Failed to update research center: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to update research center: ' . $e->getMessage()
+        ], 500);
+    }
 })->middleware('auth:web');
 
 // Admin: Delete research center
 Route::delete('/admin/research-centers/{id}', function ($id) {
-    $center = ResearchCenter::findOrFail($id);
-    $centerName = $center->name;
-    $center->delete();
-    
-    // Log activity
-    ActivityService::logResearchCenterDelete($id, $centerName);
-    
-    return response()->json(['success' => true]);
+    try {
+        $center = ResearchCenter::findOrFail($id);
+        $centerName = $center->name;
+        $center->delete();
+        
+        // Log activity (fail gracefully if activities table doesn't exist)
+        try {
+            ActivityService::logResearchCenterDelete($id, $centerName);
+        } catch (\Exception $e) {
+            \Log::warning('Failed to log research center deletion activity: ' . $e->getMessage());
+        }
+        
+        return response()->json(['success' => true]);
+    } catch (\Exception $e) {
+        \Log::error('Failed to delete research center: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete research center: ' . $e->getMessage()
+        ], 500);
+    }
 })->middleware('auth:web');
 
 // Update user profile

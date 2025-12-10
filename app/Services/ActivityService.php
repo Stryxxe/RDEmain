@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Activity;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Request;
+use Illuminate\Support\Facades\Schema;
 
 class ActivityService
 {
@@ -15,18 +16,30 @@ class ActivityService
         ?int $modelId = null,
         ?array $oldValues = null,
         ?array $newValues = null
-    ): Activity {
-        return Activity::create([
-            'userID' => Auth::id(),
-            'action' => $action,
-            'description' => $description,
-            'model_type' => $modelType,
-            'model_id' => $modelId,
-            'old_values' => $oldValues,
-            'new_values' => $newValues,
-            'ip_address' => Request::ip(),
-            'user_agent' => Request::userAgent(),
-        ]);
+    ): ?Activity {
+        try {
+            // Check if activities table exists
+            if (!\Schema::hasTable('activities')) {
+                \Log::warning('Activities table does not exist. Skipping activity log.');
+                return null;
+            }
+
+            return Activity::create([
+                'userID' => Auth::id(),
+                'action' => $action,
+                'description' => $description,
+                'model_type' => $modelType,
+                'model_id' => $modelId,
+                'old_values' => $oldValues,
+                'new_values' => $newValues,
+                'ip_address' => Request::ip(),
+                'user_agent' => Request::userAgent(),
+            ]);
+        } catch (\Exception $e) {
+            // Log error but don't throw exception
+            \Log::warning('Failed to log activity: ' . $e->getMessage());
+            return null;
+        }
     }
 
     public static function logUserCreate(array $userData, int $userId): void

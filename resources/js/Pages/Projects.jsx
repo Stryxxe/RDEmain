@@ -286,9 +286,6 @@ const Projects = () => {
                     Author & Research Center
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status & Progress
-                  </th>
-                  <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Proposed Funding
                   </th>
                   <th className="px-6 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -323,20 +320,6 @@ const Projects = () => {
                           <p className="text-xs text-gray-500">
                             {project.matrixOfCompliance?.researchCenter || 'No Research Center'}
                           </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="space-y-2">
-                          <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full text-white ${getStatusColor(project.statusID)}`}>
-                            {project.status?.statusName || 'Unknown Status'}
-                          </span>
-                          <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                              className={`h-2 rounded-full ${getProgressColor(project.statusID)}`}
-                              style={{ width: `${progress}%` }}
-                            ></div>
-                          </div>
-                          <p className="text-xs text-gray-500">{progress}% complete</p>
                         </div>
                       </td>
                       <td className="px-6 py-4">

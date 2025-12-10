@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Support\Facades\Schema;
 
 class Proposal extends Model
 {
@@ -175,9 +176,17 @@ class Proposal extends Model
      */
     public static function generateCustomProposalId($userID, $researchCenter)
     {
-        // Get year from settings
-        $yearSetting = Setting::where('key', 'proposal_id_year')->first();
-        $year = $yearSetting ? $yearSetting->value : date('Y');
+        // Get year from settings (fail gracefully if settings table doesn't exist)
+        $year = date('Y');
+        try {
+            if (Schema::hasTable('settings')) {
+                $yearSetting = Setting::where('key', 'proposal_id_year')->first();
+                $year = $yearSetting ? $yearSetting->value : date('Y');
+            }
+        } catch (\Exception $e) {
+            // If settings table doesn't exist or query fails, use current year
+            \Log::warning('Failed to get year from settings, using current year: ' . $e->getMessage());
+        }
 
         // Get user's department college_idNo
         $user = User::with('department')->find($userID);

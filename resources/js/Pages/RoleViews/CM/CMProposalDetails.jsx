@@ -3,6 +3,7 @@ import { router } from '@inertiajs/react';
 import axios from 'axios';
 import PDFViewer from '../../../Components/PDFViewer';
 import { useAuth } from '../../../contexts/AuthContext';
+import { useNotifications } from '../../../contexts/NotificationContext';
 import { updateProposal } from '../../../services/proposalService';
 import Breadcrumbs from '../../../Components/Breadcrumbs';
 
@@ -15,6 +16,7 @@ if (!window.axios) {
 
 const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
   const { user } = useAuth();
+  const { refreshAllNotifications } = useNotifications();
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState(null);
   const [isEndorsing, setIsEndorsing] = useState(false);
@@ -223,6 +225,9 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         setEndorsementComments('');
         setIsEndorsed(true);
         setEndorsementData(responseData.data);
+        
+        // Immediately refresh notifications to show new notification
+        refreshAllNotifications();
         
         // Show success alert that auto-closes after 3 seconds
         window.customAlert('', 'Endorsed Successfully!', 3000);

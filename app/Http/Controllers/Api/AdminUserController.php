@@ -100,10 +100,18 @@ class AdminUserController extends Controller
             'lastName' => $validated['lastName'],
             'email' => $validated['email'],
             'password' => $password,
-            'departmentID' => $departmentID,
-            'researchCenterID' => $researchCenterID,
             'userRolesID' => $role->userRoleID,
         ];
+        
+        // Only include departmentID if it's not null
+        if ($departmentID !== null) {
+            $createData['departmentID'] = $departmentID;
+        }
+        
+        // Only include researchCenterID if it's not null
+        if ($researchCenterID !== null) {
+            $createData['researchCenterID'] = $researchCenterID;
+        }
         // Persist status if column exists
         if (Schema::hasColumn((new User())->getTable(), 'status')) {
             $createData['status'] = $validated['status'] ?? 'inactive';
@@ -115,11 +123,16 @@ class AdminUserController extends Controller
 
         $user->load(['role', 'department', 'researchCenter']);
 
-        // Log activity
-        ActivityService::logUserCreate(
-            $validated,
-            $user->userID
-        );
+        // Log activity (fail gracefully if activities table doesn't exist)
+        try {
+            ActivityService::logUserCreate(
+                $validated,
+                $user->userID
+            );
+        } catch (\Exception $e) {
+            // Log error but don't fail user creation
+            \Log::warning('Failed to log user creation activity: ' . $e->getMessage());
+        }
 
         $responseUser = $this->formatUserResponse($user, [
             'role' => $roleSlug,
@@ -375,8 +388,12 @@ class AdminUserController extends Controller
                 'college_idNo' => $validated['college_idNo'] ?? null,
             ]);
 
-            // Log activity
-            ActivityService::logDepartmentCreate($department->departmentID, $department->name);
+            // Log activity (fail gracefully if activities table doesn't exist)
+            try {
+                ActivityService::logDepartmentCreate($department->departmentID, $department->name);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log department creation activity: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -388,10 +405,11 @@ class AdminUserController extends Controller
                 ]
             ], 201);
         } catch (\Exception $e) {
+            \Log::error('Failed to create department: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create department',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred while creating the department'
             ], 500);
         }
     }
@@ -412,8 +430,12 @@ class AdminUserController extends Controller
                 'college_idNo' => $validated['college_idNo'] ?? null,
             ]);
 
-            // Log activity
-            ActivityService::logDepartmentUpdate($department->departmentID, $oldName, $department->name);
+            // Log activity (fail gracefully if activities table doesn't exist)
+            try {
+                ActivityService::logDepartmentUpdate($department->departmentID, $oldName, $department->name);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log department update activity: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -456,8 +478,12 @@ class AdminUserController extends Controller
             $departmentName = $department->name;
             $department->delete();
 
-            // Log activity
-            ActivityService::logDepartmentDelete($id, $departmentName);
+            // Log activity (fail gracefully if activities table doesn't exist)
+            try {
+                ActivityService::logDepartmentDelete($id, $departmentName);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log department deletion activity: ' . $e->getMessage());
+            }
 
             return response()->json([
                 'success' => true,
@@ -494,17 +520,44 @@ class AdminUserController extends Controller
                 $hasReviews = \DB::table('reviews')->where('reviewerID', $userId)->count() > 0;
                 $hasDecisions = \DB::table('decisions')->where('decisionMakerID', $userId)->count() > 0;
                 
-                if ($hasProposals || $hasReviews || $hasDecisions) {
+                if ($hasProposals) {
+                    // Delete proposals and all related data
+                    $proposalIds = \DB::table('proposals')->where('userID', $userId)->pluck('proposalID');
+                    
+                    foreach ($proposalIds as $proposalId) {
+                        // Delete files associated with proposals
+                        \DB::table('files')->where('proposalID', $proposalId)->delete();
+                        // Delete proposal_proponents
+                        \DB::table('proposal_proponents')->where('proposalID', $proposalId)->delete();
+                        // Delete reviews
+                        \DB::table('reviews')->where('proposalID', $proposalId)->delete();
+                        // Delete decisions
+                        \DB::table('decisions')->where('proposalID', $proposalId)->delete();
+                        // Delete endorsements
+                        \DB::table('endorsements')->where('proposalID', $proposalId)->delete();
+                        // Delete progress reports
+                        \DB::table('progress_reports')->where('proposalID', $proposalId)->delete();
+                    }
+                    
+                    // Delete the proposals
+                    \DB::table('proposals')->where('userID', $userId)->delete();
+                }
+                
+                if ($hasReviews || $hasDecisions) {
                     return response()->json([
                         'success' => false,
-                        'message' => 'Cannot delete user with existing proposals, reviews, or decisions. Please reassign or remove them first.'
+                        'message' => 'Cannot delete user with existing reviews or decisions. Please reassign or remove them first.'
                     ], 422);
                 }
 
                 // Delete related records that can be safely removed
+                \DB::table('proposal_proponents')->where('userID', $userId)->delete();
                 \DB::table('endorsements')->where('endorserID', $userId)->delete();
                 \DB::table('notifications')->where('userID', $userId)->delete();
                 \DB::table('messages')->where('senderID', $userId)->orWhere('receiverID', $userId)->delete();
+                \DB::table('reviews')->where('reviewerID', $userId)->delete();
+                \DB::table('decisions')->where('decisionMakerID', $userId)->delete();
+                \DB::table('progress_reports')->where('userID', $userId)->delete();
             } catch (\Exception $relException) {
                 // If checking relationships fails, try to delete anyway
                 \Log::warning('Could not check user relationships: ' . $relException->getMessage());

@@ -420,11 +420,14 @@ class ProposalController extends Controller
             ]);
 
             // Find ALL CMs of the same research center and notify them
-            $cmUsers = User::whereHas('role', function ($query) {
-                $query->where('userRole', 'CM');
-            })
-                ->where('researchCenterID', $user->researchCenterID)
-                ->get();
+            $cmUsers = collect([]);
+            if ($user->researchCenterID) {
+                $cmUsers = User::whereHas('role', function ($query) {
+                    $query->where('userRole', 'CM');
+                })
+                    ->where('researchCenterID', $user->researchCenterID)
+                    ->get();
+            }
 
             // Notify all CMs in the department
             foreach ($cmUsers as $cmUser) {
@@ -1411,10 +1414,15 @@ class ProposalController extends Controller
                     if ($normalizedDost === '' || $normalizedDost === null) {
                         continue;
                     }
-                    if (!isset($dost6PsMap[$normalizedDost])) {
-                        $dost6PsMap[$normalizedDost] = 0;
+                    
+                    // Map to official category (e.g., "Publication" -> "Publications")
+                    $mappedCategory = $this->mapDostValueToCategory($normalizedDost);
+                    $categoryToUse = $mappedCategory ?? $normalizedDost;
+                    
+                    if (!isset($dost6PsMap[$categoryToUse])) {
+                        $dost6PsMap[$categoryToUse] = 0;
                     }
-                    $dost6PsMap[$normalizedDost]++;
+                    $dost6PsMap[$categoryToUse]++;
                 }
             }
 

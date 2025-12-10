@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { router, usePage } from "@inertiajs/react";
 import { useAuth } from "../contexts/AuthContext";
+import { useNotifications } from "../contexts/NotificationContext";
 import FormField from "../Components/FormField";
 import AsyncProponentSelect from "../Components/AsyncProponentSelect";
 import CheckboxGroup from "../Components/CheckboxGroup";
@@ -16,6 +17,7 @@ import { useUploadSettings } from "../hooks/useUploadSettings";
 const SubmitPage = () => {
     const { user } = useAuth();
     const { props } = usePage();
+    const { refreshAllNotifications } = useNotifications();
 
     // Get user from Inertia props (more reliable than context on initial load)
     const currentUser = user || props?.auth?.user;
@@ -351,6 +353,9 @@ const SubmitPage = () => {
                     proponents: [],
                 });
                 setSubmitterProjectRoleID("");
+
+                // Immediately refresh notifications to show new notification
+                refreshAllNotifications();
 
                 // Redirect to tracker page after 2 seconds
                 setTimeout(() => {

@@ -69,8 +69,9 @@ const TrackerDetail = ({ id: propId }) => {
                 return;
             }
 
-            // Check if user is a Proponent
-            if (currentUser.role?.userRole !== "Proponent") {
+            // Check if user is a Proponent or Center Manager
+            const userRole = currentUser.role?.userRole;
+            if (userRole !== "Proponent" && userRole !== "CM") {
                 router.visit("/dashboard");
                 return;
             }
@@ -87,9 +88,10 @@ const TrackerDetail = ({ id: propId }) => {
 
     const loadProposal = async () => {
         // Validate authentication before loading
-        if (!currentUser || currentUser.role?.userRole !== "Proponent") {
+        const userRole = currentUser?.role?.userRole;
+        if (!currentUser || (userRole !== "Proponent" && userRole !== "CM")) {
             setError(
-                "You must be logged in as a Proponent to view proposal details."
+                "You must be logged in as a Proponent or Center Manager to view proposal details."
             );
             setLoading(false);
             return;
@@ -139,6 +141,7 @@ const TrackerDetail = ({ id: propId }) => {
     const getTimelineStages = () => {
         if (!proposal || timelineStages.length === 0) return [];
 
+        const userRole = currentUser?.role?.userRole;
         const statusId = proposal.statusID;
         const statusName = proposal.status?.statusName?.toLowerCase() || "";
 
@@ -154,7 +157,49 @@ const TrackerDetail = ({ id: propId }) => {
                 e.endorsementStatus === "approved"
         );
 
-        // Map database timeline stages to display format
+        // For Proponent and Center Manager, only show 3 stages
+        if (userRole === "Proponent" || userRole === "CM") {
+            // Define the 3 stages we want to show
+            const threeStages = [
+                { name: "Proposal Submitted", id: 1 },
+                { name: "College Endorsement", id: 2 },
+                { name: "R&D Division", id: 3 }
+            ];
+
+            // Map to display format
+            const allStages = threeStages.map((stage) => ({
+                id: stage.id,
+                name: stage.name,
+                description: "",
+                status: "pending",
+                color: 'blue',
+                statusName: null,
+                statusID: null
+            }));
+
+            // Stage 1: Proposal Submitted - always completed after submission
+            allStages[0].status = "completed";
+
+            // Stage 2: College Endorsement - completed if CM has endorsed
+            if (cmEndorsement) {
+                allStages[1].status = "completed";
+            } else {
+                allStages[1].status = "current";
+            }
+
+            // Stage 3: R&D Division - completed if RDD has endorsed, otherwise pending
+            if (rddEndorsement) {
+                allStages[2].status = "completed";
+            } else if (cmEndorsement) {
+                allStages[2].status = "current";
+            } else {
+                allStages[2].status = "pending";
+            }
+
+            return allStages;
+        }
+
+        // For other roles, use the original logic
         const allStages = timelineStages.map((stage, index) => ({
             id: stage.timelineStageID,
             name: stage.stageName,
@@ -258,14 +303,16 @@ const TrackerDetail = ({ id: propId }) => {
 
     const getCompletionPercentage = () => {
         const timelineStages = getTimelineStages();
+        const userRole = currentUser?.role?.userRole;
+        
+        // Return 0 if no stages are available
+        if (!timelineStages || timelineStages.length === 0) {
+            return 0;
+        }
+        
         const completedStages = timelineStages.filter(
             (stage) => stage.status === "completed"
         ).length;
-        const currentStage = timelineStages.find(
-            (stage) => stage.status === "current"
-        )
-            ? 1
-            : 0;
         const rejectedStage = timelineStages.find(
             (stage) => stage.status === "rejected"
         )
@@ -274,6 +321,29 @@ const TrackerDetail = ({ id: propId }) => {
 
         // If rejected, return 0%
         if (rejectedStage) return 0;
+
+        // For Proponent and Center Manager with 3 stages:
+        // Stage 1 (Proposal Submitted) = 30%
+        // Stage 2 (College Endorsement) = 67%
+        // Stage 3 (R&D Division) = 100%
+        if (userRole === "Proponent" || userRole === "CM") {
+            if (completedStages === 3) {
+                return 100; // All 3 stages completed
+            } else if (completedStages === 2) {
+                return 67; // 2 stages completed (Proposal Submitted + College Endorsement)
+            } else if (completedStages === 1) {
+                return 30; // 1 stage completed (Proposal Submitted)
+            } else {
+                return 0;
+            }
+        }
+
+        // For other roles, use the original calculation
+        const currentStage = timelineStages.find(
+            (stage) => stage.status === "current"
+        )
+            ? 1
+            : 0;
 
         return Math.round(
             ((completedStages + currentStage * 0.5) / timelineStages.length) *
@@ -820,13 +890,6 @@ const TrackerDetail = ({ id: propId }) => {
                                     <div className="overflow-x-auto pb-4">
                                         <div className="flex justify-between items-start relative min-w-max px-4">
                                             {timelineStages.map((stage, index) => {
-                                        // Get date for this stage from status history
-                                        const stageEntry = statusHistory.find(
-                                            (e) => e.status === stage.name
-                                        );
-                                        const stageDate =
-                                            stageEntry?.dateObj || null;
-
                                         return (
                                             <div
                                                 key={`${stage.id || stage.name}-${index}`}
@@ -923,17 +986,6 @@ const TrackerDetail = ({ id: propId }) => {
                                                     >
                                                         {stage.name}
                                                     </span>
-                                                    {stageDate &&
-                                                        (stage.status ===
-                                                            "completed" ||
-                                                            stage.status ===
-                                                                "current") && (
-                                                            <span className="text-xs text-gray-500 mt-1 block whitespace-nowrap">
-                                                                {formatDateTime(
-                                                                    stageDate
-                                                                )}
-                                                            </span>
-                                                        )}
                                                 </div>
                                             </div>
                                         );

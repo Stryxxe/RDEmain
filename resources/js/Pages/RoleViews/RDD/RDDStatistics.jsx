@@ -121,7 +121,7 @@ const RDDStatistics = () => {
         "Patent",
         "Product",
         "People Services",
-        "Places and Partner",
+        "Places and Partnership",
         "Policies"
     ];
 

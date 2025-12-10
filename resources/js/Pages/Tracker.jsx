@@ -415,10 +415,9 @@ const Tracker = () => {
             <div className="p-6">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+                    <div className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
                         <div>Research Title</div>
                         <div>Author & College</div>
-                        <div>Status & Progress</div>
                         <div>Proposed Funding</div>
                         <div>Details</div>
                     </div>
@@ -433,7 +432,7 @@ const Tracker = () => {
                             sortedProposals.map((proposal, index) => (
                                 <div
                                     key={proposal.proposalID}
-                                    className="grid grid-cols-[2fr_1fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
+                                    className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
                                 >
                                     {/* Research Title */}
                                     <div>
@@ -472,39 +471,6 @@ const Tracker = () => {
                                         </div>
                                         <div className="text-sm text-gray-600">
                                             {proposal.researchCenter}
-                                        </div>
-                                    </div>
-
-                                    {/* Status & Progress */}
-                                    <div>
-                                        <div className="mb-2">
-                                            <span
-                                                className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusClass(
-                                                    proposal.status?.statusName
-                                                )}`}
-                                            >
-                                                {proposal.status?.statusName ||
-                                                    "Unknown"}
-                                            </span>
-                                        </div>
-                                        <div className="mb-1">
-                                            <div className="w-full bg-gray-200 rounded-full h-2">
-                                                <div
-                                                    className={`h-2 rounded-full ${getProgressColor(
-                                                        proposal.status
-                                                            ?.statusName
-                                                    )} transition-all duration-300`}
-                                                    style={{
-                                                        width: `${getProgressPercentage(
-                                                            proposal
-                                                        )}%`,
-                                                    }}
-                                                ></div>
-                                            </div>
-                                        </div>
-                                        <div className="text-xs text-gray-600">
-                                            {getProgressPercentage(proposal)}%
-                                            complete
                                         </div>
                                     </div>
 
