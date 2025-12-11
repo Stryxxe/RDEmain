@@ -36,7 +36,7 @@ export default function Login({ status, canResetPassword }) {
                     if (window.customAlert) {
                         await window.customAlert(
                             'Your account is currently pending for approval. You will be able to log in once an administrator activates your account. Please contact the administrator if you have any questions.',
-                            'Account Pending Approval'
+                            'Notification'
                         );
                     } else {
                         alert('Your account is currently pending for approval. You will be able to log in once an administrator activates your account.');

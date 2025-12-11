@@ -1,4 +1,4 @@
-import { Send, FileText, FolderOpen, Clock, RefreshCcw } from 'lucide-react';
+import { Send, FileText, FolderOpen, Clock, RefreshCcw, Upload } from 'lucide-react';
 import { Link, usePage } from '@inertiajs/react';
 
 const Sidebar = () => {
@@ -13,18 +13,26 @@ const Sidebar = () => {
     if (path === '/proponent/submit') {
       return url === '/proponent/submit' || url === '/proponent' || url === '/proponent/';
     }
+    // For revision, match exact path or paths starting with /proponent/revision/
+    if (path === '/proponent/revision') {
+      return url === '/proponent/revision' || url.startsWith('/proponent/revision/');
+    }
+    // For submit-report, match exact path
+    if (path === '/proponent/submit-report') {
+      return url === '/proponent/submit-report' || url.startsWith('/proponent/submit-report/');
+    }
     // For other paths, match exact path or paths starting with path + /
     return url === path || url.startsWith(path + '/');
   };
 
   return (
-    <div className="w-64 bg-red-900 text-white fixed h-full top-5 left-0 z-30">
-      <nav className="pt-20 pb-6 h-full flex flex-col">
+    <div className="w-64 bg-red-900 text-white fixed h-full top-0 left-0 z-30" style={{ paddingTop: '92px' }}>
+      <nav className="pb-6 h-full flex flex-col overflow-y-auto">
         <ul className="space-y-2 px-4 flex-1">
           <li>
             <Link 
               href="/proponent/submit" 
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
                 isActive('/proponent/submit') 
                   ? 'bg-white text-red-800 font-semibold' 
                   : 'text-white hover:bg-red-700'
@@ -37,7 +45,7 @@ const Sidebar = () => {
           <li>
             <Link 
               href="/proponent/tracker" 
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
                 isActive('/proponent/tracker') 
                   ? 'bg-white text-red-800 font-semibold' 
                   : 'text-white hover:bg-red-700'
@@ -50,7 +58,7 @@ const Sidebar = () => {
           <li>
             <Link 
               href="/proponent/revision" 
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
                 isActive('/proponent/revision') 
                   ? 'bg-white text-red-800 font-semibold' 
                   : 'text-white hover:bg-red-700'
@@ -62,8 +70,21 @@ const Sidebar = () => {
           </li>
           <li>
             <Link 
+              href="/proponent/submit-report" 
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
+                isActive('/proponent/submit-report') 
+                  ? 'bg-white text-red-800 font-semibold' 
+                  : 'text-white hover:bg-red-700'
+              }`}
+            >
+              <Upload size={20} />
+              <span className="text-base">Submit Report</span>
+            </Link>
+          </li>
+          <li>
+            <Link 
               href="/proponent/resources" 
-              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+              className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
                 isActive('/proponent/resources') 
                   ? 'bg-white text-red-800 font-semibold' 
                   : 'text-white hover:bg-red-700'

@@ -69,13 +69,19 @@ const RDDStatistics = () => {
             setLoading(true);
             setError(null);
             const response = await rddService.getRddAnalytics(selectedCenter, null);
+            console.log("🔍 [RDD Statistics] Full API Response:", response);
             if (response.success) {
+                console.log("✅ [RDD Statistics] Response successful");
+                console.log("📊 [RDD Statistics] Analytics Data:", response.data);
+                console.log("📋 [RDD Statistics] RDE Agenda Data:", response.data.rdeAgenda);
+                console.log("📋 [RDD Statistics] RDE Agenda Count:", response.data.rdeAgenda?.length || 0);
                 setAnalyticsData(response.data);
             } else {
+                console.error("❌ [RDD Statistics] Response failed:", response);
                 setError("Failed to fetch analytics data");
             }
         } catch (err) {
-            console.error("Error fetching analytics data:", err);
+            console.error("❌ [RDD Statistics] Error fetching analytics data:", err);
             setError("Error loading analytics data");
         } finally {
             setLoading(false);
@@ -84,9 +90,9 @@ const RDDStatistics = () => {
 
     const { overview, rdeAgenda, dost6Ps, sdg } = analyticsData;
 
-    // Complete RDE Agenda list
+    // Complete RDE Agenda list (must match backend exactly)
     const allRdeAgenda = [
-        "Agriculture, Aquatic, and Natural Resources",
+        "Agriculture, Aquatic, and Agro-Forestry",
         "Business and Trade",
         "Social Sciences and Education",
         "Engineering and Technology",
@@ -105,11 +111,31 @@ const RDDStatistics = () => {
         "Policies"
     ];
 
+    // Log raw RDE Agenda data
+    console.log("🔍 [RDD Statistics] Raw rdeAgenda from analyticsData:", rdeAgenda);
+    console.log("🔍 [RDD Statistics] rdeAgenda type:", typeof rdeAgenda, Array.isArray(rdeAgenda));
+    console.log("🔍 [RDD Statistics] rdeAgenda length:", rdeAgenda?.length || 0);
+
     // Merge API data with complete lists to show all items
     const rdeAgendaToShow = allRdeAgenda.map(name => {
-        const apiItem = rdeAgenda.find(item => item.name === name);
-        return apiItem || { name, ongoing: 0, completed: 0, total: 0 };
+        const apiItem = rdeAgenda.find(item => {
+            const match = item.name === name;
+            if (!match && item.name) {
+                console.log(`⚠️ [RDD Statistics] Name mismatch - Looking for: "${name}", Found: "${item.name}"`);
+            }
+            return match;
+        });
+        const result = apiItem || { name, ongoing: 0, completed: 0, total: 0 };
+        if (apiItem) {
+            console.log(`✅ [RDD Statistics] Found agenda: "${name}"`, apiItem);
+        } else {
+            console.log(`❌ [RDD Statistics] No data for agenda: "${name}"`);
+        }
+        return result;
     });
+
+    console.log("📊 [RDD Statistics] Final rdeAgendaToShow:", rdeAgendaToShow);
+    console.log("📊 [RDD Statistics] rdeAgendaToShow with data:", rdeAgendaToShow.filter(item => item.total > 0 || item.ongoing > 0 || item.completed > 0));
 
     const dost6PsToShow = allDost6Ps.map(name => {
         const apiItem = dost6Ps.find(item => item.name === name);

@@ -435,8 +435,9 @@ export default function Register() {
                                                 value={data.department}
                                                 onChange={handleDepartmentChange}
                                                 className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
+                                                required
                                             >
-                                                <option value="">Select Department</option>
+                                                <option value="">Select Department *</option>
                                                 {departments.map((dept) => (
                                                     <option
                                                         key={dept.departmentID || dept.id}

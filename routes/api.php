@@ -351,6 +351,66 @@ Route::put('/admin/research-centers/{id}', function (Request $request, $id) {
     }
 })->middleware('auth:web');
 
+// Admin: Bulk delete research centers
+Route::post('/admin/research-centers/bulk-delete', function (Request $request) {
+    try {
+        $validated = $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'integer|exists:research_centers,centerID'
+        ]);
+
+        $ids = $validated['ids'];
+        $deletedCount = 0;
+        $errors = [];
+
+        foreach ($ids as $id) {
+            try {
+                $center = ResearchCenter::findOrFail($id);
+                $centerName = $center->name;
+                
+                // Check if research center has users
+                if ($center->users()->count() > 0) {
+                    $errors[] = "Cannot delete research center '{$centerName}' - it has assigned users";
+                    continue;
+                }
+                
+                $center->delete();
+                $deletedCount++;
+                
+                // Log activity (fail gracefully if activities table doesn't exist)
+                try {
+                    ActivityService::logResearchCenterDelete($id, $centerName);
+                } catch (\Exception $e) {
+                    \Log::warning('Failed to log research center deletion activity: ' . $e->getMessage());
+                }
+            } catch (\Exception $e) {
+                $errors[] = "Failed to delete research center ID {$id}: " . $e->getMessage();
+            }
+        }
+
+        if ($deletedCount > 0) {
+            return response()->json([
+                'success' => true,
+                'message' => "Successfully deleted {$deletedCount} research center(s)",
+                'deletedCount' => $deletedCount,
+                'errors' => $errors
+            ]);
+        } else {
+            return response()->json([
+                'success' => false,
+                'message' => 'No research centers were deleted',
+                'errors' => $errors
+            ], 422);
+        }
+    } catch (\Exception $e) {
+        \Log::error('Failed to bulk delete research centers: ' . $e->getMessage());
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to delete research centers: ' . $e->getMessage()
+        ], 500);
+    }
+})->middleware('auth:web');
+
 // Admin: Delete research center
 Route::delete('/admin/research-centers/{id}', function ($id) {
     try {
@@ -961,8 +1021,10 @@ Route::middleware(['auth:web'])->group(function () {
     // Department management
     Route::get('/admin/departments', [AdminUserController::class, 'getDepartments']);
     Route::post('/admin/departments', [AdminUserController::class, 'storeDepartment']);
+    Route::post('/admin/departments/bulk-delete', [AdminUserController::class, 'bulkDeleteDepartments']);
     Route::put('/admin/departments/{id}', [AdminUserController::class, 'updateDepartment']);
     Route::delete('/admin/departments/{id}', [AdminUserController::class, 'destroyDepartment']);
+    Route::delete('/admin/departments/{id}/force', [AdminUserController::class, 'forceDeleteDepartment']);
     
     // Template management - Proponent templates
     Route::get('/admin/templates/proponent', function (Request $request) {

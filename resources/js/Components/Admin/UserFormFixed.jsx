@@ -221,6 +221,19 @@ const UserFormFixed = ({ user, onClose }) => {
     const handleChange = (e) => {
         const { name, value } = e.target;
 
+        // If role changes to RDD, clear department and research center
+        if (name === "role" && value === "rdd") {
+            setFormData((prev) => ({
+                ...prev,
+                [name]: value,
+                department: "",
+                researchCenter: "",
+            }));
+            if (errors.department) setErrors((prev) => ({ ...prev, department: "" }));
+            if (errors.researchCenter) setErrors((prev) => ({ ...prev, researchCenter: "" }));
+            return;
+        }
+
         // Auto-link logic
         if (name === "department") {
             // When department changes, filter research centers for this department
@@ -455,6 +468,34 @@ const UserFormFixed = ({ user, onClose }) => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                                        Role *
+                                    </label>
+                                    <select
+                                        name="role"
+                                        value={formData.role}
+                                        onChange={handleChange}
+                                        className={`admin-input ${
+                                            errors.role ? "border-red-500" : ""
+                                        }`}
+                                    >
+                                        <option value="">Select a role</option>
+                                        <option value="admin">Admin</option>
+                                        <option value="proponent">
+                                            Proponent
+                                        </option>
+                                        <option value="central_manager">
+                                            Center Manager
+                                        </option>
+                                        <option value="rdd">RDD</option>
+                                    </select>
+                                    {errors.role && (
+                                        <p className="mt-1 text-sm text-red-600">
+                                            {errors.role}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
                                         Department
                                     </label>
                                     <div className="relative">
@@ -479,9 +520,14 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 name="department"
                                                 value={formData.department}
                                                 onChange={handleChange}
+                                                disabled={formData.role === "rdd"}
                                                 className={`admin-input !pl-8 ${
                                                     errors.department
                                                         ? "border-red-500"
+                                                        : ""
+                                                } ${
+                                                    formData.role === "rdd"
+                                                        ? "bg-gray-100 cursor-not-allowed opacity-60"
                                                         : ""
                                                 }`}
                                             >
@@ -507,9 +553,14 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 name="department"
                                                 value={formData.department}
                                                 onChange={handleChange}
+                                                disabled={formData.role === "rdd"}
                                                 className={`admin-input pl-14 placeholder-gray-400 ${
                                                     errors.department
                                                         ? "border-red-500"
+                                                        : ""
+                                                } ${
+                                                    formData.role === "rdd"
+                                                        ? "bg-gray-100 cursor-not-allowed opacity-60"
                                                         : ""
                                                 }`}
                                                 placeholder="Enter department"
@@ -544,12 +595,12 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 name="researchCenter"
                                                 value={formData.researchCenter || ''}
                                                 onChange={handleChange}
+                                                disabled={formData.role === "rdd" || !formData.department}
                                                 className={`admin-input !pl-8 ${
-                                                    !formData.department 
+                                                    formData.role === "rdd" || !formData.department
                                                         ? 'bg-gray-100 cursor-not-allowed opacity-60' 
                                                         : ''
                                                 }`}
-                                                disabled={!formData.department}
                                             >
                                                 <option value="">
                                                     {formData.department 
@@ -577,69 +628,16 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 name="researchCenter"
                                                 value={formData.researchCenter || ''}
                                                 onChange={handleChange}
+                                                disabled={formData.role === "rdd" || !formData.department}
                                                 className={`admin-input pl-14 placeholder-gray-400 ${
-                                                    !formData.department 
+                                                    formData.role === "rdd" || !formData.department
                                                         ? 'bg-gray-100 cursor-not-allowed opacity-60' 
                                                         : ''
                                                 }`}
                                                 placeholder={formData.department ? "Enter research center" : "Select Department first"}
-                                                disabled={!formData.department}
                                             />
                                         )}
                                     </div>
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                        Role *
-                                    </label>
-                                    <select
-                                        name="role"
-                                        value={formData.role}
-                                        onChange={handleChange}
-                                        className={`admin-input ${
-                                            errors.role ? "border-red-500" : ""
-                                        }`}
-                                    >
-                                        <option value="">Select a role</option>
-                                        <option value="admin">Admin</option>
-                                        <option value="proponent">
-                                            Proponent
-                                        </option>
-                                        <option value="central_manager">
-                                            Center Manager
-                                        </option>
-                                        <option value="rdd">RDD</option>
-                                        <option value="rde">RDE</option>
-                                        <option value="op">OP</option>
-                                        <option value="osuoro">OSUORO</option>
-                                    </select>
-                                    {errors.role && (
-                                        <p className="mt-1 text-sm text-red-600">
-                                            {errors.role}
-                                        </p>
-                                    )}
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                        Status *
-                                    </label>
-                                    <select
-                                        name="status"
-                                        value={formData.status}
-                                        onChange={handleChange}
-                                        className={`admin-input ${
-                                            errors.status ? "border-red-500" : ""
-                                        }`}
-                                    >
-                                        <option value="pending">Pending</option>
-                                        <option value="active">Active</option>
-                                        <option value="inactive">Inactive</option>
-                                    </select>
-                                    {errors.status && (
-                                        <p className="mt-1 text-sm text-red-600">
-                                            {errors.status}
-                                        </p>
-                                    )}
                                 </div>
                             </div>
                         </div>

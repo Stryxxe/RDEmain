@@ -684,8 +684,8 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
                 <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-8 place-items-center">
-                <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2 md:col-start-2">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2 md:col-start-1">
                   <div className="flex items-center justify-between mb-2">
                     <h4 className="text-base font-bold text-red-900">Main Document</h4>
                     <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">

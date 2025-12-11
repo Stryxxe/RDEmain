@@ -213,14 +213,14 @@ const RDDProposalDetail = ({ id: proposalId }) => {
         switch (statusId) {
             case 1: // Under Review - Proposal submitted, waiting for College Endorsement
                 allStages[0].status = "completed"; // Proposal Submitted
-                // If CM endorsed, College Endorsement is completed and R&D is current
+                // If CM endorsed, College Endorsement is completed and R&D is pending
                 if (hasCmEndorsement) {
                     allStages[1].status = "completed"; // College Endorsement completed
                     // If RDD also endorsed, R&D Division is completed
                     if (hasRddEndorsement) {
                         allStages[2].status = "completed"; // R&D Division completed
                     } else {
-                        allStages[2].status = "current"; // R&D Division current
+                        allStages[2].status = "pending"; // R&D Division pending (light gray)
                     }
                 } else {
                     allStages[1].status = "current"; // College Endorsement current
@@ -251,7 +251,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                 allStages[0].status = "completed";
                 if (hasCmEndorsement) {
                     allStages[1].status = "completed";
-                    allStages[2].status = hasRddEndorsement ? "completed" : "current";
+                    allStages[2].status = hasRddEndorsement ? "completed" : "pending";
                 } else {
                     allStages[1].status = "current";
                 }
@@ -407,7 +407,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
             case "completed":
                 return "bg-green-500";
             case "current":
-                return "bg-red-600";
+                return "bg-blue-500";
             case "rejected":
                 return "bg-red-500";
             case "pending":
@@ -422,7 +422,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
             case "completed":
                 return "text-green-600";
             case "current":
-                return "text-red-600";
+                return "text-gray-700";
             case "rejected":
                 return "text-red-600";
             case "pending":
@@ -758,12 +758,12 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                     key={`timeline-stage-${stage.id}-${index}`}
                                                     className="flex flex-col items-center relative mx-4 sm:mx-8"
                                                 >
-                                                    {/* Stage Dot with Connecting Line */}
+                                                    {/* Stage Dot */}
                                                     <div className="relative">
                                                         <div
                                                             className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(
                                                                 stage.status
-                                                            )} mb-4 relative z-10`}
+                                                            )} mb-4 relative z-10 flex-shrink-0`}
                                                         >
                                                             {stage.status ===
                                                                 "completed" && (
@@ -783,21 +783,28 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                             )}
                                                         </div>
 
-                                                        {/* Connecting Line */}
+                                                        {/* Connecting Chevron - Centered between circles */}
                                                         {index <
                                                             timelineStages.length -
                                                                 1 && (
-                                                            <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
-                                                                <div
-                                                                    className="h-full bg-green-500 transition-all duration-500"
-                                                                    style={{
-                                                                        width:
-                                                                            stage.status ===
-                                                                            "completed"
-                                                                                ? "100%"
-                                                                                : "0%",
-                                                                    }}
-                                                                ></div>
+                                                            <div className="absolute top-[20px] sm:top-[24px] left-[calc(100%+1rem)] sm:left-[calc(100%+2rem)] z-0 -translate-x-1/2">
+                                                                <svg
+                                                                    className={`w-6 h-6 sm:w-8 sm:h-8 ${
+                                                                        stage.status === "completed"
+                                                                            ? "text-green-500"
+                                                                            : "text-gray-300"
+                                                                    }`}
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={2}
+                                                                        d="M9 5l7 7-7 7"
+                                                                    />
+                                                                </svg>
                                                             </div>
                                                         )}
                                                     </div>
@@ -807,20 +814,22 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                         className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
                                                             stage.status ===
                                                             "current"
-                                                                ? "bg-blue-50 border border-blue-200"
+                                                                ? "bg-blue-500 border border-blue-600"
                                                                 : stage.status ===
                                                                   "completed"
                                                                 ? "bg-green-50 border border-green-200"
                                                                 : stage.status ===
                                                                   "rejected"
                                                                 ? "bg-red-50 border border-red-200"
-                                                                : "bg-gray-50 border border-gray-200"
+                                                                : "bg-gray-100 border border-gray-300"
                                                         }`}
                                                     >
                                                         <span
-                                                            className={`text-xs sm:text-sm font-medium ${getStatusTextColor(
-                                                                stage.status
-                                                            )} leading-tight block`}
+                                                            className={`text-xs sm:text-sm font-medium ${
+                                                                stage.status === "current"
+                                                                    ? "text-white"
+                                                                    : getStatusTextColor(stage.status)
+                                                            } leading-tight block`}
                                                         >
                                                             {stage.name}
                                                         </span>
@@ -973,8 +982,8 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                         <h3 className="text-2xl font-bold text-gray-900">Research Paper</h3>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-4 gap-8 place-items-center">
-                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2 md:col-start-2">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2">
                           <div className="flex items-center justify-between mb-2">
                             <h4 className="text-base font-bold text-red-900">Main Document</h4>
                             <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">

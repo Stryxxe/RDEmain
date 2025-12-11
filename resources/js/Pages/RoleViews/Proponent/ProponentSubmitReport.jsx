@@ -4,7 +4,6 @@ import { usePage } from "@inertiajs/react";
 import SubmitProgressReport from "../../../Components/SubmitProgressReport";
 import SearchableSelect from "../../../Components/SearchableSelect";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
-import AppLayout from "../../../Components/Layouts/AppLayout";
 import axios from "axios";
 
 // Use window.axios which has session-based auth configured
@@ -150,9 +149,7 @@ const ProponentSubmitReport = () => {
 };
 
 ProponentSubmitReport.layout = (page) => (
-    <AppLayout>
-        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
-    </AppLayout>
+    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
 );
 
 export default ProponentSubmitReport;

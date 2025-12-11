@@ -1,7 +1,7 @@
 import React, { useMemo } from "react";
 import { Link, usePage } from "@inertiajs/react";
 import { getRoleConfig } from "../../config/roleConfigs";
-import { getUserRole } from "../../utils/roleHelpers";
+import { getUserRole, normalizeRoleForRoute } from "../../utils/roleHelpers";
 import {
     Search,
     FileText,
@@ -107,17 +107,26 @@ const RoleBasedNavigation = ({ role: propRole, className = "" }) => {
         );
     }, [config.routes]);
 
+    // Normalize role for route construction
+    const normalizedRolePath = normalizeRoleForRoute(normalizedRole) || normalizedRole?.toLowerCase() || '';
+
     return (
         <nav className={`flex flex-col ${className}`}>
             {navigationRoutes.map((route) => {
-                // Construct the full path with role prefix using the actual role from user
-                const rolePath = `/${role.toLowerCase()}`;
+                // Construct the full path with role prefix using normalized role
+                const rolePath = `/${normalizedRolePath}`;
                 const fullPath =
                     route.path === "" ? rolePath : `${rolePath}/${route.path}`;
+                
+                // Enhanced active state checking
                 const isActive =
                     url === fullPath ||
+                    url === `${fullPath}/` ||
                     (route.path === "" &&
-                        (url === rolePath || url === `${rolePath}/`));
+                        (url === rolePath || url === `${rolePath}/`)) ||
+                    (route.path === 'tracker' && url.startsWith(`${rolePath}/tracker`)) ||
+                    (route.path === 'revision' && url.startsWith(`${rolePath}/revision`)) ||
+                    (route.path === 'submit-report' && url.startsWith(`${rolePath}/submit-report`));
 
                 return (
                     <Link

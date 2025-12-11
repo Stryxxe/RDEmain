@@ -39,15 +39,19 @@ class AdminUserSeeder extends Seeder
             'password' => Hash::make('admin123'), // Default password - change after first login
             'departmentID' => $itDepartment->departmentID,
             'userRolesID' => $adminRole->userRoleID,
+            'status' => 'active', // Admin users should always be active
         ];
 
         // Check if admin user already exists
         $existingAdmin = User::where('email', $adminData['email'])->first();
         
         if ($existingAdmin) {
+            // Update existing admin to ensure status is active
+            $existingAdmin->update(['status' => 'active']);
             $this->command->warn("Admin user with email {$adminData['email']} already exists!");
             $this->command->info("User ID: {$existingAdmin->userID}");
             $this->command->info("Name: {$existingAdmin->fullName}");
+            $this->command->info("Status updated to: active");
             return;
         }
 

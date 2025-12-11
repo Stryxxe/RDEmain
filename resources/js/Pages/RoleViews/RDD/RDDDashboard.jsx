@@ -418,7 +418,7 @@ const RDDDashboard = () => {
                         <div>Project Details</div>
                         <div>Author & Research Center</div>
                         <div>Proposed Funding</div>
-                        <div>Details</div>
+                        <div className="text-center">Details</div>
                     </div>
 
                     {/* Table Body */}
@@ -465,7 +465,7 @@ const RDDDashboard = () => {
                                 </div>
 
                                 {/* Actions */}
-                                <div className="flex items-center">
+                                <div className="flex items-center justify-center">
                                     <button 
                                         onClick={() => router.visit(`/rdd/proposal/${research.id}`)}
                                         className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"

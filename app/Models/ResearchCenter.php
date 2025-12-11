@@ -20,4 +20,9 @@ class ResearchCenter extends Model
     {
         return $this->belongsTo(Department::class, 'departmentID', 'departmentID');
     }
+
+    public function users()
+    {
+        return $this->hasMany(User::class, 'researchCenterID', 'centerID');
+    }
 }

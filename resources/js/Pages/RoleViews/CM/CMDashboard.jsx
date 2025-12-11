@@ -495,7 +495,7 @@ const CMDashboard = () => {
                         <div>Research Title</div>
                         <div>Author & College</div>
                         <div>Proposed Funding</div>
-                        <div>Details</div>
+                        <div className="text-center">Details</div>
                     </div>
 
                     {/* Table Body */}
@@ -530,18 +530,20 @@ const CMDashboard = () => {
                                     className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
                                 >
                                     {/* Research Title */}
-                                    <div>
-                                        <Link
-                                            href={`/cm/proposal/${proposal.proposalID}`}
-                                            className="font-bold text-gray-900 mb-1 hover:text-blue-600 transition-colors duration-200 cursor-pointer block flex items-center gap-2"
+                                    <div style={{ pointerEvents: 'auto' }}>
+                                        <div 
+                                            className="font-bold text-gray-900 mb-1 flex items-center gap-2"
+                                            style={{ pointerEvents: 'none', cursor: 'default', userSelect: 'text' }}
+                                            onClick={(e) => e.preventDefault()}
+                                            onMouseDown={(e) => e.preventDefault()}
                                         >
-                                            <span>{proposal.researchTitle}</span>
+                                            <span style={{ pointerEvents: 'none', cursor: 'default' }}>{proposal.researchTitle}</span>
                                             {proposal.statusID === 1 && proposal.revisionHistory && proposal.revisionHistory.length > 0 && (
                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
                                                     Revised
                                                 </span>
                                             )}
-                                        </Link>
+                                        </div>
                                         <div className="text-sm text-gray-600">
                                             ID: {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
                                         </div>
@@ -578,7 +580,7 @@ const CMDashboard = () => {
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex items-center">
+                                    <div className="flex items-center justify-center">
                                         <Link
                                             href={`/cm/proposal/${proposal.proposalID}`}
                                         >

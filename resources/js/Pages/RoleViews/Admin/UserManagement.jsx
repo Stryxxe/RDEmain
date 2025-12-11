@@ -405,9 +405,6 @@ const UserManagement = () => {
                                 Center Manager
                             </option>
                             <option value="rdd">RDD</option>
-                            <option value="rde">RDE</option>
-                            <option value="op">OP</option>
-                            <option value="osuoro">OSUORO</option>
                         </select>
                     </div>
 

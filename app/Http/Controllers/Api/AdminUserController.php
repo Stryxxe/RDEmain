@@ -562,6 +562,118 @@ class AdminUserController extends Controller
         }
     }
 
+    public function forceDeleteDepartment($id)
+    {
+        try {
+            $department = Department::findOrFail($id);
+            $departmentName = $department->name;
+            
+            // Get counts before deletion for reporting
+            $usersCount = $department->users()->count();
+            $researchCentersCount = $department->researchCenters()->count();
+            
+            // Remove department assignments from users (set to null)
+            $department->users()->update(['departmentID' => null]);
+            
+            // Remove department assignments from research centers (set to null)
+            $department->researchCenters()->update(['departmentID' => null]);
+            
+            // Now delete the department
+            $department->delete();
+
+            // Log activity (fail gracefully if activities table doesn't exist)
+            try {
+                ActivityService::logDepartmentDelete($id, $departmentName);
+            } catch (\Exception $e) {
+                \Log::warning('Failed to log department deletion activity: ' . $e->getMessage());
+            }
+
+            $message = "Department '{$departmentName}' force deleted successfully.";
+            if ($usersCount > 0 || $researchCentersCount > 0) {
+                $message .= " Removed department assignments from {$usersCount} user(s) and {$researchCentersCount} research center(s).";
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $message,
+                'usersAffected' => $usersCount,
+                'researchCentersAffected' => $researchCentersCount
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to force delete department: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to force delete department',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function bulkDeleteDepartments(Request $request)
+    {
+        try {
+            $validated = $request->validate([
+                'ids' => 'required|array',
+                'ids.*' => 'integer|exists:departments,departmentID'
+            ]);
+
+            $ids = $validated['ids'];
+            $deletedCount = 0;
+            $errors = [];
+
+            foreach ($ids as $id) {
+                try {
+                    $department = Department::findOrFail($id);
+                    
+                    // Check if department has users or research centers
+                    if ($department->users()->count() > 0) {
+                        $errors[] = "Cannot delete department '{$department->name}' - it has assigned users";
+                        continue;
+                    }
+
+                    if ($department->researchCenters()->count() > 0) {
+                        $errors[] = "Cannot delete department '{$department->name}' - it has assigned research centers";
+                        continue;
+                    }
+
+                    $departmentName = $department->name;
+                    $department->delete();
+                    $deletedCount++;
+
+                    // Log activity (fail gracefully if activities table doesn't exist)
+                    try {
+                        ActivityService::logDepartmentDelete($id, $departmentName);
+                    } catch (\Exception $e) {
+                        \Log::warning('Failed to log department deletion activity: ' . $e->getMessage());
+                    }
+                } catch (\Exception $e) {
+                    $errors[] = "Failed to delete department ID {$id}: " . $e->getMessage();
+                }
+            }
+
+            if ($deletedCount > 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => "Successfully deleted {$deletedCount} department(s)",
+                    'deletedCount' => $deletedCount,
+                    'errors' => $errors
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No departments were deleted',
+                    'errors' => $errors
+                ], 422);
+            }
+        } catch (\Exception $e) {
+            \Log::error('Failed to bulk delete departments: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete departments: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
     public function destroy($userId)
     {
         try {

@@ -52,6 +52,7 @@ const SystemSettings = () => {
     const [deptLoading, setDeptLoading] = useState(false);
     const [deptForm, setDeptForm] = useState({ id: null, name: "" });
     const [deptErrors, setDeptErrors] = useState("");
+    const [selectedDepartments, setSelectedDepartments] = useState([]);
     
     // Research Centers
     const [researchCenters, setResearchCenters] = useState([]);
@@ -60,6 +61,7 @@ const SystemSettings = () => {
     const [centerLoading, setCenterLoading] = useState(false);
     const [centerForm, setCenterForm] = useState({ id: null, name: "", departmentID: "" });
     const [centerErrors, setCenterErrors] = useState("");
+    const [selectedResearchCenters, setSelectedResearchCenters] = useState([]);
     
     // Document Templates - Separate for Proponent and General
     const [proponentTemplates, setProponentTemplates] = useState([]);
@@ -605,12 +607,69 @@ const SystemSettings = () => {
                 withCredentials: true,
             });
             await fetchDepartments();
+            setSelectedDepartments([]);
         } catch (e) {
             console.error("Delete department failed", e?.response?.data || e?.message || e);
             const errorMessage = e?.response?.data?.message || "Unable to delete department";
             alert(errorMessage);
         } finally {
             setDeptLoading(false);
+        }
+    };
+
+    const bulkDeleteDepartments = async () => {
+        if (selectedDepartments.length === 0) return;
+        const confirmed = await window.customConfirm(
+            `Delete ${selectedDepartments.length} selected department(s)?`,
+            "Confirm Bulk Deletion"
+        );
+        if (!confirmed) return;
+        try {
+            setDeptLoading(true);
+            await axiosInstance.post('/admin/departments/bulk-delete', {
+                ids: selectedDepartments
+            }, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            await fetchDepartments();
+            setSelectedDepartments([]);
+        } catch (e) {
+            console.error("Bulk delete departments failed", e?.response?.data || e?.message || e);
+            const errorMessage = e?.response?.data?.message || "Unable to delete departments";
+            alert(errorMessage);
+        } finally {
+            setDeptLoading(false);
+        }
+    };
+
+    const toggleDepartmentSelection = (id) => {
+        setSelectedDepartments(prev => 
+            prev.includes(id) 
+                ? prev.filter(selectedId => selectedId !== id)
+                : [...prev, id]
+        );
+    };
+
+    const toggleAllDepartments = () => {
+        const currentPageDepts = departments
+            .slice((deptPage - 1) * DEPT_PER_PAGE, deptPage * DEPT_PER_PAGE)
+            .map(dept => dept.departmentID || dept.id);
+        
+        const allSelected = currentPageDepts.every(id => selectedDepartments.includes(id));
+        
+        if (allSelected) {
+            setSelectedDepartments(prev => prev.filter(id => !currentPageDepts.includes(id)));
+        } else {
+            setSelectedDepartments(prev => {
+                const newSelection = [...prev];
+                currentPageDepts.forEach(id => {
+                    if (!newSelection.includes(id)) {
+                        newSelection.push(id);
+                    }
+                });
+                return newSelection;
+            });
         }
     };
 
@@ -694,11 +753,68 @@ const SystemSettings = () => {
                 withCredentials: true,
             });
             await fetchResearchCenters();
+            setSelectedResearchCenters([]);
         } catch (e) {
             console.error("Delete research center failed", e?.response?.data || e?.message || e);
             alert("Unable to delete research center");
         } finally {
             setCenterLoading(false);
+        }
+    };
+
+    const bulkDeleteResearchCenters = async () => {
+        if (selectedResearchCenters.length === 0) return;
+        const confirmed = await window.customConfirm(
+            `Delete ${selectedResearchCenters.length} selected research center(s)?`,
+            "Confirm Bulk Deletion"
+        );
+        if (!confirmed) return;
+        try {
+            setCenterLoading(true);
+            await axiosInstance.post('/admin/research-centers/bulk-delete', {
+                ids: selectedResearchCenters
+            }, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            await fetchResearchCenters();
+            setSelectedResearchCenters([]);
+        } catch (e) {
+            console.error("Bulk delete research centers failed", e?.response?.data || e?.message || e);
+            const errorMessage = e?.response?.data?.message || "Unable to delete research centers";
+            alert(errorMessage);
+        } finally {
+            setCenterLoading(false);
+        }
+    };
+
+    const toggleResearchCenterSelection = (id) => {
+        setSelectedResearchCenters(prev => 
+            prev.includes(id) 
+                ? prev.filter(selectedId => selectedId !== id)
+                : [...prev, id]
+        );
+    };
+
+    const toggleAllResearchCenters = () => {
+        const currentPageCenters = researchCenters
+            .slice((centerPage - 1) * CENTER_PER_PAGE, centerPage * CENTER_PER_PAGE)
+            .map(center => center.centerID || center.id);
+        
+        const allSelected = currentPageCenters.every(id => selectedResearchCenters.includes(id));
+        
+        if (allSelected) {
+            setSelectedResearchCenters(prev => prev.filter(id => !currentPageCenters.includes(id)));
+        } else {
+            setSelectedResearchCenters(prev => {
+                const newSelection = [...prev];
+                currentPageCenters.forEach(id => {
+                    if (!newSelection.includes(id)) {
+                        newSelection.push(id);
+                    }
+                });
+                return newSelection;
+            });
         }
     };
 
@@ -1566,10 +1682,39 @@ const SystemSettings = () => {
                             </div>
                         </div>
 
+                        {selectedDepartments.length > 0 && (
+                            <div className="mb-4 flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <span className="text-sm font-medium text-red-800">
+                                    {selectedDepartments.length} department(s) selected
+                                </span>
+                                <button
+                                    onClick={bulkDeleteDepartments}
+                                    disabled={deptLoading}
+                                    className="admin-button-danger px-4 py-2 text-sm"
+                                >
+                                    Delete Selected
+                                </button>
+                            </div>
+                        )}
                         <div className="overflow-x-auto">
                             <table className="admin-table">
                                 <thead>
                                     <tr>
+                                        <th className="text-left w-12">
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    departments
+                                                        .slice((deptPage - 1) * DEPT_PER_PAGE, deptPage * DEPT_PER_PAGE)
+                                                        .length > 0 &&
+                                                    departments
+                                                        .slice((deptPage - 1) * DEPT_PER_PAGE, deptPage * DEPT_PER_PAGE)
+                                                        .every(dept => selectedDepartments.includes(dept.departmentID || dept.id))
+                                                }
+                                                onChange={toggleAllDepartments}
+                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                            />
+                                        </th>
                                         <th className="text-left">Name</th>
                                         <th className="text-left w-40">College ID</th>
                                         <th className="w-52 text-left">Actions</th>
@@ -1578,23 +1723,33 @@ const SystemSettings = () => {
                                 <tbody>
                                     {departments.length === 0 && (
                                         <tr>
-                                            <td colSpan="3" className="text-center text-sm text-gray-500 py-6">No departments found</td>
+                                            <td colSpan="4" className="text-center text-sm text-gray-500 py-6">No departments found</td>
                                         </tr>
                                     )}
                                     {departments
                                         .slice((deptPage - 1) * DEPT_PER_PAGE, deptPage * DEPT_PER_PAGE)
-                                        .map((dept) => (
-                                        <tr key={dept.departmentID || dept.id} className="hover:bg-gray-50">
-                                            <td className="text-base text-gray-900 py-4">{dept.name || dept.departmentName}</td>
-                                            <td className="text-sm text-gray-600 py-4">{dept.college_idNo || '—'}</td>
-                                            <td className="py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <button onClick={() => editDepartment(dept)} className="admin-button-secondary px-4 py-2">Edit</button>
-                                                    <button onClick={() => deleteDepartment(dept)} className="admin-button-danger px-4 py-2">Delete</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                        .map((dept) => {
+                                            const deptId = dept.departmentID || dept.id;
+                                            return (
+                                            <tr key={deptId} className="hover:bg-gray-50">
+                                                <td className="py-4">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedDepartments.includes(deptId)}
+                                                        onChange={() => toggleDepartmentSelection(deptId)}
+                                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                    />
+                                                </td>
+                                                <td className="text-base text-gray-900 py-4">{dept.name || dept.departmentName}</td>
+                                                <td className="text-sm text-gray-600 py-4">{dept.college_idNo || '—'}</td>
+                                                <td className="py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <button onClick={() => editDepartment(dept)} className="admin-button-secondary px-4 py-2">Edit</button>
+                                                        <button onClick={() => deleteDepartment(dept)} className="admin-button-danger px-4 py-2">Delete</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )})}
                                 </tbody>
                             </table>
                         </div>
@@ -1674,10 +1829,39 @@ const SystemSettings = () => {
                             </div>
                         </div>
 
+                        {selectedResearchCenters.length > 0 && (
+                            <div className="mb-4 flex items-center justify-between p-3 bg-red-50 border border-red-200 rounded-lg">
+                                <span className="text-sm font-medium text-red-800">
+                                    {selectedResearchCenters.length} research center(s) selected
+                                </span>
+                                <button
+                                    onClick={bulkDeleteResearchCenters}
+                                    disabled={centerLoading}
+                                    className="admin-button-danger px-4 py-2 text-sm"
+                                >
+                                    Delete Selected
+                                </button>
+                            </div>
+                        )}
                         <div className="overflow-x-auto">
                             <table className="admin-table">
                                 <thead>
                                     <tr>
+                                        <th className="text-left w-12">
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    researchCenters
+                                                        .slice((centerPage - 1) * CENTER_PER_PAGE, centerPage * CENTER_PER_PAGE)
+                                                        .length > 0 &&
+                                                    researchCenters
+                                                        .slice((centerPage - 1) * CENTER_PER_PAGE, centerPage * CENTER_PER_PAGE)
+                                                        .every(center => selectedResearchCenters.includes(center.centerID || center.id))
+                                                }
+                                                onChange={toggleAllResearchCenters}
+                                                className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                            />
+                                        </th>
                                         <th className="text-left">Name</th>
                                         <th className="text-left">Department</th>
                                         <th className="w-52 text-left">Actions</th>
@@ -1686,23 +1870,33 @@ const SystemSettings = () => {
                                 <tbody>
                                     {researchCenters.length === 0 && (
                                         <tr>
-                                            <td colSpan="3" className="text-center text-sm text-gray-500 py-6">No research centers found</td>
+                                            <td colSpan="4" className="text-center text-sm text-gray-500 py-6">No research centers found</td>
                                         </tr>
                                     )}
                                     {researchCenters
                                         .slice((centerPage - 1) * CENTER_PER_PAGE, centerPage * CENTER_PER_PAGE)
-                                        .map((center) => (
-                                        <tr key={center.centerID || center.id} className="hover:bg-gray-50">
-                                            <td className="text-base text-gray-900 py-4">{center.name || center.centerName}</td>
-                                            <td className="text-sm text-gray-600 py-4">{center.departmentName || '—'}</td>
-                                            <td className="py-4">
-                                                <div className="flex items-center gap-3">
-                                                    <button onClick={() => editResearchCenter(center)} className="admin-button-secondary px-4 py-2">Edit</button>
-                                                    <button onClick={() => deleteResearchCenter(center)} className="admin-button-danger px-4 py-2">Delete</button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
+                                        .map((center) => {
+                                            const centerId = center.centerID || center.id;
+                                            return (
+                                            <tr key={centerId} className="hover:bg-gray-50">
+                                                <td className="py-4">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedResearchCenters.includes(centerId)}
+                                                        onChange={() => toggleResearchCenterSelection(centerId)}
+                                                        className="rounded border-gray-300 text-red-600 focus:ring-red-500"
+                                                    />
+                                                </td>
+                                                <td className="text-base text-gray-900 py-4">{center.name || center.centerName}</td>
+                                                <td className="text-sm text-gray-600 py-4">{center.departmentName || '—'}</td>
+                                                <td className="py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <button onClick={() => editResearchCenter(center)} className="admin-button-secondary px-4 py-2">Edit</button>
+                                                        <button onClick={() => deleteResearchCenter(center)} className="admin-button-danger px-4 py-2">Delete</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )})}
                                 </tbody>
                             </table>
                         </div>

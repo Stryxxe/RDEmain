@@ -34,15 +34,24 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        // Department is required except for RDD Staff
+        $rules = [
             'firstName' => ['required', 'string', 'max:50'],
             'lastName' => ['required', 'string', 'max:50'],
             'email' => ['required', 'email', 'max:50', 'unique:users,email'],
             'password' => ['required', 'confirmed', 'min:8'],
             'role' => ['required', 'string'],
-            'department' => ['nullable', 'string', 'max:255'],
             'researchCenter' => ['nullable', 'string', 'max:255'],
-        ]);
+        ];
+
+        // Department is required for non-RDD roles
+        if ($request->input('role') !== 'rdd') {
+            $rules['department'] = ['required', 'string', 'max:255'];
+        } else {
+            $rules['department'] = ['nullable', 'string', 'max:255'];
+        }
+
+        $validated = $request->validate($rules);
 
         // For RDD Staff, department and researchCenter are not required
         if ($validated['role'] === 'rdd') {

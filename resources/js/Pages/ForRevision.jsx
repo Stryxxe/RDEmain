@@ -4,7 +4,6 @@ import { RefreshCw } from "lucide-react";
 import { BiSearch, BiShow } from "react-icons/bi";
 import apiService from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
-import AppLayout from "../Components/Layouts/AppLayout";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 import Breadcrumbs from "../Components/Breadcrumbs";
 
@@ -308,7 +307,7 @@ const ForRevision = () => {
             <div>Research Title</div>
             <div>Author & College</div>
             <div>Proposed Funding</div>
-            <div>Details</div>
+            <div className="text-center">Details</div>
           </div>
 
           <div className="divide-y divide-gray-100">
@@ -349,7 +348,7 @@ const ForRevision = () => {
                     <div className="text-sm text-gray-600">Total Budget</div>
                   </div>
 
-                  <div className="flex items-center">
+                  <div className="flex items-center justify-center">
                     <button
                       onClick={() => handleViewDetails(proposal.proposalID || proposal.id)}
                       className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"
@@ -369,9 +368,7 @@ const ForRevision = () => {
 };
 
 ForRevision.layout = (page) => (
-  <AppLayout>
-    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
-  </AppLayout>
+  <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
 );
 
 export default ForRevision;

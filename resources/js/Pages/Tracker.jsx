@@ -10,6 +10,7 @@ import {
     ChevronDown,
     ChevronUp,
     Eye,
+    Trash2,
     RefreshCw,
 } from "lucide-react";
 import { BiSearch, BiShow } from "react-icons/bi";
@@ -20,7 +21,6 @@ import { useMessages } from "../contexts/MessageContext";
 import AutoRefreshControls from "../Components/AutoRefreshControls";
 import RefreshStatusIndicator from "../Components/RefreshStatusIndicator";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
-import AppLayout from "../Components/Layouts/AppLayout";
 import Breadcrumbs from "../Components/Breadcrumbs";
 
 const Tracker = () => {
@@ -37,6 +37,7 @@ const Tracker = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [fromYear, setFromYear] = useState("2025");
     const [toYear, setToYear] = useState("2025");
+    const [deletingProposalId, setDeletingProposalId] = useState(null);
 
     // Get user from Inertia props (more reliable than context on initial load)
     const currentUser = user || props?.auth?.user;
@@ -251,6 +252,32 @@ const Tracker = () => {
         router.visit(`/proponent/tracker/${projectId}`);
     };
 
+    const handleDeleteProposal = async (proposalId) => {
+        if (!window.confirm('Are you sure you want to delete this proposal? This action cannot be undone.')) {
+            return;
+        }
+
+        try {
+            setDeletingProposalId(proposalId);
+            const response = await apiService.deleteProposal(proposalId);
+            
+            if (response.success) {
+                // Remove from projects list
+                setProjects(prev => prev.filter(p => p.proposalID !== proposalId));
+                // Refresh notifications and messages
+                refreshAllNotifications();
+                refreshAllMessages();
+            } else {
+                alert(response.message || 'Failed to delete proposal');
+            }
+        } catch (error) {
+            console.error('Error deleting proposal:', error);
+            alert(error.message || 'Failed to delete proposal. Please try again.');
+        } finally {
+            setDeletingProposalId(null);
+        }
+    };
+
     const filteredProposals = projects.filter(
         (proposal) =>
             proposal.researchTitle
@@ -415,11 +442,11 @@ const Tracker = () => {
             <div className="p-6">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+                    <div className="grid grid-cols-[2fr_1fr_1fr_140px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
                         <div>Research Title</div>
                         <div>Author & College</div>
                         <div>Proposed Funding</div>
-                        <div>Details</div>
+                        <div className="text-center">Actions</div>
                     </div>
 
                     {/* Table Body */}
@@ -432,7 +459,7 @@ const Tracker = () => {
                             sortedProposals.map((proposal, index) => (
                                 <div
                                     key={proposal.proposalID}
-                                    className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
+                                    className="grid grid-cols-[2fr_1fr_1fr_140px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
                                 >
                                     {/* Research Title */}
                                     <div>
@@ -487,17 +514,25 @@ const Tracker = () => {
                                     </div>
 
                                     {/* Actions */}
-                                    <div className="flex items-center">
+                                    <div className="flex items-center justify-center gap-2">
                                         <button
                                             onClick={() =>
                                                 handleViewDetails(
                                                     proposal.proposalID
                                                 )
                                             }
-                                            className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"
+                                            className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded transition-colors duration-150"
+                                            title="View Details"
                                         >
-                                            <BiShow className="text-sm" />
-                                            View Details
+                                            <Eye className="w-4 h-4" />
+                                        </button>
+                                        <button
+                                            onClick={() => handleDeleteProposal(proposal.proposalID)}
+                                            disabled={deletingProposalId === proposal.proposalID}
+                                            className="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title="Delete proposal"
+                                        >
+                                            <Trash2 className="w-4 h-4" />
                                         </button>
                                     </div>
                                 </div>
@@ -511,9 +546,7 @@ const Tracker = () => {
 };
 
 Tracker.layout = (page) => (
-    <AppLayout>
-        <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
-    </AppLayout>
+    <RoleBasedLayout roleName="Proponent">{page}</RoleBasedLayout>
 );
 
 export default Tracker;

@@ -46,8 +46,30 @@ class ProposalController extends Controller
             // Apply role-specific filtering
             $role = $user->role?->userRole;
             if ($role === 'RDD') {
-                // Exclude archived proposals - see all non-archived proposals
+                // Exclude archived proposals
                 $query->whereNull('archivedByRDD');
+                
+                // Only show proposals that have been endorsed by CM (Center Manager)
+                // Get all CM user IDs
+                $cmUserIds = User::whereHas('role', function($q) {
+                    $q->where('userRole', 'CM');
+                })->pluck('userID')->toArray();
+                
+                // Only show proposals with approved endorsements from CM users
+                $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
+                    $q->whereIn('endorserID', $cmUserIds)
+                      ->where('endorsementStatus', 'approved');
+                });
+                
+                // Exclude proposals that RDD has already endorsed/archived
+                $rddUserIds = User::whereHas('role', function($q) {
+                    $q->where('userRole', 'RDD');
+                })->pluck('userID')->toArray();
+                
+                $query->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                    $q->whereIn('endorserID', $rddUserIds)
+                      ->where('endorsementStatus', 'approved');
+                });
                 
                 // Filter by research center if provided
                 if ($request->has('centerID') && $request->centerID) {
@@ -63,64 +85,19 @@ class ProposalController extends Controller
                     });
                 }
             } elseif ($role === 'CM') {
-                // Show submitted proposals (Under Review status) from same research center
-                // that haven't been endorsed by this CM yet, or were rejected by this CM
+                // Show submitted proposals from same research center
+                // Show all proposals that haven't been endorsed by this CM yet, or were rejected
                 if ($user->researchCenterID) {
-                    // Debug: Check all proposals from this research center first
-                    $allCenterProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))->get();
-                    Log::info('CM Debug: All proposals from research center', [
-                        'user_id' => $user->userID,
-                        'research_center_id' => $user->researchCenterID,
-                        'total_proposals' => $allCenterProposals->count(),
-                        'proposals' => $allCenterProposals->map(function($p) {
-                            return [
-                                'proposalID' => $p->proposalID,
-                                'statusID' => $p->statusID,
-                                'statusName' => $p->status?->statusName,
-                                'title' => $p->researchTitle,
-                                'userID' => $p->userID,
-                                'endorsements_count' => $p->endorsements()->count()
-                            ];
-                        })->toArray()
-                    ]);
+                    // Filter by research center first
+                    $query->whereHas('user', function($q) use ($user) {
+                        $q->where('researchCenterID', $user->researchCenterID);
+                    });
                     
-                    // Debug: Check proposals with "Under Review" status
-                    $underReviewProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                        ->whereHas('status', fn($q) => $q->whereRaw('LOWER(statusName) = ?', ['under review']))
-                        ->get();
-                    Log::info('CM Debug: Proposals with Under Review status', [
-                        'user_id' => $user->userID,
-                        'under_review_count' => $underReviewProposals->count(),
-                        'proposals' => $underReviewProposals->map(function($p) {
-                            return [
-                                'proposalID' => $p->proposalID,
-                                'statusID' => $p->statusID,
-                                'statusName' => $p->status?->statusName,
-                                'title' => $p->researchTitle,
-                                'endorsements' => $p->endorsements()->where('endorserID', $user->userID)->get()->map(function($e) {
-                                    return [
-                                        'endorsementID' => $e->endorsementID,
-                                        'endorserID' => $e->endorserID,
-                                        'status' => $e->endorsementStatus
-                                    ];
-                                })->toArray()
-                            ];
-                        })->toArray()
-                    ]);
-                    
-                    // Show proposals that are "Under Review" - check both by status name and statusID
-                    // statusID = 1 is typically "Under Review" when proposals are first submitted
-                    $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                        ->where(function($q) {
-                            // Check by status name (case-insensitive) OR by statusID = 1
-                            $q->whereHas('status', fn($subQ) => $subQ->whereRaw('LOWER(statusName) = ?', ['under review']))
-                              ->orWhere('statusID', 1); // Fallback: statusID 1 is usually "Under Review"
-                        })
-                        ->whereDoesntHave('endorsements', function ($q) use ($user) {
-                            // Exclude proposals that this CM has already approved
-                            $q->where('endorserID', $user->userID)
-                              ->where('endorsementStatus', 'approved');
-                        });
+                    // Exclude proposals that this CM has already approved
+                    $query->whereDoesntHave('endorsements', function ($q) use ($user) {
+                        $q->where('endorserID', $user->userID)
+                          ->where('endorsementStatus', 'approved');
+                    });
                     
                     // Log for debugging
                     Log::info('CM Dashboard Query Applied', [
@@ -150,78 +127,10 @@ class ProposalController extends Controller
                 ->orderByDesc('uploadedAt')
                 ->get();
 
-            // Log query results for CM users for debugging
-            $debugInfo = null;
-            if ($role === 'CM') {
-                // Get debug information
-                $allCenterProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                    ->with('status')
-                    ->get();
-                $underReviewProposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                    ->whereHas('status', fn($q) => $q->whereRaw('LOWER(statusName) = ?', ['under review']))
-                    ->get();
-                $statusID1Proposals = Proposal::whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID))
-                    ->where('statusID', 1)
-                    ->get();
-                
-                $debugInfo = [
-                    'user_id' => $user->userID,
-                    'research_center_id' => $user->researchCenterID,
-                    'total_proposals_in_center' => $allCenterProposals->count(),
-                    'under_review_proposals_count' => $underReviewProposals->count(),
-                    'statusID_1_proposals_count' => $statusID1Proposals->count(),
-                    'final_proposals_count' => $proposals->count(),
-                    'all_center_proposals' => $allCenterProposals->map(function($p) {
-                        return [
-                            'proposalID' => $p->proposalID,
-                            'statusID' => $p->statusID,
-                            'statusName' => $p->status?->statusName ?? 'NULL',
-                            'title' => $p->researchTitle,
-                        ];
-                    })->toArray(),
-                    'statusID_1_proposals' => $statusID1Proposals->map(function($p) {
-                        return [
-                            'proposalID' => $p->proposalID,
-                            'statusID' => $p->statusID,
-                            'statusName' => $p->status?->statusName ?? 'NULL',
-                            'title' => $p->researchTitle,
-                        ];
-                    })->toArray(),
-                    'under_review_proposals' => $underReviewProposals->map(function($p) use ($user) {
-                        return [
-                            'proposalID' => $p->proposalID,
-                            'statusID' => $p->statusID,
-                            'statusName' => $p->status?->statusName,
-                            'title' => $p->researchTitle,
-                            'has_cm_endorsement' => $p->endorsements()->where('endorserID', $user->userID)->exists(),
-                            'cm_endorsements' => $p->endorsements()->where('endorserID', $user->userID)->get()->map(function($e) {
-                                return [
-                                    'endorsementID' => $e->endorsementID,
-                                    'status' => $e->endorsementStatus
-                                ];
-                            })->toArray()
-                        ];
-                    })->toArray()
-                ];
-                
-                Log::info('CM Dashboard Query Results - Final', [
-                    'user_id' => $user->userID,
-                    'research_center_id' => $user->researchCenterID,
-                    'proposal_count' => $proposals->count(),
-                    'proposal_ids' => $proposals->pluck('proposalID')->toArray(),
-                    'debug_info' => $debugInfo
-                ]);
-            }
-
             $response = [
                 'success' => true,
                 'data' => $proposals
             ];
-            
-            // Include debug info in response for CM users (only in debug mode)
-            if ($role === 'CM' && config('app.debug')) {
-                $response['debug'] = $debugInfo;
-            }
             
             return response()->json($response);
         } catch (\Exception $e) {
@@ -854,9 +763,22 @@ class ProposalController extends Controller
         // Apply authorization filters based on user role
         $userRole = $user->role?->userRole;
         if ($userRole === 'RDD') {
-            // RDD users see ALL proposals for statistics (not just archived ones)
-            // This gives them the total count of all submitted proposals
-            // No filter needed - show all proposals
+            // For RDD statistics, count ALL proposals that have been endorsed by CM
+            // This includes proposals that RDD has already endorsed (for accurate totals)
+            // Exclude archived proposals
+            $query->whereNull('archivedByRDD');
+            
+            // Get all CM user IDs
+            $cmUserIds = User::whereHas('role', function($q) {
+                $q->where('userRole', 'CM');
+            })->pluck('userID')->toArray();
+            
+            // Count ALL proposals with approved endorsements from CM users
+            // (including those that RDD has already endorsed)
+            $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
+                $q->whereIn('endorserID', $cmUserIds)
+                  ->where('endorsementStatus', 'approved');
+            });
         } elseif ($userRole === 'CM') {
             $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
         } else {
@@ -907,10 +829,27 @@ class ProposalController extends Controller
         $user = Auth::user();
         $user->loadMissing('role');
 
-        // For RDD users, show all proposals; for others, show only their own
+        // For RDD users, show only proposals endorsed by CM; for others, show only their own
         $query = Proposal::with(['status', 'user.department']);
 
-        if ($user->role?->userRole !== 'RDD') {
+        if ($user->role?->userRole === 'RDD') {
+            // For RDD analytics/statistics, count ALL proposals that have been endorsed by CM
+            // This includes proposals that RDD has already endorsed (for accurate totals)
+            // Exclude archived proposals
+            $query->whereNull('archivedByRDD');
+            
+            // Get all CM user IDs
+            $cmUserIds = User::whereHas('role', function($q) {
+                $q->where('userRole', 'CM');
+            })->pluck('userID')->toArray();
+            
+            // Count ALL proposals with approved endorsements from CM users
+            // (including those that RDD has already endorsed)
+            $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
+                $q->whereIn('endorserID', $cmUserIds)
+                  ->where('endorsementStatus', 'approved');
+            });
+        } else {
             $query->where('userID', $user->userID);
         }
 
@@ -918,6 +857,12 @@ class ProposalController extends Controller
 
         // RDE Agenda data
         $rdeAgendaData = $this->getRdeAgendaData($proposals);
+        
+        // Log RDE Agenda data for debugging
+        Log::info('RDD Analytics - RDE Agenda Data', [
+            'count' => count($rdeAgendaData),
+            'data' => $rdeAgendaData
+        ]);
 
         // DOST 6Ps data
         $dost6PsData = $this->getDost6PsData($proposals);
@@ -931,7 +876,7 @@ class ProposalController extends Controller
         $totalCompleted = $proposals->where('statusID', 5)->count();
         $completionRate = $totalProposals > 0 ? round(($totalCompleted / $totalProposals) * 100) : 0;
 
-        return response()->json([
+        $responseData = [
             'success' => true,
             'data' => [
                 'overview' => [
@@ -944,7 +889,16 @@ class ProposalController extends Controller
                 'dost6Ps' => $dost6PsData,
                 'sdg' => $sdgData
             ]
+        ];
+        
+        // Log final response for debugging
+        Log::info('RDD Analytics - Final Response', [
+            'total_proposals' => $totalProposals,
+            'rde_agenda_count' => count($rdeAgendaData),
+            'rde_agenda_names' => array_column($rdeAgendaData, 'name')
         ]);
+
+        return response()->json($responseData);
     }
 
     /**
@@ -1072,12 +1026,59 @@ class ProposalController extends Controller
         $additionalData = [];
 
         foreach ($proposals as $proposal) {
-            $agendas = $proposal->researchAgenda ?? [];
+            // Get research agenda - check matrixOfCompliance first, then direct column
+            $researchAgenda = null;
+            
+            // Get matrixOfCompliance once for data extraction
+            $rawMatrix = $proposal->getRawOriginal('matrixOfCompliance');
+            $matrixOfCompliance = null;
+            if ($rawMatrix) {
+                if (is_string($rawMatrix)) {
+                    $matrixOfCompliance = json_decode($rawMatrix, true);
+                } else {
+                    $matrixOfCompliance = $rawMatrix;
+                }
+            }
+            
+            // Check matrixOfCompliance directly (bypass accessor)
+            if ($matrixOfCompliance && is_array($matrixOfCompliance) && isset($matrixOfCompliance['researchAgenda']) && !empty($matrixOfCompliance['researchAgenda'])) {
+                $researchAgenda = $matrixOfCompliance['researchAgenda'];
+            }
+            
+            // If still empty, try the accessor (which also reads from matrixOfCompliance)
+            if (empty($researchAgenda)) {
+                $matrixAgenda = $proposal->researchAgenda;
+                if (!empty($matrixAgenda) && is_array($matrixAgenda)) {
+                    $researchAgenda = $matrixAgenda;
+                }
+            }
+            
+            // Final fallback to direct column
+            if (empty($researchAgenda)) {
+                $rawAgenda = $proposal->getRawOriginal('researchAgenda');
+                if ($rawAgenda !== null) {
+                    if (is_string($rawAgenda)) {
+                        $decoded = json_decode($rawAgenda, true);
+                        $researchAgenda = json_last_error() === JSON_ERROR_NONE && is_array($decoded) && !empty($decoded) ? $decoded : null;
+                    } elseif (is_array($rawAgenda) && !empty($rawAgenda)) {
+                        $researchAgenda = $rawAgenda;
+                    }
+                }
+            }
+            
+            $agendas = $researchAgenda ?? [];
             $status = $proposal->statusID;
 
             foreach ($agendas as $agenda) {
-                $match = $this->matchOfficialAgenda($agenda, $officialAgendas);
-                $key = $match ?? $this->formatAgendaLabel($agenda);
+                // Normalize agenda value (handle both string and array formats)
+                $normalizedAgenda = is_string($agenda) ? trim($agenda) : (is_array($agenda) ? ($agenda['name'] ?? $agenda['value'] ?? null) : $agenda);
+                
+                if ($normalizedAgenda === '' || $normalizedAgenda === null) {
+                    continue;
+                }
+                
+                $match = $this->matchOfficialAgenda($normalizedAgenda, $officialAgendas);
+                $key = $match ?? $this->formatAgendaLabel($normalizedAgenda);
 
                 $bucket = $match !== null ? $officialData[$match] : ($additionalData[$key] ?? [
                     'name' => $key,
@@ -1438,8 +1439,31 @@ class ProposalController extends Controller
             ], 403);
         }
 
-        // Include all proposals (not just archived) so analytics reflects current pipeline
-        $query = Proposal::with(['status', 'endorsements', 'user.researchCenter', 'user.department']);
+        // Only include proposals that have been endorsed by CM
+        // Exclude archived proposals
+        $query = Proposal::with(['status', 'endorsements', 'user.researchCenter', 'user.department'])
+            ->whereNull('archivedByRDD');
+        
+        // Get all CM user IDs
+        $cmUserIds = User::whereHas('role', function($q) {
+            $q->where('userRole', 'CM');
+        })->pluck('userID')->toArray();
+        
+        // Only include proposals with approved endorsements from CM users
+        $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
+            $q->whereIn('endorserID', $cmUserIds)
+              ->where('endorsementStatus', 'approved');
+        });
+        
+        // Exclude proposals that RDD has already endorsed/archived
+        $rddUserIds = User::whereHas('role', function($q) {
+            $q->where('userRole', 'RDD');
+        })->pluck('userID')->toArray();
+        
+        $query->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+            $q->whereIn('endorserID', $rddUserIds)
+              ->where('endorsementStatus', 'approved');
+        });
         
         // Filter by research center if provided
         if ($request->has('centerID') && $request->centerID) {

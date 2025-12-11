@@ -488,7 +488,7 @@ const CMProposalDetail = () => {
             case "completed":
                 return "text-green-600";
             case "current":
-                return "text-red-600";
+                return "text-gray-700";
             case "rejected":
                 return "text-red-600";
             case "pending":
@@ -843,47 +843,57 @@ const CMProposalDetail = () => {
                                                     key={`timeline-stage-${stage.id}-${index}`}
                                                     className="flex flex-col items-center relative mx-4 sm:mx-8"
                                                 >
-                                                    {/* Stage Dot */}
-                                                    <div
-                                                        className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(
-                                                            stage.status
-                                                        )} mb-4 relative z-10`}
-                                                    >
-                                                        {stage.status ===
-                                                            "completed" && (
-                                                            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
+                                                    {/* Stage Dot with Connecting Line Container */}
+                                                    <div className="relative">
+                                                        {/* Stage Dot */}
+                                                        <div
+                                                            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(
+                                                                stage.status
+                                                            )} mb-4 relative z-10 flex-shrink-0`}
+                                                        >
+                                                            {stage.status ===
+                                                                "completed" && (
+                                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
+                                                                    <svg
+                                                                        className="w-5 h-5 sm:w-6 sm:h-6 text-green-500"
+                                                                        fill="currentColor"
+                                                                        viewBox="0 0 20 20"
+                                                                    >
+                                                                        <path
+                                                                            fillRule="evenodd"
+                                                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                                            clipRule="evenodd"
+                                                                        />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Connecting Chevron - Centered between circles */}
+                                                        {index <
+                                                            timelineStages.length -
+                                                                1 && (
+                                                            <div className="absolute top-1/2 -translate-y-1/2 right-[-2rem] sm:right-[-4rem] z-0">
                                                                 <svg
-                                                                    className="w-5 h-5 sm:w-6 sm:h-6 text-green-500"
-                                                                    fill="currentColor"
-                                                                    viewBox="0 0 20 20"
+                                                                    className={`w-6 h-6 sm:w-8 sm:h-8 ${
+                                                                        stage.status === "completed"
+                                                                            ? "text-green-500"
+                                                                            : "text-gray-300"
+                                                                    }`}
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
                                                                 >
                                                                     <path
-                                                                        fillRule="evenodd"
-                                                                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                                                        clipRule="evenodd"
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={2}
+                                                                        d="M9 5l7 7-7 7"
                                                                     />
                                                                 </svg>
                                                             </div>
                                                         )}
                                                     </div>
-
-                                                    {/* Connecting Line */}
-                                                    {index <
-                                                        timelineStages.length -
-                                                            1 && (
-                                                        <div className="absolute top-2 sm:top-3 left-full w-8 sm:w-16 h-0.5 bg-gray-300 z-0">
-                                                            <div
-                                                                className="h-full bg-green-500 transition-all duration-500"
-                                                                style={{
-                                                                    width:
-                                                                        stage.status ===
-                                                                        "completed"
-                                                                            ? "100%"
-                                                                            : "0%",
-                                                                }}
-                                                            ></div>
-                                                        </div>
-                                                    )}
 
                                                     {/* Stage Label with Date */}
                                                     <div
