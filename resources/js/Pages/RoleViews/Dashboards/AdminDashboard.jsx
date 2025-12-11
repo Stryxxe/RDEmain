@@ -123,19 +123,15 @@ const UserRoleChart = ({ users }) => {
   }, {});
 
   const roles = [
-    { name: 'Admin', count: roleCounts.admin || 0, color: 'bg-red-500' },
     { name: 'Proponent', count: roleCounts.proponent || 0, color: 'bg-green-500' },
     { name: 'Center Manager', count: roleCounts.central_manager || 0, color: 'bg-blue-500' },
-    { name: 'RDD', count: roleCounts.rdd || 0, color: 'bg-yellow-500' },
-    { name: 'RDE', count: roleCounts.rde || 0, color: 'bg-purple-500' },
-    { name: 'OP', count: roleCounts.op || 0, color: 'bg-orange-500' },
-    { name: 'OSUORO', count: roleCounts.osuoro || 0, color: 'bg-indigo-500' }
+    { name: 'RDD', count: roleCounts.rdd || 0, color: 'bg-yellow-500' }
   ];
 
   const total = roles.reduce((sum, role) => sum + role.count, 0);
 
   return (
-    <div className="admin-card">
+    <div className="admin-card max-w-md">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Users by Role</h3>
       <div className="space-y-3">
         {roles.map((role) => (
@@ -269,15 +265,17 @@ const AdminDashboard = () => {
         <StatCard title="Inactive Users" value={`${inactiveUsers} (${inactivePct}%)`} change={inactivePct} icon={FiUserX} color="red" />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <UserRoleChart users={users} />
-        <RecentActivity 
-          activities={activities} 
-          loading={activitiesLoading}
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={(page) => setCurrentPage(page)}
-        />
+        <div className="lg:col-span-2">
+          <RecentActivity 
+            activities={activities} 
+            loading={activitiesLoading}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={(page) => setCurrentPage(page)}
+          />
+        </div>
       </div>
       </div>
     </AdminLayout>
