@@ -1,1153 +1,1307 @@
-import React, { useState, useEffect } from 'react';
-import { useRouteParams } from '../../../Components/RoleBased/InertiaRoleRouter';
-import { BiDownload, BiEdit, BiCheck, BiX, BiCalendar, BiUser, BiFile, BiDollar, BiEnvelope } from 'react-icons/bi';
-import { router } from '@inertiajs/react';
-import rddService from '../../../services/rddService';
-import PDFViewer from '../../../Components/PDFViewer';
+import React, { useState, useEffect } from "react";
+import { router, usePage } from "@inertiajs/react";
+import { useAuth } from "../../../contexts/AuthContext";
+import { useRouteParams } from "../../../Components/RoleBased/InertiaRoleRouter";
+import axios from "axios";
+import PDFViewer from "../../../Components/PDFViewer";
+import CoAuthorsCard from "../../../Components/CoAuthorsCard";
+import RDDLayout from "../../../Components/Layouts/RDDLayout";
+import AppLayout from "../../../Components/Layouts/AppLayout";
+import Breadcrumbs from "../../../Components/Breadcrumbs";
 
-const RDDProposalDetail = () => {
-  const { id } = useRouteParams();
-  const [activeTab, setActiveTab] = useState('overview');
-  const [reviewDecision, setReviewDecision] = useState('');
-  const [reviewComments, setReviewComments] = useState('');
-  const [proposal, setProposal] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [showDocumentModal, setShowDocumentModal] = useState(false);
-  const [selectedDocument, setSelectedDocument] = useState(null);
-
-  useEffect(() => {
-    if (id) {
-      fetchProposal();
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+    axiosInstance.defaults.withCredentials = true;
+    axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+    axiosInstance.defaults.headers = {
+        ...(axiosInstance.defaults.headers || {}),
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+    };
+    // Add CSRF token from meta tag for all requests to avoid 419
+    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (metaToken) {
+        axiosInstance.defaults.headers['X-CSRF-TOKEN'] = metaToken;
     }
-  }, [id]);
+}
 
-  const fetchProposal = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const response = await rddService.getProposalById(id);
-      if (response.success) {
-        setProposal(response.data);
-      } else {
-        setError('Failed to fetch proposal');
-      }
-    } catch (err) {
-      console.error('Error fetching proposal:', err);
-      setError('Error loading proposal');
-    } finally {
-      setLoading(false);
-    }
-  };
+const RDDProposalDetail = ({ id: proposalId }) => {
+    const { props } = usePage();
+    const routeParams = useRouteParams();
+    // Get ID from props, route params, or fallback to prop
+    const id = proposalId || routeParams.id || props?.id;
+    const { user } = useAuth();
+    // Get user from Inertia props (more reliable than context on initial load)
+    const currentUser = user || props?.auth?.user;
+    const [proposal, setProposal] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState("");
+    // Endorsement state
+    const [hasCmEndorsement, setHasCmEndorsement] = useState(false);
+    const [hasRddEndorsement, setHasRddEndorsement] = useState(false);
+    const [endorsementData, setEndorsementData] = useState(null); // store CM endorsement for history
+    const [refreshKey, setRefreshKey] = useState(0);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading proposal...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    console.log("RDDProposalDetail rendered with ID:", id);
+    console.log("Current user:", currentUser);
 
-  if (error || !proposal) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <div className="text-red-600 text-6xl mb-4">⚠️</div>
-              <p className="text-gray-600 mb-4">{error || 'Proposal not found'}</p>
-              <button 
-                onClick={fetchProposal}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Retry
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    // Fetch proposal and endorsements in parallel to reduce loading time
+    const fetchProposalAndEndorsements = async () => {
+        if (!id) {
+            setError("Proposal ID is required");
+            setLoading(false);
+            return;
+        }
 
-  const formatCurrency = (value) => {
-    const numeric = Number(value);
-    if (!Number.isFinite(numeric)) return '₱0';
-    return `₱${numeric.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-  };
+        try {
+            setLoading(true);
+            const startTime = performance.now();
+            setError("");
+            console.log("Fetching proposal with ID:", id);
+            
+            // Fetch only the proposal - it already includes endorsements
+            const proposalResponse = await axiosInstance.get(`/proposals/${id}`, {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            
+            const fetchTime = performance.now() - startTime;
+            console.log(`API call completed in ${fetchTime.toFixed(2)}ms`);
 
-  const buildBudgetBreakdown = (budget, breakdown) => {
-    const total = Number(budget) || 0;
-    const source =
-      (breakdown && Object.keys(breakdown).length > 0)
-        ? breakdown
-        : total > 0
-          ? {
-              personnel: total * 0.5,
-              equipment: total * 0.2,
-              materials: total * 0.15,
-              travel: total * 0.1,
-              other: total * 0.05,
+            if (proposalResponse.data.success) {
+                const proposalData = proposalResponse.data.data;
+                setProposal(proposalData);
+                console.log("Proposal loaded successfully:", proposalData);
+                
+                // Extract endorsement data from the proposal's included endorsements
+                console.log("Proposal endorsements:", proposalData.endorsements);
+                if (Array.isArray(proposalData.endorsements) && proposalData.endorsements.length > 0) {
+                    // Log the structure of the first endorsement to debug
+                    console.log("First endorsement structure:", proposalData.endorsements[0]);
+                    console.log("Endorser object:", proposalData.endorsements[0]?.endorser);
+                    console.log("Endorser role object:", proposalData.endorsements[0]?.endorser?.role);
+                    
+                    const cmEndorsement = proposalData.endorsements.find(
+                        (e) => {
+                            console.log("Checking endorsement:", e.endorsementID, "Role:", e.endorser?.role?.userRole, "Status:", e.endorsementStatus);
+                            return e.endorser?.role?.userRole === "CM" && e.endorsementStatus === "approved";
+                        }
+                    );
+                    const rddEndorsement = proposalData.endorsements.find(
+                        (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+                    );
+
+                    console.log("CM Endorsement found:", cmEndorsement);
+                    console.log("RDD Endorsement found:", rddEndorsement);
+
+                    setHasCmEndorsement(Boolean(cmEndorsement));
+                    setHasRddEndorsement(Boolean(rddEndorsement));
+                    setEndorsementData(cmEndorsement || null);
+                } else {
+                    console.log("No endorsements array found");
+                    setHasCmEndorsement(false);
+                    setHasRddEndorsement(false);
+                    setEndorsementData(null);
+                }
+            } else {
+                console.error("API returned error:", proposalResponse.data?.message);
+                setError("Proposal not found");
             }
-          : {};
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            if (error.response?.status === 401) {
+                setError("Unauthorized. Please log in again.");
+            } else if (error.response?.status === 404) {
+                setError("Proposal not found");
+            } else {
+                setError("Error loading proposal");
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
 
-    const formatted = {};
-    let computedTotal = 0;
-    Object.entries(source).forEach(([category, amount]) => {
-      const numericAmount = Number(amount) || 0;
-      computedTotal += numericAmount;
-      formatted[category] = formatCurrency(numericAmount);
-    });
+    useEffect(() => {
+        // Wait a bit for user to be available (in case of initial page load)
+        const checkAndLoad = setTimeout(() => {
+            if (!id) {
+                setError("Proposal ID is required");
+                setLoading(false);
+                return;
+            }
+            
+            // Try to fetch even if user is not yet loaded (API will handle auth)
+            fetchProposalAndEndorsements();
+        }, 100);
 
-    if (total > 0) {
-      formatted.total = formatCurrency(total);
-    } else if (computedTotal > 0) {
-      formatted.total = formatCurrency(computedTotal);
+        return () => clearTimeout(checkAndLoad);
+    }, [id, currentUser, refreshKey]);
+
+    // Force refresh function
+    const handleRefresh = () => {
+        setRefreshKey((prev) => prev + 1);
+    };
+
+    const handleBack = () => {
+        router.visit("/rdd");
+    };
+
+    const handleEndorse = () => {
+        // Navigate to the RDD endorsement detail page for this proposal
+        router.visit(`/rdd/review-proposal/${proposal.proposalID}`);
+    };
+
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-red-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600">
+                        Loading proposal details...
+                    </p>
+                </div>
+            </div>
+        );
     }
 
-    return formatted;
-  };
-
-  const budgetAmount = Number(proposal.proposedBudget) || 0;
-  const formattedBudgetBreakdown = buildBudgetBreakdown(budgetAmount, proposal.budgetBreakdown);
-
-  // Format date with time for display
-  const formatDateTime = (dateInput) => {
-    if (!dateInput) return 'Not available';
-    
-    try {
-      const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
-      if (isNaN(date.getTime())) return 'Invalid date';
-      
-      return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true
-      });
-    } catch (error) {
-      return 'Invalid date';
+    if (error || !proposal) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <div className="text-red-600 text-6xl mb-4">⚠️</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                        Proposal Not Found
+                    </h2>
+                    <p className="text-gray-600 mb-4">{error}</p>
+                    <button
+                        onClick={handleBack}
+                        className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
+            </div>
+        );
     }
-  };
 
-  // Format date range with time for display
-  const formatDateRange = (startDate, endDate) => {
-    const start = formatDateTime(startDate);
-    const end = formatDateTime(endDate);
-    
-    if (start === end) {
-      return start;
-    }
-    
-    return `${start} - ${end}`;
-  };
+    // Dynamic timeline based on actual proposal status and endorsement status
+    const getTimelineStages = () => {
+        if (!proposal) return [];
 
-  // Build dynamic timeline based on actual proposal process
-  const buildTimeline = () => {
-    const baseDate = new Date(proposal.uploadedAt || proposal.created_at);
-    const timeline = [];
-    const statusId = proposal.statusID || 1;
-    const now = new Date();
-    
-    // Get endorsements sorted by date
-    const cmEndorsements = proposal.endorsements?.filter(e => 
-      e.endorser?.role?.userRole === 'CM' && e.endorsementStatus === 'approved'
-    ).sort((a, b) => new Date(a.endorsementDate || 0) - new Date(b.endorsementDate || 0)) || [];
-    
-    const rddEndorsements = proposal.endorsements?.filter(e => 
-      e.endorser?.role?.userRole === 'RDD' && e.endorsementStatus === 'approved'
-    ).sort((a, b) => new Date(a.endorsementDate || 0) - new Date(b.endorsementDate || 0)) || [];
-    
-    // Get reviews sorted by date
-    const reviews = proposal.reviews?.filter(r => r.reviewedAt)
-      .sort((a, b) => new Date(a.reviewedAt) - new Date(b.reviewedAt)) || [];
-    
-    // 1. Proposal Submitted (always first, use actual submission date with time)
-    const submissionDate = new Date(baseDate);
-    timeline.push({
-      phase: 'Proposal Submitted',
-      start: submissionDate,
-      end: submissionDate,
-      status: 'Completed',
-      displayDate: formatDateTime(submissionDate)
-    });
-    
-    // 2. College Endorsement (must come after submission)
-    const cmEndorsement = cmEndorsements[0];
-    if (cmEndorsement && cmEndorsement.endorsementDate) {
-      const endorsementDate = new Date(cmEndorsement.endorsementDate);
-      // Ensure endorsement date is after submission
-      if (endorsementDate >= submissionDate) {
-        timeline.push({
-          phase: 'College Endorsement',
-          start: endorsementDate,
-          end: endorsementDate,
-          status: 'Completed',
-          displayDate: formatDateTime(endorsementDate)
+        const statusId = proposal.statusID;
+        const isArchived = Boolean(proposal.archivedByRDD);
+        console.log("Timeline calculation - StatusID:", statusId, "hasCmEndorsement:", hasCmEndorsement, "hasRddEndorsement:", hasRddEndorsement, "isArchived:", isArchived);
+
+        // Define only RDD-relevant timeline stages (proposals don't go beyond RDD in this view)
+        const allStages = [
+            { id: 0, name: "Proposal Submitted", status: "pending" },
+            { id: 1, name: "College Endorsement", status: "pending" },
+            { id: 2, name: "R&D Division Endorsement", status: "pending" },
+        ];
+
+        // If archived, show completion through RDD endorsement
+        if (isArchived) {
+            allStages[0].status = "completed"; // Proposal Submitted
+            allStages[1].status = "completed"; // College Endorsement
+            allStages[2].status = "completed"; // R&D Division Endorsement
+            return allStages;
+        }
+
+        // Update stages based on actual proposal status (matching StatusSeeder IDs)
+        switch (statusId) {
+            case 1: // Under Review - Proposal submitted, waiting for College Endorsement
+                allStages[0].status = "completed"; // Proposal Submitted
+                // If CM endorsed, College Endorsement is completed and R&D is pending
+                if (hasCmEndorsement) {
+                    allStages[1].status = "completed"; // College Endorsement completed
+                    // If RDD also endorsed, R&D Division is completed
+                    if (hasRddEndorsement) {
+                        allStages[2].status = "completed"; // R&D Division completed
+                    } else {
+                        allStages[2].status = "pending"; // R&D Division pending (light gray)
+                    }
+                } else {
+                    allStages[1].status = "current"; // College Endorsement current
+                }
+                break;
+            case 2: // Approved - All stages completed
+                allStages[0].status = "completed"; // Proposal Submitted
+                allStages[1].status = "completed"; // College Endorsement
+                allStages[2].status = "completed"; // R&D Division
+                break;
+            case 3: // Rejected - College Endorsement completed, R&D Division rejected
+                allStages[0].status = "completed"; // Proposal Submitted
+                allStages[1].status = "completed"; // College Endorsement
+                allStages[2].status = "rejected"; // R&D Division
+                break;
+            case 4: // Ongoing - All stages completed
+                allStages[0].status = "completed"; // Proposal Submitted
+                allStages[1].status = "completed"; // College Endorsement
+                allStages[2].status = "completed"; // R&D Division
+                break;
+            case 5: // Completed - All stages completed
+                allStages[0].status = "completed"; // Proposal Submitted
+                allStages[1].status = "completed"; // College Endorsement
+                allStages[2].status = "completed"; // R&D Division
+                break;
+            default:
+                // Default mirrors Under Review behavior
+                allStages[0].status = "completed";
+                if (hasCmEndorsement) {
+                    allStages[1].status = "completed";
+                    allStages[2].status = hasRddEndorsement ? "completed" : "pending";
+                } else {
+                    allStages[1].status = "current";
+                }
+        }
+
+        return allStages;
+    };
+
+    // Dynamic status history based on actual proposal data
+    const getStatusHistory = () => {
+        if (!proposal) return [];
+
+        const timelineStages = getTimelineStages();
+        const baseDate = new Date(proposal.created_at);
+
+        // Generate status history based on timeline stages
+        const statusHistory = [];
+
+        // Get stages in chronological order
+        const completedStages = timelineStages.filter(
+            (stage) => stage.status === "completed"
+        );
+        const currentStage = timelineStages.find(
+            (stage) => stage.status === "current"
+        );
+        const rejectedStage = timelineStages.find(
+            (stage) => stage.status === "rejected"
+        );
+
+        // Create a proper chronological timeline
+        const timelineEntries = [];
+
+        // 1. Add initial proposal submission (always first)
+        timelineEntries.push({
+            date: baseDate,
+            status: "Proposal Submitted",
+            action: "Proposal submitted successfully and is now under review.",
+            priority: "medium",
+            type: "completed",
         });
-      }
-    } else if (statusId >= 2) {
-      // If status is beyond submission but no endorsement date, estimate (at least 1 day after submission)
-      const estimatedDate = new Date(Math.max(
-        submissionDate.getTime() + 1 * 24 * 60 * 60 * 1000,
-        submissionDate.getTime() + 7 * 24 * 60 * 60 * 1000
-      ));
-      estimatedDate.setHours(10, 0, 0, 0); // Set to 10 AM
-      timeline.push({
-        phase: 'College Endorsement',
-        start: estimatedDate,
-        end: estimatedDate,
-        status: 'Completed',
-        displayDate: formatDateTime(estimatedDate)
-      });
-    } else {
-      // Pending - estimate future date
-      const futureDate = new Date(submissionDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-      futureDate.setHours(10, 0, 0, 0);
-      timeline.push({
-        phase: 'College Endorsement',
-        start: futureDate,
-        end: new Date(futureDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        status: 'Pending',
-        displayDate: formatDateRange(futureDate, new Date(futureDate.getTime() + 7 * 24 * 60 * 60 * 1000))
-      });
-    }
-    
-    // 3. R&D Division Review (comes after College Endorsement)
-    // Get the last completed stage date
-    const lastCompletedDate = timeline[timeline.length - 1]?.end || submissionDate;
-    
-    if (statusId >= 2) {
-      // Determine R&D review date - use actual data or estimate after CM endorsement
-      let rddDate;
-      if (rddEndorsements.length > 0 && rddEndorsements[0].endorsementDate) {
-        rddDate = new Date(rddEndorsements[0].endorsementDate);
-      } else if (reviews.length > 0 && reviews[0].reviewedAt) {
-        rddDate = new Date(reviews[0].reviewedAt);
-      } else {
-        // Estimate: at least 1 day after last completed stage
-        rddDate = new Date(Math.max(
-          lastCompletedDate.getTime() + 1 * 24 * 60 * 60 * 1000,
-          submissionDate.getTime() + 14 * 24 * 60 * 60 * 1000
-        ));
-        rddDate.setHours(10, 0, 0, 0);
-      }
-      
-      // Ensure R&D date is after last completed stage
-      if (rddDate >= lastCompletedDate) {
-        timeline.push({
-          phase: 'R&D Division Review',
-          start: rddDate,
-          end: rddDate,
-          status: reviews.length > 0 || statusId >= 3 ? 'Completed' : 'In Progress',
-          displayDate: formatDateTime(rddDate)
+
+        // 2. Add completed stages in chronological order (excluding Proposal Submitted to avoid duplication)
+        // Also exclude College Endorsement if we have actual CM endorsement data to use instead
+        completedStages
+            .filter((stage) => {
+                if (stage.name === "Proposal Submitted") return false;
+                // Skip College Endorsement here if we have real CM endorsement data
+                if (stage.name === "College Endorsement" && hasCmEndorsement && endorsementData) return false;
+                return true;
+            })
+            .forEach((stage, index) => {
+                const stageDate = new Date(baseDate);
+                // Add realistic time progression: 1-2 weeks between stages
+                const daysToAdd =
+                    (index + 1) * 7 + Math.floor(Math.random() * 7);
+                stageDate.setDate(stageDate.getDate() + daysToAdd);
+
+                // Add random time during business hours (9 AM - 5 PM)
+                const randomHour = 9 + Math.floor(Math.random() * 8);
+                const randomMinute = Math.floor(Math.random() * 60);
+                stageDate.setHours(randomHour, randomMinute, 0, 0);
+
+                timelineEntries.push({
+                    date: stageDate,
+                    status: stage.name,
+                    action: `${stage.name} completed successfully.`,
+                    priority: "medium",
+                    type: "completed",
+                });
+            });
+
+        // 3. Add CM endorsement entry if present (with actual date and endorser)
+        if (hasCmEndorsement && endorsementData) {
+            const endorsementDate = new Date(endorsementData.endorsementDate);
+            timelineEntries.push({
+                date: endorsementDate,
+                status: "College Endorsement",
+                action: `Proposal endorsed by ${
+                    endorsementData.endorser?.fullName || "Center Manager"
+                }.`,
+                priority: "high",
+                type: "completed",
+            });
+        }
+
+        // 3.5. Add RDD endorsement entry if archived
+        if (proposal.archivedByRDD) {
+            const rddEndorsementDate = new Date(proposal.archivedByRDD);
+            const rddEndorser = proposal.endorsements?.find(e => e.endorser?.role?.userRole === 'RDD' && e.endorsementStatus === 'approved');
+            timelineEntries.push({
+                date: rddEndorsementDate,
+                status: "R&D Division Endorsement",
+                action: `Proposal endorsed by RDD${rddEndorser ? ` - ${rddEndorser.endorser.fullName}` : ''} and moved to archive.`,
+                priority: "high",
+                type: "completed",
+            });
+        }
+
+        // 4. Add current stage (most recent)
+        if (currentStage && !proposal.archivedByRDD) {
+            // Don't show current stage if archived
+            const currentDate = new Date();
+            timelineEntries.push({
+                date: currentDate,
+                status: currentStage.name,
+                action: `Currently in ${currentStage.name} stage.`,
+                priority: "high",
+                type: "current",
+            });
+        }
+
+        // 5. Add rejected stage (if applicable)
+        if (rejectedStage) {
+            const rejectedDate = new Date();
+            timelineEntries.push({
+                date: rejectedDate,
+                status: rejectedStage.name,
+                action: `Proposal rejected at ${rejectedStage.name} stage.`,
+                priority: "high",
+                type: "rejected",
+            });
+        }
+
+        // Sort by date (newest first for display)
+        timelineEntries.sort((a, b) => b.date - a.date);
+
+        // Format the entries for display
+        timelineEntries.forEach((entry) => {
+            statusHistory.push({
+                date: entry.date.toLocaleDateString("en-US", {
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: true,
+                }),
+                status: entry.status,
+                action: entry.action,
+                priority: entry.priority,
+                type: entry.type,
+            });
         });
-      }
-    } else {
-      // Pending - estimate future date
-      const futureDate = new Date(lastCompletedDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-      futureDate.setHours(10, 0, 0, 0);
-      timeline.push({
-        phase: 'R&D Division Review',
-        start: futureDate,
-        end: new Date(futureDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        status: 'Pending',
-        displayDate: formatDateRange(futureDate, new Date(futureDate.getTime() + 7 * 24 * 60 * 60 * 1000))
-      });
-    }
-    
-    // 4. Proposal Review (comes after R&D Division Review, only if reviews exist or status indicates it)
-    const lastStageDate = timeline[timeline.length - 1]?.end || lastCompletedDate;
-    
-    if (reviews.length > 0) {
-      // Use the latest review date
-      const latestReviewDate = new Date(reviews[reviews.length - 1].reviewedAt);
-      if (latestReviewDate >= lastStageDate) {
-        timeline.push({
-          phase: 'Proposal Review',
-          start: latestReviewDate,
-          end: latestReviewDate,
-          status: 'Completed',
-          displayDate: formatDateTime(latestReviewDate)
-        });
-      }
-    } else if (statusId >= 3) {
-      // In progress - estimate date after R&D review
-      const reviewDate = new Date(Math.max(
-        lastStageDate.getTime() + 1 * 24 * 60 * 60 * 1000,
-        submissionDate.getTime() + 21 * 24 * 60 * 60 * 1000
-      ));
-      reviewDate.setHours(10, 0, 0, 0);
-      timeline.push({
-        phase: 'Proposal Review',
-        start: reviewDate,
-        end: new Date(reviewDate.getTime() + 7 * 24 * 60 * 60 * 1000),
-        status: 'In Progress',
-        displayDate: formatDateRange(reviewDate, new Date(reviewDate.getTime() + 7 * 24 * 60 * 60 * 1000))
-      });
-    }
-    
-    // 5. Implementation (only if proposal is approved/ongoing - statusId >= 2)
-    // Implementation should only come after reviews are completed
-    const finalReviewDate = timeline[timeline.length - 1]?.end || lastStageDate;
-    
-    if (statusId >= 2 && (reviews.length > 0 || statusId >= 3)) {
-      // Implementation starts after reviews are done
-      const implementationStart = new Date(Math.max(
-        finalReviewDate.getTime() + 1 * 24 * 60 * 60 * 1000,
-        submissionDate.getTime() + 30 * 24 * 60 * 60 * 1000
-      ));
-      implementationStart.setHours(9, 0, 0, 0);
-      
-      let implementationEnd;
-      if (statusId >= 4) {
-        // Ongoing - end date is today or estimated end
-        implementationEnd = new Date(Math.max(now, implementationStart.getTime() + 90 * 24 * 60 * 60 * 1000));
-      } else {
-        // Completed - estimate 90 days duration
-        implementationEnd = new Date(implementationStart.getTime() + 90 * 24 * 60 * 60 * 1000);
-      }
-      
-      timeline.push({
-        phase: 'Implementation',
-        start: implementationStart,
-        end: implementationEnd,
-        status: statusId >= 4 ? 'In Progress' : 'Completed',
-        displayDate: formatDateRange(implementationStart, implementationEnd)
-      });
-    } else if (statusId >= 2) {
-      // Approved but not yet in implementation
-      const futureDate = new Date(finalReviewDate.getTime() + 7 * 24 * 60 * 60 * 1000);
-      futureDate.setHours(9, 0, 0, 0);
-      timeline.push({
-        phase: 'Implementation',
-        start: futureDate,
-        end: new Date(futureDate.getTime() + 90 * 24 * 60 * 60 * 1000),
-        status: 'Pending',
-        displayDate: formatDateRange(futureDate, new Date(futureDate.getTime() + 90 * 24 * 60 * 60 * 1000))
-      });
-    }
-    
-    // 6. Monitoring (only if status is Ongoing or Completed - statusId >= 4)
-    if (statusId >= 4) {
-      const lastPhaseDate = timeline[timeline.length - 1]?.end || finalReviewDate;
-      const monitoringStart = new Date(Math.max(
-        lastPhaseDate.getTime() + 1 * 24 * 60 * 60 * 1000,
-        submissionDate.getTime() + 120 * 24 * 60 * 60 * 1000
-      ));
-      monitoringStart.setHours(9, 0, 0, 0);
-      
-      const monitoringEnd = statusId >= 5 
-        ? new Date(Math.max(now, monitoringStart.getTime() + 60 * 24 * 60 * 60 * 1000))
-        : new Date(monitoringStart.getTime() + 60 * 24 * 60 * 60 * 1000);
-      
-      timeline.push({
-        phase: 'Monitoring',
-        start: monitoringStart,
-        end: monitoringEnd,
-        status: statusId >= 5 ? 'Completed' : 'In Progress',
-        displayDate: formatDateRange(monitoringStart, monitoringEnd)
-      });
-    }
-    
-    return timeline;
-  };
 
-  // Get priority based on budget
-  const getPriority = (budget) => {
-    const numericBudget = Number(budget) || 0;
-    if (numericBudget >= 1000000) return 'High';
-    if (numericBudget >= 500000) return 'Medium';
-    return 'Low';
-  };
+        return statusHistory;
+    };
 
-  // Get actual endorsement date from CM endorsements
-  const getEndorsementDate = () => {
-    const cmEndorsements = proposal.endorsements?.filter(e => 
-      e.endorser?.role?.userRole === 'CM' && e.endorsementStatus === 'approved'
-    ) || [];
-    if (cmEndorsements.length > 0 && cmEndorsements[0].endorsementDate) {
-      return new Date(cmEndorsements[0].endorsementDate);
-    }
-    return null;
-  };
+    const timelineStages = getTimelineStages();
+    const statusHistory = getStatusHistory();
 
-  const transformedProposal = {
-    id: `PRO-2025-${String(proposal.proposalID).padStart(5, '0')}`,
-    title: proposal.researchTitle,
-    author: proposal.user ? `${proposal.user.firstName} ${proposal.user.lastName}` : 'Unknown',
-    email: proposal.user?.email || 'Unknown',
-    college: proposal.user?.department?.name || 'Unknown Department',
-    department: proposal.user?.department?.name || 'Unknown Department',
-    status: proposal.status?.statusName || 'Unknown',
-    priority: getPriority(budgetAmount),
-    submittedDate: new Date(proposal.uploadedAt).toISOString().split('T')[0],
-    reviewDeadline: new Date(new Date(proposal.uploadedAt).getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from submission
-    budget: formatCurrency(budgetAmount),
-    duration: '12 months', // Default duration since it's not in the database
-    startDate: new Date(proposal.uploadedAt).toISOString().split('T')[0],
-    endDate: new Date(new Date(proposal.uploadedAt).getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 1 year from submission
-    abstract: proposal.description || 'No abstract provided',
-    objectives: proposal.objectives ? proposal.objectives.split('\n').filter(obj => obj.trim()) : ['No objectives provided'],
-    methodology: proposal.matrixOfCompliance?.methodology || 'Methodology details not specified in the proposal.',
-    expectedOutcomes: proposal.matrixOfCompliance?.expectedOutcomes || [
-      'Research findings and publications',
-      'Implementation of proposed solution',
-      'Knowledge transfer to stakeholders',
-      'Policy recommendations'
-    ],
-    budgetBreakdown: formattedBudgetBreakdown,
-    timeline: buildTimeline(),
-    // Dynamic data from proposal
-    sustainableDevelopmentGoals: Array.isArray(proposal.sustainableDevelopmentGoals) 
-      ? proposal.sustainableDevelopmentGoals 
-      : [],
-    researchAgenda: Array.isArray(proposal.researchAgenda) 
-      ? proposal.researchAgenda 
-      : [],
-    dostSPs: Array.isArray(proposal.dostSPs) 
-      ? proposal.dostSPs 
-      : [],
-    endorsementDate: getEndorsementDate(),
-    reviewers: proposal.reviews && proposal.reviews.length > 0
-      ? proposal.reviews.map(review => ({
-          name: review.reviewer 
-            ? `${review.reviewer.firstName || ''} ${review.reviewer.lastName || ''}`.trim() || 'Unknown Reviewer'
-            : 'Unknown Reviewer',
-          status: review.decision 
-            ? review.decision.decision 
-            : review.reviewedAt 
-              ? 'Completed' 
-              : 'Pending',
-          comments: review.remarks || 'No comments provided.',
-          reviewedAt: review.reviewedAt 
-            ? new Date(review.reviewedAt).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })
-            : null
-        }))
-      : [],
-    attachments: proposal.files && proposal.files.length > 0
-      ? proposal.files.map(file => ({
-          name: file.fileName || 'Untitled File',
-          size: file.fileSize ? `${(file.fileSize / 1024 / 1024).toFixed(1)} MB` : 'Unknown size',
-          type: file.fileType ? (file.fileType === 'report' ? 'PDF' : file.fileType.toUpperCase()) : 'Unknown',
-          filePath: file.filePath ? `/storage/${file.filePath}` : null,
-          fileID: file.fileID
-        }))
-      : []
-  };
+    const getStatusColor = (status) => {
+        switch (status) {
+            case "completed":
+                return "bg-green-500";
+            case "current":
+                return "bg-blue-500";
+            case "rejected":
+                return "bg-red-500";
+            case "pending":
+                return "bg-gray-300";
+            default:
+                return "bg-gray-300";
+        }
+    };
 
-  const getStatusClass = (status) => {
-    switch (status) {
-      case 'Completed':
-        return 'bg-green-100 text-green-800 border-green-300';
-      case 'In Progress':
-        return 'bg-blue-100 text-blue-800 border-blue-300';
-      case 'Pending':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-300';
-      case 'Under Review':
-        return 'bg-orange-100 text-orange-800 border-orange-300';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-300';
-    }
-  };
+    const getStatusTextColor = (status) => {
+        switch (status) {
+            case "completed":
+                return "text-green-600";
+            case "current":
+                return "text-gray-700";
+            case "rejected":
+                return "text-red-600";
+            case "pending":
+                return "text-gray-400";
+            default:
+                return "text-gray-400";
+        }
+    };
 
-  const getPriorityClass = (priority) => {
-    switch (priority) {
-      case 'High':
-        return 'bg-red-100 text-red-800';
-      case 'Medium':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'Low':
-        return 'bg-green-100 text-green-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
+    const getPriorityColor = (priority) => {
+        switch (priority) {
+            case "high":
+                return "bg-red-100 text-red-800 border-red-200";
+            case "medium":
+                return "bg-yellow-100 text-yellow-800 border-yellow-200";
+            case "low":
+                return "bg-green-100 text-green-800 border-green-200";
+            default:
+                return "bg-gray-100 text-gray-800 border-gray-200";
+        }
+    };
 
-  const handleReviewSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!reviewDecision) {
-      alert('Please select a review decision');
-      return;
-    }
+    const getCompletionPercentage = () => {
+        const timelineStages = getTimelineStages();
+        
+        if (!timelineStages || timelineStages.length === 0) {
+            return 0;
+        }
+        
+        const completedStages = timelineStages.filter(
+            (stage) => stage.status === "completed"
+        ).length;
+        const rejectedStage = timelineStages.find(
+            (stage) => stage.status === "rejected"
+        )
+            ? 1
+            : 0;
 
-    try {
-      const reviewData = {
-        proposalID: proposal.proposalID,
-        decision: reviewDecision,
-        remarks: reviewComments || ''
-      };
+        // If rejected, return 0%
+        if (rejectedStage) return 0;
 
-      const response = await rddService.submitReview(reviewData);
-      
-      if (response.success) {
-        alert('Review submitted successfully!');
-        // Reset form
-        setReviewDecision('');
-        setReviewComments('');
-        // Refresh proposal data to show the new review
-        await fetchProposal();
-      } else {
-        alert(response.message || 'Failed to submit review');
-      }
-    } catch (error) {
-      console.error('Error submitting review:', error);
-      alert(error.response?.data?.message || 'Failed to submit review. Please try again.');
-    }
-  };
-
-  const handleDocumentClick = (document) => {
-    if (document && document.pdfPath) {
-      setSelectedDocument(document);
-      setShowDocumentModal(true);
-    }
-  };
-
-  const handleCloseModal = () => {
-    setShowDocumentModal(false);
-    setSelectedDocument(null);
-  };
-
-  const handleBack = () => {
-    router.visit('/rdd/endorsement');
-  };
-
-  // Prepare attached documents from actual uploaded files
-  const attachedDocuments = proposal?.files && proposal.files.length > 0
-    ? proposal.files.map(file => ({
-        name: file.fileName || 'Untitled File',
-        available: true,
-        pdfPath: file.filePath ? `/storage/${file.filePath}` : null,
-        fileID: file.fileID,
-        fileType: file.fileType,
-        fileSize: file.fileSize
-      }))
-    : [];
-
-  // Get concept paper path for PDF viewer (first file or fallback)
-  const conceptPaperPath = proposal?.files && proposal.files.length > 0
-    ? `/storage/${proposal.files[0].filePath}`
-    : null;
-
-  // Document Modal Component
-  const DocumentModal = () => {
-    if (!selectedDocument) return null;
+        // For RDD with 3 stages:
+        // Stage 1 (Proposal Submitted) = 33%
+        // Stage 2 (College Endorsement) = 67%
+        // Stage 3 (R&D Division Endorsement) = 100%
+        if (completedStages === 3) {
+            return 100; // All 3 stages completed
+        } else if (completedStages === 2) {
+            return 67; // 2 stages completed (Proposal Submitted + College Endorsement)
+        } else if (completedStages === 1) {
+            return 33; // 1 stage completed (Proposal Submitted)
+        } else {
+            return 0;
+        }
+    };
 
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-          {/* Modal Header */}
-          <div className="flex items-center justify-between p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-800">{selectedDocument.name}</h2>
-            <button
-              onClick={handleCloseModal}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+            <div className="max-w-7xl mx-auto px-6 pt-6">
+                <Breadcrumbs items={[
+                    { label: 'R&D Initiative Status', href: '/rdd/proposal' },
+                    { label: 'Project Details', href: null }
+                ]} />
+            </div>
+            <div className="max-w-7xl mx-auto p-6 space-y-8">
+                {/* Header Section */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                    {/* Back Button and Endorse Button */}
+                    <div className="flex items-center justify-between mb-6">
+                        <button
+                            onClick={handleBack}
+                            className="flex items-center text-red-600 hover:text-red-700 hover:bg-red-50 px-4 py-2 rounded-xl transition-all duration-200 group"
+                        >
+                            <svg
+                                className="w-5 h-5 mr-2 group-hover:-translate-x-1 transition-transform duration-200"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15 19l-7-7 7-7"
+                                />
+                            </svg>
+                            <span className="font-medium">
+                                Back to Projects
+                            </span>
+                        </button>
 
-          {/* Modal Content */}
-          <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-            <div className="h-full">
-              <PDFViewer 
-                pdfPath={selectedDocument.pdfPath} 
-                title={selectedDocument.name}
-              />
-              <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 mt-4">
-                <button
-                  onClick={handleCloseModal}
-                  className="px-4 py-2 text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  Close
-                </button>
-                <button className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors">
-                  Download PDF
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+                        {/* Endorse Button or Endorsement Status */}
+                        {(() => {
+                            const timelineStagesLocal = getTimelineStages();
+                            const rddStage = timelineStagesLocal.find(
+                                (stage) => stage.name === "R&D Division Endorsement"
+                            );
+                            const isRddCurrent = rddStage?.status === "current";
 
-  return (
-    <div className="p-6 bg-gradient-to-br from-gray-50 to-gray-100 h-full overflow-y-auto">
-      {/* Back Button */}
-      <div className="mb-8">
-        <button
-          onClick={handleBack}
-          className="inline-flex items-center space-x-2 px-4 py-2 bg-white hover:bg-gray-50 text-gray-700 rounded-lg shadow-sm border border-gray-200 transition-all duration-200 hover:shadow-md"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-          </svg>
-          <span className="font-medium">Back to Endorsements</span>
-        </button>
-      </div>
+                            // Find RDD endorsement data
+                            const rddEndorsementData = proposal.endorsements?.find(
+                                (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+                            );
 
-      {/* Proposal Details Section */}
-      <div className="bg-white rounded-xl shadow-lg p-8 mb-8 border border-gray-100">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2 leading-tight">
-            {transformedProposal.title}
-          </h1>
-          <p className="text-gray-600 text-lg">Research Proposal Details</p>
-        </div>
-        
-        {/* Info Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
-            <div className="flex items-center mb-1">
-              <div className="w-6 h-6 bg-blue-500 rounded-lg flex items-center justify-center mr-2">
-                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-gray-800">Proposal ID</h3>
-            </div>
-            <p className="text-lg font-bold text-blue-600">{transformedProposal.id}</p>
-          </div>
-          
-          <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-100">
-            <div className="flex items-center mb-1">
-              <div className="w-6 h-6 bg-purple-500 rounded-lg flex items-center justify-center mr-2">
-                <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-gray-800">Endorsement Date</h3>
-            </div>
-            <p className="text-lg font-bold text-purple-600">
-              {transformedProposal.endorsementDate
-                ? transformedProposal.endorsementDate.toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })
-                : 'Not yet endorsed'}
-            </p>
-          </div>
-        </div>
+                            // Show endorse button if: CM has endorsed, RDD hasn't endorsed, and proposal is not archived
+                            const canEndorse = hasCmEndorsement && !hasRddEndorsement && !proposal.archivedByRDD;
 
-        {/* Attached Documents */}
-        <div className="mb-8">
-          <div className="flex items-center mb-6">
-            <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center mr-3">
-              <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-semibold text-gray-800">Attached Documents</h3>
-          </div>
-          
-          {attachedDocuments.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {attachedDocuments.map((document, index) => (
-                <div 
-                  key={document.fileID || index} 
-                  className="flex items-center p-4 rounded-lg border transition-all duration-200 cursor-pointer group bg-blue-50 hover:bg-blue-100 border-blue-200"
-                  onClick={() => handleDocumentClick(document)}
-                >
-                  <div className="w-3 h-3 rounded-full mr-4 transition-colors bg-blue-500 group-hover:bg-blue-600"></div>
-                  <span className="font-medium text-sm flex-1 text-blue-700 hover:text-blue-800 group-hover:underline">
-                    {document.name}
-                  </span>
-                  <svg className="w-4 h-4 text-blue-500 group-hover:text-blue-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
-              <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-gray-600 font-medium">No documents attached</p>
-              <p className="text-gray-500 text-sm mt-1">Files will appear here once they are uploaded.</p>
-            </div>
-          )}
-        </div>
-
-        {/* Research Information Section */}
-        <div className="bg-gradient-to-br from-white via-blue-50/30 to-purple-50/30 rounded-2xl shadow-xl border border-gray-200/50 p-8 mb-8 backdrop-blur-sm">
-          <div className="flex items-center gap-4 mb-8">
-            <div className="w-12 h-12 bg-blue-100 rounded-2xl flex items-center justify-center shadow-lg">
-              <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-2xl font-bold text-black">
-                Research Information
-              </h3>
-              <p className="text-gray-600 mt-1">Comprehensive research project details and classifications</p>
-            </div>
-          </div>
-
-          {/* Research Information Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-            {/* Basic Information */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h4 className="text-lg font-bold text-gray-900">Basic Information</h4>
-              </div>
-              <div className="space-y-4">
-                <div className="flex items-start gap-3 p-3 bg-blue-50/50 rounded-xl">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-2"></div>
-                  <div>
-                    <span className="font-semibold text-gray-800 text-sm">RESEARCH CENTER</span>
-                    <p className="text-gray-700 font-medium">{proposal.researchCenter || transformedProposal.department}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-yellow-50/50 rounded-xl">
-                  <div className="w-2 h-2 bg-yellow-500 rounded-full mt-2"></div>
-                  <div>
-                    <span className="font-semibold text-gray-800 text-sm">FUNDING STATUS</span>
-                    <p className="text-gray-700 font-medium">{transformedProposal.status}</p>
-                    <p className="text-gray-600 text-sm mt-1">Proposed: {transformedProposal.budget}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-3 p-3 bg-green-50/50 rounded-xl">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-2"></div>
-                  <div>
-                    <span className="font-semibold text-gray-800 text-sm">SUBMITTED DATE</span>
-                    <p className="text-gray-700 font-medium">
-                      {new Date(proposal?.uploadedAt || new Date()).toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric'
-                      })}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* SDGs */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-                <h4 className="text-lg font-bold text-gray-900">Sustainable Development Goals</h4>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {transformedProposal.sustainableDevelopmentGoals.length > 0 ? (
-                  transformedProposal.sustainableDevelopmentGoals.map((sdg, index) => (
-                    <span key={index} className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-purple-100 text-purple-800">
-                      {sdg}
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm">No Sustainable Development Goals specified</p>
-                )}
-              </div>
-            </div>
-
-            {/* Research Agenda */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-                <h4 className="text-lg font-bold text-gray-900">Research Agenda</h4>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {transformedProposal.researchAgenda.length > 0 ? (
-                  transformedProposal.researchAgenda.map((agenda, index) => (
-                    <span key={index} className="inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 border border-blue-300/50 shadow-sm hover:shadow-md transition-all duration-200">
-                      {agenda}
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm">No Research Agenda specified</p>
-                )}
-              </div>
-            </div>
-
-            {/* DOST Programs */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 hover:shadow-xl transition-all duration-300">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                  </svg>
-                </div>
-                <h4 className="text-lg font-bold text-gray-900">DOST Programs</h4>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {transformedProposal.dostSPs.length > 0 ? (
-                  transformedProposal.dostSPs.map((dost, index) => (
-                    <span 
-                      key={index} 
-                      className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold shadow-sm hover:shadow-md transition-all duration-200 ${
-                        index === 0 
-                          ? 'bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg hover:shadow-xl transform hover:scale-105 font-bold'
-                          : 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 border border-green-300/50'
-                      }`}
-                    >
-                      {dost}
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-gray-500 text-sm">No DOST Programs specified</p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Research Details */}
-          <div className="bg-white/80 backdrop-blur-sm rounded-2xl p-6 shadow-lg border border-gray-200/50 hover:shadow-xl transition-all duration-300">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
-                <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-              </div>
-              <h4 className="text-lg font-bold text-gray-900">Research Details</h4>
-            </div>
-            <div className="space-y-4">
-              <div className="p-4 bg-gradient-to-r from-yellow-50/50 to-orange-50/50 rounded-xl border border-yellow-200/50">
-                <span className="font-bold text-gray-800 text-sm">DESCRIPTION</span>
-                <p className="text-gray-700 mt-2 leading-relaxed">{transformedProposal.abstract}</p>
-              </div>
-              <div className="p-4 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 rounded-xl border border-blue-200/50">
-                <span className="font-bold text-gray-800 text-sm">OBJECTIVES</span>
-                <ul className="text-gray-700 mt-2 leading-relaxed list-disc list-inside space-y-1">
-                  {transformedProposal.objectives.map((objective, index) => (
-                    <li key={index}>{objective}</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="flex space-x-8 px-6">
-              {['overview', 'budget', 'timeline', 'reviewers', 'attachments'].map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`py-4 px-1 border-b-2 font-medium text-sm capitalize ${
-                    activeTab === tab
-                      ? 'border-red-500 text-red-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          <div className="p-6">
-            {/* Overview Tab */}
-            {activeTab === 'overview' && (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Principal Investigator</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center">
-                        <BiUser className="mr-2 text-gray-400" />
-                        <span className="text-gray-900">{transformedProposal.author}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <BiEnvelope className="mr-2 text-gray-400" />
-                        <span className="text-gray-900">{transformedProposal.email}</span>
-                      </div>
-                      <div className="text-gray-600">{transformedProposal.college}</div>
-                      <div className="text-gray-600">{transformedProposal.department}</div>
+                            if (hasRddEndorsement) {
+                                return (
+                                    <div className="flex items-center space-x-4">
+                                        <div className="flex items-center px-6 py-3 bg-green-100 text-green-800 rounded-xl font-semibold">
+                                            <svg
+                                                className="w-5 h-5 mr-2"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                />
+                                            </svg>
+                                            Project Endorsed
+                                        </div>
+                                    </div>
+                                );
+                            } else if (canEndorse || (isRddCurrent && !proposal.archivedByRDD)) {
+                                // Show endorse button if CM has endorsed and RDD hasn't, or if timeline shows RDD as current
+                                return (
+                                    <button
+                                        onClick={handleEndorse}
+                                        className="flex items-center bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-xl font-medium transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+                                    >
+                                        <svg
+                                            className="w-5 h-5 mr-2"
+                                            fill="none"
+                                            stroke="currentColor"
+                                            viewBox="0 0 24 24"
+                                        >
+                                            <path
+                                                strokeLinecap="round"
+                                                strokeLinejoin="round"
+                                                strokeWidth={2}
+                                                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                                            />
+                                        </svg>
+                                        Endorse Project
+                                    </button>
+                                );
+                            } else if (proposal.archivedByRDD) {
+                                // Show archived badge for archived proposals
+                                return (
+                                    <div className="flex items-center gap-3 bg-green-50 border-2 border-green-200 text-green-700 px-6 py-3 rounded-xl">
+                                        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                                        </svg>
+                                        <div>
+                                            <div className="font-semibold">Archived</div>
+                                            <div className="text-sm">RDD endorsed on {new Date(proposal.archivedByRDD).toLocaleDateString()}</div>
+                                        </div>
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
                     </div>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Project Information</h3>
-                    <div className="space-y-2">
-                      <div className="flex items-center">
-                        <BiDollar className="mr-2 text-gray-400" />
-                        <span className="text-gray-900">{transformedProposal.budget}</span>
-                      </div>
-                      <div className="flex items-center">
-                        <BiCalendar className="mr-2 text-gray-400" />
-                        <span className="text-gray-900">{transformedProposal.duration}</span>
-                      </div>
-                      <div className="text-gray-600">Start: {transformedProposal.startDate}</div>
-                      <div className="text-gray-600">End: {transformedProposal.endDate}</div>
-                    </div>
-                  </div>
-                </div>
 
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Abstract</h3>
-                  <p className="text-gray-700 leading-relaxed">{transformedProposal.abstract}</p>
-                </div>
+                    {/* Project Title and Info */}
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-6">
+                        <div className="flex-1">
+                            <h1 className="text-3xl lg:text-4xl font-bold text-gray-900 mb-4 leading-tight">
+                                {proposal.researchTitle}
+                            </h1>
 
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Objectives</h3>
-                  <ul className="list-disc list-inside space-y-1 text-gray-700">
-                    {transformedProposal.objectives.map((objective, index) => (
-                      <li key={index}>{objective}</li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Methodology</h3>
-                  <p className="text-gray-700 leading-relaxed">{transformedProposal.methodology}</p>
-                </div>
-
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Expected Outcomes</h3>
-                  <ul className="list-disc list-inside space-y-1 text-gray-700">
-                    {transformedProposal.expectedOutcomes.map((outcome, index) => (
-                      <li key={index}>{outcome}</li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            )}
-
-            {/* Budget Tab */}
-            {activeTab === 'budget' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">Budget Breakdown</h3>
-                <div className="bg-gray-50 rounded-lg p-6">
-                  <div className="space-y-4">
-                    {Object.entries(transformedProposal.budgetBreakdown).map(([category, amount]) => (
-                      <div key={category} className="flex justify-between items-center">
-                        <span className="text-gray-700 capitalize">{category.replace(/([A-Z])/g, ' $1')}</span>
-                        <span className="font-semibold text-gray-900">{amount}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Timeline Tab */}
-            {activeTab === 'timeline' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">Project Timeline</h3>
-                <div className="space-y-4">
-                  {transformedProposal.timeline.map((phase, index) => (
-                    <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex-1">
-                        <h4 className="font-semibold text-gray-900 mb-1">{phase.phase}</h4>
-                        <p className="text-sm text-gray-600">{phase.displayDate || formatDateRange(phase.start, phase.end)}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusClass(phase.status)}`}>
-                        {phase.status}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Reviewers Tab */}
-            {activeTab === 'reviewers' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">Reviewers</h3>
-                {transformedProposal.reviewers.length > 0 ? (
-                  <div className="space-y-4">
-                    {transformedProposal.reviewers.map((reviewer, index) => (
-                      <div key={index} className="p-4 border border-gray-200 rounded-lg">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-gray-900">{reviewer.name}</h4>
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusClass(reviewer.status)}`}>
-                            {reviewer.status}
-                          </span>
+                            <div className="flex flex-wrap gap-4 text-gray-600">
+                                <div className="flex items-center">
+                                    <svg
+                                        className="w-5 h-5 mr-2 text-gray-400"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                        />
+                                    </svg>
+                                    <span className="font-medium">ID:</span>
+                                    <span className="ml-1">
+                                        {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
+                                    </span>
+                                </div>
+                                <div className="flex items-center">
+                                    <svg
+                                        className="w-5 h-5 mr-2 text-gray-400"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
+                                        />
+                                    </svg>
+                                    <span className="font-medium">Budget:</span>
+                                    <span className="ml-1">
+                                        ₱
+                                        {proposal.proposedBudget?.toLocaleString() ||
+                                            "0"}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        {reviewer.reviewedAt && (
-                          <p className="text-xs text-gray-500 mb-2">Reviewed on: {reviewer.reviewedAt}</p>
-                        )}
-                        {reviewer.comments && (
-                          <p className="text-gray-700 text-sm">{reviewer.comments}</p>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                    <p className="text-gray-600">No reviews have been submitted yet.</p>
-                  </div>
-                )}
 
-                {/* Review Form */}
-                <div className="mt-8 p-6 bg-gray-50 rounded-lg">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Submit Review</h4>
-                  <form onSubmit={handleReviewSubmit} className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Review Decision
-                      </label>
-                      <select
-                        value={reviewDecision}
-                        onChange={(e) => setReviewDecision(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                        required
-                      >
-                        <option value="">Select decision...</option>
-                        <option value="approve">Approve</option>
-                        <option value="approve_with_conditions">Approve with Conditions</option>
-                        <option value="reject">Reject</option>
-                        <option value="request_revision">Request Revision</option>
-                      </select>
+                        {/* Progress Card */}
+                        <div className={`bg-gradient-to-r rounded-2xl p-6 min-w-[280px] transition-colors duration-300 ${
+                            getCompletionPercentage() === 100
+                                ? 'from-green-50 to-green-100'
+                                : 'from-red-50 to-red-100'
+                        }`}>
+                            <div className="text-center">
+                                <div className={`text-3xl font-bold mb-1 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}>
+                                    {getCompletionPercentage()}%
+                                </div>
+                                <div className={`text-sm font-medium mb-3 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-700'
+                                        : 'text-red-700'
+                                }`}>
+                                    Project Progress
+                                </div>
+                                <div className={`w-full rounded-full h-2 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'bg-green-200'
+                                        : 'bg-red-200'
+                                }`}>
+                                    <div
+                                        className={`h-2 rounded-full transition-all duration-500 ${
+                                            getCompletionPercentage() === 100
+                                                ? 'bg-green-600'
+                                                : 'bg-red-600'
+                                        }`}
+                                        style={{
+                                            width: `${getCompletionPercentage()}%`,
+                                        }}
+                                    ></div>
+                                </div>
+                                <div className={`text-xs mt-2 transition-colors duration-300 ${
+                                    getCompletionPercentage() === 100
+                                        ? 'text-green-600'
+                                        : 'text-red-600'
+                                }`}>
+                                    {
+                                        timelineStages.filter(
+                                            (s) => s.status === "completed"
+                                        ).length
+                                    }{" "}
+                                    of {timelineStages.length} stages completed
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Comments
-                      </label>
-                      <textarea
-                        value={reviewComments}
-                        onChange={(e) => setReviewComments(e.target.value)}
-                        rows={4}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
-                        placeholder="Provide detailed feedback..."
-                        required
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-                      >
-                        <BiCheck className="text-sm" />
-                        Submit Review
-                      </button>
-                      <button
-                        type="button"
-                        className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors duration-200"
-                      >
-                        <BiX className="text-sm" />
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
+                    {/* Co-Authors Card */}
+                    <CoAuthorsCard proposal={proposal} />
                 </div>
-              </div>
-            )}
 
-            {/* Attachments Tab */}
-            {activeTab === 'attachments' && (
-              <div className="space-y-6">
-                <h3 className="text-lg font-semibold text-gray-900">Attachments</h3>
-                {transformedProposal.attachments.length > 0 ? (
-                  <div className="space-y-3">
-                    {transformedProposal.attachments.map((file, index) => (
-                      <div key={file.fileID || index} className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-                        <div className="flex items-center flex-1">
-                          <BiFile className="mr-3 text-gray-400" />
-                          <div className="flex-1">
-                            <h4 className="font-semibold text-gray-900">{file.name}</h4>
-                            <p className="text-sm text-gray-600">{file.type} • {file.size}</p>
+                {/* Status Timeline Section */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                    <div className="flex items-center mb-8">
+                        <div className="p-3 bg-red-100 rounded-xl mr-4">
+                            <svg
+                                className="w-6 h-6 text-red-600"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                            >
+                                <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v4a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+                                />
+                            </svg>
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900">
+                                Project Timeline
+                            </h2>
+                            <p className="text-gray-600">
+                                Track your project's progress through each stage
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                                ← Scroll horizontally to view all stages →
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Timeline stages data */}
+                    {(() => {
+                        const statusHistory = getStatusHistory(); // Compute once to get dates
+
+                        return (
+                            <div className="relative">
+                                {timelineStages.length === 0 ? (
+                                    <div className="text-center py-8">
+                                        <p className="text-gray-500">No timeline stages configured. Please contact the administrator.</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        {/* Scrollable Timeline Container */}
+                                        <div className="overflow-x-auto pb-4">
+                                            <div className="flex justify-between items-start relative min-w-max px-4">
+                                                {timelineStages.map((stage, index) => {
+                                            return (
+                                                <div
+                                                    key={`timeline-stage-${stage.id}-${index}`}
+                                                    className="flex flex-col items-center relative mx-4 sm:mx-8"
+                                                >
+                                                    {/* Stage Dot */}
+                                                    <div className="relative">
+                                                        <div
+                                                            className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full ${getStatusColor(
+                                                                stage.status
+                                                            )} mb-4 relative z-10 flex-shrink-0`}
+                                                        >
+                                                            {stage.status ===
+                                                                "completed" && (
+                                                                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-white flex items-center justify-center border-2 border-green-200">
+                                                                    <svg
+                                                                        className="w-5 h-5 sm:w-6 sm:h-6 text-green-500"
+                                                                        fill="currentColor"
+                                                                        viewBox="0 0 20 20"
+                                                                    >
+                                                                        <path
+                                                                            fillRule="evenodd"
+                                                                            d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                                                            clipRule="evenodd"
+                                                                        />
+                                                                    </svg>
+                                                                </div>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Connecting Chevron - Centered between circles */}
+                                                        {index <
+                                                            timelineStages.length -
+                                                                1 && (
+                                                            <div className="absolute top-[20px] sm:top-[24px] left-[calc(100%+1rem)] sm:left-[calc(100%+2rem)] z-0 -translate-x-1/2">
+                                                                <svg
+                                                                    className={`w-6 h-6 sm:w-8 sm:h-8 ${
+                                                                        stage.status === "completed"
+                                                                            ? "text-green-500"
+                                                                            : "text-gray-300"
+                                                                    }`}
+                                                                    fill="none"
+                                                                    stroke="currentColor"
+                                                                    viewBox="0 0 24 24"
+                                                                >
+                                                                    <path
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        strokeWidth={2}
+                                                                        d="M9 5l7 7-7 7"
+                                                                    />
+                                                                </svg>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Stage Label */}
+                                                    <div
+                                                        className={`px-3 sm:px-4 py-2 rounded-lg text-center min-w-24 sm:min-w-32 ${
+                                                            stage.status ===
+                                                            "current"
+                                                                ? "bg-blue-500 border border-blue-600"
+                                                                : stage.status ===
+                                                                  "completed"
+                                                                ? "bg-green-50 border border-green-200"
+                                                                : stage.status ===
+                                                                  "rejected"
+                                                                ? "bg-red-50 border border-red-200"
+                                                                : "bg-gray-100 border border-gray-300"
+                                                        }`}
+                                                    >
+                                                        <span
+                                                            className={`text-xs sm:text-sm font-medium ${
+                                                                stage.status === "current"
+                                                                    ? "text-white"
+                                                                    : getStatusTextColor(stage.status)
+                                                            } leading-tight block`}
+                                                        >
+                                                            {stage.name}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                                    </>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </div>
+
+                {/* Status History Section */}
+                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div className="p-8 pb-6">
+                        <div className="flex items-center mb-6">
+                            <div className="p-3 bg-blue-100 rounded-xl mr-4">
+                                <svg
+                                    className="w-6 h-6 text-blue-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                                    />
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900">
+                                    Status History
+                                </h2>
+                                <p className="text-gray-600">
+                                    Detailed timeline of all project activities
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Enhanced Status History Table */}
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-y border-gray-200">
+                                    <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
+                                        Date & Time
+                                    </th>
+                                    <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
+                                        Status
+                                    </th>
+                                    <th className="px-8 py-4 text-left text-sm font-semibold text-gray-700">
+                                        Action Details
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {statusHistory.map((entry, index) => (
+                                    <tr
+                                        key={index}
+                                        className={`hover:bg-gray-50 transition-colors duration-200 ${
+                                            index !== statusHistory.length - 1
+                                                ? "border-b border-gray-100"
+                                                : ""
+                                        }`}
+                                    >
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center">
+                                                <div className="w-2 h-2 bg-gray-400 rounded-full mr-3"></div>
+                                                <div>
+                                                    <div className="text-sm font-medium text-gray-900">
+                                                        {entry.date}
+                                                    </div>
+                                                    <div className="text-xs text-gray-500">
+                                                        {index === 0
+                                                            ? "Latest update"
+                                                            : index ===
+                                                              statusHistory.length -
+                                                                  1
+                                                            ? "Initial submission"
+                                                            : "Stage completed"}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <div className="flex items-center">
+                                                <div
+                                                    className={`w-3 h-3 rounded-full mr-3 ${
+                                                        index === 0
+                                                            ? "bg-red-600 animate-pulse"
+                                                            : "bg-green-500"
+                                                    }`}
+                                                ></div>
+                                                <span
+                                                    className={`text-sm font-medium ${
+                                                        index === 0
+                                                            ? "text-red-700"
+                                                            : "text-gray-900"
+                                                    }`}
+                                                >
+                                                    {entry.status}
+                                                </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-8 py-6">
+                                            <span className="text-sm text-gray-600 leading-relaxed">
+                                                {entry.action ||
+                                                    "No additional details"}
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* Research Paper Section */}
+                {(() => {
+                  const researchPaper = proposal?.files?.find(f => {
+                    const fileName = f.fileName?.toLowerCase() || '';
+                    return f.fileType === 'concept_paper' || 
+                           f.fileType === 'report' ||
+                           fileName.includes('concept') ||
+                           fileName.includes('research') ||
+                           fileName.includes('paper');
+                  });
+
+                  if (!researchPaper || !researchPaper.filePath) {
+                    return null;
+                  }
+
+                  const fileUrl = `/storage/${researchPaper.filePath}`;
+
+                  return (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-8">
+                      <div className="flex items-center mb-8">
+                        <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </div>
+                        <h3 className="text-2xl font-bold text-gray-900">Research Proposal</h3>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <h4 className="text-base font-bold text-red-900">Main Document</h4>
+                            <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                              1 file
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 mb-4">Primary research document</p>
+                          <div className="p-4 bg-gray-50 rounded-lg">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{researchPaper.fileName}</p>
+                            {researchPaper.fileSize && <p className="text-xs text-gray-500 mt-1">{(researchPaper.fileSize / 1024).toFixed(0)} KB</p>}
+                            <div className="mt-3">
+                              <button
+                                onClick={() => window.open(fileUrl, '_blank', 'noopener')}
+                                className="w-full flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                              >
+                                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                View
+                              </button>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          {file.filePath && (
-                            <button 
-                              onClick={() => handleDocumentClick(file)}
-                              className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-                            >
-                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        
+                        {/* Proposed Budget - Only show in archive view */}
+                        {proposal.archivedByRDD && proposal.proposedBudget && (
+                          <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2">
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-base font-bold text-green-900">Proposed Budget</h4>
+                              <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                               </svg>
-                              View
-                            </button>
-                          )}
-                          {file.filePath && (
-                            <a
-                              href={file.filePath}
-                              download
-                              className="flex items-center gap-2 px-3 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors duration-200"
-                            >
-                              <BiDownload className="text-sm" />
-                              Download
-                            </a>
-                          )}
-                        </div>
+                            </div>
+                            <p className="text-sm text-gray-600 mb-4">Total funding requested</p>
+                            <div className="p-4 bg-green-50 rounded-lg">
+                              <p className="text-2xl font-bold text-green-900">
+                                ₱{Number(proposal.proposedBudget).toLocaleString('en-US', {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2
+                                })}
+                              </p>
+                              <p className="text-xs text-gray-600 mt-2">
+                                {Number(proposal.proposedBudget) >= 1000000 
+                                  ? `${(Number(proposal.proposedBudget) / 1000000).toFixed(2)} Million Pesos`
+                                  : `${(Number(proposal.proposedBudget) / 1000).toFixed(0)} Thousand Pesos`}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-6 bg-gray-50 rounded-lg border border-gray-200 text-center">
-                    <svg className="w-12 h-12 text-gray-400 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <p className="text-gray-600 font-medium">No attachments found</p>
-                    <p className="text-gray-500 text-sm mt-1">Files will appear here once they are uploaded.</p>
-                  </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Supporting Documents - SETI, GAD, MOC */}
+                {proposal.files && proposal.files.length > 0 && (() => {
+                    // Helper function to check if a file is a research proposal file
+                    const isResearchProposalFile = (file) => {
+                        const fileName = file.fileName?.toLowerCase() || "";
+                        return (
+                            file.fileType === "concept_paper" ||
+                            file.fileType === "report" ||
+                            fileName.includes("concept") ||
+                            fileName.includes("research") ||
+                            fileName.includes("paper")
+                        );
+                    };
+
+                    const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
+                    const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
+                    const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
+                    const otherFiles = proposal.files.filter(f => {
+                        // Exclude SETI, GAD, MOC files
+                        if (f.fileType === 'seti_scorecard' || 
+                            f.fileType === 'gad_certificate' || 
+                            f.fileType === 'matrix_compliance') {
+                            return false;
+                        }
+                        // Exclude research proposal files to avoid duplication
+                        if (isResearchProposalFile(f)) {
+                            return false;
+                        }
+                        return true;
+                    });
+
+                    const renderFileCard = (file) => (
+                        <div
+                            key={file.fileID}
+                            className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
+                        >
+                            <div className="flex items-start gap-4">
+                                <div className="flex-1 min-w-0">
+                                    <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">
+                                        {file.fileName}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mb-3">
+                                        {file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}
+                                    </p>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => window.open(`/storage/${file.filePath}`, "_blank")}
+                                            className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
+                                            title="View file"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                            View
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                const link = document.createElement("a");
+                                                link.href = `/storage/${file.filePath}`;
+                                                link.download = file.fileName;
+                                                link.target = "_blank";
+                                                document.body.appendChild(link);
+                                                link.click();
+                                                document.body.removeChild(link);
+                                            }}
+                                            className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
+                                            title="Download file"
+                                        >
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                            </svg>
+                                            Download
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    );
+
+                    return (
+                        <>
+                            {/* SETI, GAD, MOC - Horizontal 3 Column Layout */}
+                            {(setiFiles.length > 0 || gadFiles.length > 0 || mocFiles.length > 0) && (
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Supporting Documents</h2>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        {/* SETI Column */}
+                                        {setiFiles.length > 0 && (
+                                            <div>
+                                                <div className="mb-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="font-bold text-blue-900">SETI</h3>
+                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                            {setiFiles.length} file{setiFiles.length !== 1 ? "s" : ""}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600">Science and Engineering Technology Initiative</p>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {setiFiles.map(renderFileCard)}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* GAD Column */}
+                                        {gadFiles.length > 0 && (
+                                            <div>
+                                                <div className="mb-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="font-bold text-purple-900">GAD</h3>
+                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                            {gadFiles.length} file{gadFiles.length !== 1 ? "s" : ""}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600">Gender and Development</p>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {gadFiles.map(renderFileCard)}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* MOC Column */}
+                                        {mocFiles.length > 0 && (
+                                            <div>
+                                                <div className="mb-4">
+                                                    <div className="flex items-start justify-between mb-2">
+                                                        <h3 className="font-bold text-green-900">MOC</h3>
+                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">
+                                                            {mocFiles.length} file{mocFiles.length !== 1 ? "s" : ""}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-xs text-gray-600">Matrix of Compliance</p>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    {mocFiles.map(renderFileCard)}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Other Supporting Documents */}
+                            {otherFiles.length > 0 && (
+                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center">
+                                            <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-gray-900">Other Supporting Documents</h2>
+                                            <p className="text-sm text-gray-600">Additional files and attachments</p>
+                                        </div>
+                                        <span className="ml-auto bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">
+                                            {otherFiles.length} file{otherFiles.length !== 1 ? "s" : ""}
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {otherFiles.map(renderFileCard)}
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
+
+                {/* PDF Viewer - Legacy support for revisionFile */}
+                {proposal.revisionFile && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6">
+                            Legacy Proposal Document
+                        </h2>
+                        <PDFViewer
+                            pdfPath={proposal.revisionFile}
+                            title="Proposal Document"
+                        />
+                    </div>
                 )}
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-end space-x-4 mt-8">
-          <button 
-            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Edit Proposal
-          </button>
-          <button 
-            onClick={() => setActiveTab('reviewers')}
-            className="inline-flex items-center px-8 py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            Review Proposal
-          </button>
-        </div>
-      </div>
+                {/* RDD Endorsement Comment - Display after supporting documents if archived */}
+                {proposal.archivedByRDD && (() => {
+                    const rddEndorsement = proposal.endorsements?.find(
+                        (e) => e.endorser?.role?.userRole === "RDD" && e.endorsementStatus === "approved"
+                    );
+                    const rddComment = rddEndorsement?.endorsementComments;
+                    
+                    if (rddComment) {
+                        return (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center">
+                                        <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                    </div>
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-900">RDD Endorsement Comment</h2>
+                                        <p className="text-sm text-gray-600">
+                                            Comment from R&D Division upon endorsement
+                                            {rddEndorsement?.endorsedAt && (
+                                                <span className="ml-2">
+                                                    • {new Date(rddEndorsement.endorsedAt).toLocaleDateString('en-US', {
+                                                        year: 'numeric',
+                                                        month: 'long',
+                                                        day: 'numeric'
+                                                    })}
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div className="bg-green-50 border-l-4 border-green-500 rounded-r-lg p-6">
+                                    <div className="flex items-start gap-3">
+                                        <div className="flex-shrink-0">
+                                            <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                                            </svg>
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                                {rddComment}
+                                            </p>
+                                            {rddEndorsement?.endorser && (
+                                                <p className="text-sm text-gray-600 mt-4 font-medium">
+                                                    — {rddEndorsement.endorser.firstName} {rddEndorsement.endorser.lastName}
+                                                    {rddEndorsement.endorser.role?.userRole && (
+                                                        <span className="text-gray-500"> (RDD)</span>
+                                                    )}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    }
+                    return null;
+                })()}
 
-      {/* PDF Viewer */}
-      {conceptPaperPath && (
-        <div className="mb-8">
-          <PDFViewer pdfPath={conceptPaperPath} title="Concept Paper" />
+                {/* No Files Message */}
+                {(!proposal.files || proposal.files.length === 0) &&
+                    !proposal.revisionFile && (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                            <div className="text-center py-12">
+                                <div className="text-gray-400 text-6xl mb-4">
+                                    📄
+                                </div>
+                                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                                    No Documents Available
+                                </h3>
+                                <p className="text-gray-600">
+                                    This proposal doesn't have any uploaded
+                                    documents yet.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+            </div>
         </div>
-      )}
-
-      {/* Document Modal */}
-      {showDocumentModal && <DocumentModal />}
-    </div>
-  );
+    );
 };
+
+RDDProposalDetail.layout = (page) => (
+    <AppLayout>
+        <RDDLayout>{page}</RDDLayout>
+    </AppLayout>
+);
 
 export default RDDProposalDetail;

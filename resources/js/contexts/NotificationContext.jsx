@@ -44,22 +44,53 @@ export const NotificationProvider = ({ children }) => {
     const isTabVisible = !document.hidden;
     
     // If tab is hidden, refresh less frequently
-    if (!isTabVisible) return 180000; // 3 minutes
+    if (!isTabVisible) return 60000; // 1 minute
     
-    // If there's unread content, refresh more frequently
-    if (hasUnreadContent) return 15000; // 15 seconds
+    // If there's unread content, refresh very frequently for real-time updates
+    if (hasUnreadContent) return 5000; // 5 seconds
     
-    // If user was recently active, refresh moderately
-    if (timeSinceActivity < 60000) return 45000; // 45 seconds
+    // If user was recently active, refresh frequently
+    if (timeSinceActivity < 60000) return 10000; // 10 seconds
     
-    // Default refresh interval
-    return 90000; // 1.5 minutes
+    // Default refresh interval - more frequent for better UX
+    return 15000; // 15 seconds
   }, [autoRefreshEnabled, unreadCount]);
 
   // Update activity timestamp
   const updateActivity = useCallback(() => {
     lastActivityRef.current = Date.now();
   }, []);
+
+  // Fetch notifications from API
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      if (!user) { setNotifications([]); return; }
+      const response = await axiosInstance.get('/notifications', {
+        withCredentials: true
+      });
+      
+      setNotifications(response.data.data || []);
+    } catch (error) {
+      // Set empty array on error to prevent undefined issues
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Fetch unread count
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      if (!user) { setUnreadCount(0); return; }
+      const response = await axiosInstance.get('/notifications/unread-count', {
+        withCredentials: true
+      });
+      setUnreadCount(response.data.count || 0);
+    } catch (error) {
+      setUnreadCount(0);
+    }
+  }, [user]);
 
   // Refresh all notification data
   const refreshAllNotifications = useCallback(async () => {
@@ -77,7 +108,7 @@ export const NotificationProvider = ({ children }) => {
     } finally {
       setIsRefreshing(false);
     }
-  }, [isRefreshing]);
+  }, [isRefreshing, fetchNotifications, fetchUnreadCount]);
 
   // Set up auto-refresh
   const setupAutoRefresh = useCallback(() => {
@@ -116,36 +147,6 @@ export const NotificationProvider = ({ children }) => {
     loadDismissedToasts();
   }, []);
 
-  // Fetch notifications from API
-  const fetchNotifications = async () => {
-    try {
-      setLoading(true);
-      if (!user) { setNotifications([]); return; }
-      const response = await axiosInstance.get('/notifications', {
-        withCredentials: true
-      });
-      
-      setNotifications(response.data.data || []);
-    } catch (error) {
-      // Set empty array on error to prevent undefined issues
-      setNotifications([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Fetch unread count
-  const fetchUnreadCount = async () => {
-    try {
-      if (!user) { setUnreadCount(0); return; }
-      const response = await axiosInstance.get('/notifications/unread-count', {
-        withCredentials: true
-      });
-      setUnreadCount(response.data.count || 0);
-    } catch (error) {
-      setUnreadCount(0);
-    }
-  };
 
   // Load notifications on mount
   useEffect(() => {
@@ -164,7 +165,7 @@ export const NotificationProvider = ({ children }) => {
       setNotifications([]);
       setUnreadCount(0);
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, fetchNotifications, fetchUnreadCount]);
 
   // Set up auto-refresh when user is authenticated
   useEffect(() => {
@@ -233,7 +234,7 @@ export const NotificationProvider = ({ children }) => {
         clearDismissedToasts();
       }
     }
-  }, [user, authLoading]);
+  }, [user, authLoading, fetchNotifications, fetchUnreadCount]);
 
   const markAsRead = async (id) => {
     try {
@@ -256,7 +257,7 @@ export const NotificationProvider = ({ children }) => {
       setTimeout(() => {
         fetchNotifications();
         fetchUnreadCount();
-      }, 500);
+      }, 300);
     } catch (error) {
       // Error handling for marking notification as read
     }

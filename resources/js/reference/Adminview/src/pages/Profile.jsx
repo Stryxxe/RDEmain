@@ -297,10 +297,6 @@ const Profile = () => {
                 <span className="text-sm text-gray-600">Status</span>
                 <span className="text-sm text-green-600">Active</span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-sm text-gray-600">Two-Factor Auth</span>
-                <span className="text-sm text-gray-900">Enabled</span>
-              </div>
             </div>
           </div>
 

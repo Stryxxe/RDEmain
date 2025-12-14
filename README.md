@@ -1,61 +1,252 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Research Development & Extension (RDE) Management System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+A Laravel-based application for managing research proposals, endorsements, reviews, and project workflows using Laravel 12, Inertia.js, and React.
 
-## About Laravel
+## Prerequisites
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+Before you begin, ensure you have the following installed:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- **PHP 8.2 or higher** ([Download PHP](https://www.php.net/downloads))
+- **Composer** ([Download Composer](https://getcomposer.org/download/))
+- **Node.js 18+ & npm** ([Download Node.js](https://nodejs.org/))
+- **SQLite** (included with PHP) or **MySQL/PostgreSQL** (optional)
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Quick Setup Guide
 
-## Learning Laravel
+### 1. Clone & Navigate to Project
+```bash
+cd c:\projects\RDEmain-refactor-UI-apply_DRY_principle
+```
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 2. Install PHP Dependencies
+```bash
+composer install
+```
 
-You may also try the [Laravel Bootcamp](https://bootcamp.laravel.com), where you will be guided through building a modern Laravel application from scratch.
+### 3. Install JavaScript Dependencies
+```bash
+npm install
+```
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 4. Configure Environment
+```bash
+# Copy the example environment file
+copy .env.example .env
 
-## Laravel Sponsors
+# Generate application key
+php artisan key:generate
+```
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### 5. Configure Database
 
-### Premium Partners
+**Option A: Using SQLite (Recommended for Quick Start)**
+```bash
+# Create SQLite database file
+type nul > database\database.sqlite
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+The `.env` file is already configured for SQLite by default.
 
-## Contributing
+**Option B: Using MySQL/PostgreSQL**
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Edit `.env` and update:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=your_database_name
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+```
 
-## Code of Conduct
+### 6. Run Database Migrations
+```bash
+php artisan migrate
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 7. Seed Database (Optional)
+```bash
+# Seed with sample data
+php artisan db:seed
+```
 
-## Security Vulnerabilities
+### 8. Create Storage Link
+```bash
+php artisan storage:link
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 9. Configure File Upload Limits (Optional)
+
+If you need to upload large files, run:
+```powershell
+.\update-php-upload-limits.ps1
+```
+
+### 10. Start Development Servers
+
+**Option A: All-in-One Command (Recommended)**
+```bash
+composer dev
+```
+
+This starts all required services:
+- Laravel server (http://localhost:8000)
+- Queue worker
+- Log viewer (Pail)
+- Vite dev server (for frontend assets)
+
+**Option B: Manual Start**
+
+Open 4 separate terminal windows and run:
+
+Terminal 1 - Laravel Server:
+```bash
+php artisan serve
+```
+
+Terminal 2 - Queue Worker:
+```bash
+php artisan queue:listen
+```
+
+Terminal 3 - Frontend Dev Server:
+```bash
+npm run dev
+```
+
+Terminal 4 - Logs (Optional):
+```bash
+php artisan pail
+```
+
+### 11. Access the Application
+
+Open your browser and navigate to:
+```
+http://localhost:8000
+```
+
+## Project Features
+
+- ✅ Research proposal submission and management
+- ✅ Multi-level endorsement workflow
+- ✅ Review and decision tracking
+- ✅ File upload management
+- ✅ User roles and permissions
+- ✅ Activity logging
+- ✅ Automated backup system
+- ✅ Email notifications
+- ✅ Timeline tracking for proposals
+- ✅ Analytics and reporting
+
+## Additional Configuration
+
+### Setting Up Email (Optional)
+Edit `.env` to configure email:
+```env
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.mailtrap.io
+MAIL_PORT=2525
+MAIL_USERNAME=your_username
+MAIL_PASSWORD=your_password
+MAIL_ENCRYPTION=tls
+MAIL_FROM_ADDRESS="noreply@rde.edu"
+MAIL_FROM_NAME="${APP_NAME}"
+```
+
+### Setting Up Task Scheduler (Windows)
+For automated backups and scheduled tasks:
+```bash
+.\setup-scheduler.bat
+```
+
+### Backup System Configuration
+1. Log in as Admin
+2. Go to **Admin → System Settings**
+3. Scroll to **Backup** section
+4. Configure backup frequency and storage location
+5. See [BACKUP_QUICK_START.md](BACKUP_QUICK_START.md) for detailed instructions
+
+## Building for Production
+
+```bash
+# Build frontend assets
+npm run build
+
+# Optimize Laravel
+php artisan config:cache
+php artisan route:cache
+php artisan view:cache
+```
+
+## Common Commands
+
+```bash
+# Clear all caches
+php artisan optimize:clear
+
+# Run tests
+php artisan test
+
+# Check code quality
+./vendor/bin/phpstan analyse
+
+# Format code
+./vendor/bin/pint
+
+# Create a new migration
+php artisan make:migration create_table_name
+
+# Create a new controller
+php artisan make:controller ControllerName
+
+# Create a new model
+php artisan make:model ModelName -m
+```
+
+## Troubleshooting
+
+### Port Already in Use
+If port 8000 is already in use:
+```bash
+php artisan serve --port=8080
+```
+
+### Permission Issues
+On Windows, you may need to run PowerShell as Administrator for certain operations.
+
+### Database Connection Error
+- Verify `.env` database credentials
+- For SQLite, ensure `database\database.sqlite` exists
+- For MySQL/PostgreSQL, ensure the database server is running
+
+### Frontend Not Loading
+```bash
+# Clear npm cache and reinstall
+npm cache clean --force
+npm install
+
+# Rebuild assets
+npm run build
+```
+
+## Documentation
+
+- [Backend Integration Guide](COMPLETE_BACKEND_INTEGRATION_GUIDE.md)
+- [Backup System Documentation](BACKUP_SYSTEM_DOCUMENTATION.md)
+- [Backup Quick Start](BACKUP_QUICK_START.md)
+- [Dynamic Timeline Implementation](DYNAMIC_TIMELINE_IMPLEMENTATION.md)
+- [RDD Analytics Implementation](RDD_ANALYTICS_IMPLEMENTATION.md)
+
+## Tech Stack
+
+- **Backend**: Laravel 12, PHP 8.2+
+- **Frontend**: React 18, Inertia.js 2.0
+- **Styling**: Tailwind CSS 3
+- **Build Tool**: Vite 7
+- **Database**: SQLite (default) / MySQL / PostgreSQL
+- **Icons**: Lucide React, React Icons
 
 ## License
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+This project is built on the Laravel framework, which is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).

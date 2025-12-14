@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
+use App\Jobs\PerformScheduledBackup;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -36,8 +37,14 @@ class AuthenticatedSessionController extends Controller
         $user = Auth::user();
         $user->load(['role', 'department']);
 
-        // Redirect based on user role
-        return redirect()->intended($this->getRoleBasedRedirect($user));
+        // Trigger automatic backup when admin logs in
+        if ($user->role && strtolower($user->role->userRole) === 'admin') {
+            PerformScheduledBackup::dispatch();
+        }
+
+        $redirectPath = $this->getRoleBasedRedirect($user);
+
+        return redirect()->intended($redirectPath);
     }
 
     /**
@@ -60,16 +67,17 @@ class AuthenticatedSessionController extends Controller
     private function getRoleBasedRedirect($user): string
     {
         $userRole = $user->role->userRole ?? null;
-        
+
         if (!$userRole) {
             return '/';
         }
 
         // Normalize role name to lowercase for route
         $rolePath = strtolower($userRole);
-        
+
         // Map role names to their route prefixes
         $roleMap = [
+            'admin' => 'admin',
             'administrator' => 'admin',
             'rdd' => 'rdd',
             'cm' => 'cm',
@@ -80,7 +88,7 @@ class AuthenticatedSessionController extends Controller
         ];
 
         $routePrefix = $roleMap[strtolower($userRole)] ?? strtolower($userRole);
-        
+
         return "/{$routePrefix}";
     }
 }

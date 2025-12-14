@@ -1,37 +1,8 @@
 import React from 'react';
-import { X, CheckCircle, AlertCircle, Info, Clock } from 'lucide-react';
+import NotificationBanner from './NotificationBanner';
+import { Clock } from 'lucide-react';
 
 const NotificationToast = ({ notification, onRemove, onMarkAsRead }) => {
-  const getIcon = (type) => {
-    switch (type) {
-      case 'success':
-        return <CheckCircle className="w-5 h-5 text-green-500" />;
-      case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-500" />;
-      case 'warning':
-        return <AlertCircle className="w-5 h-5 text-yellow-500" />;
-      case 'info':
-        return <Info className="w-5 h-5 text-blue-500" />;
-      default:
-        return <Clock className="w-5 h-5 text-gray-500" />;
-    }
-  };
-
-  const getBorderColor = (type) => {
-    switch (type) {
-      case 'success':
-        return 'border-l-green-500';
-      case 'error':
-        return 'border-l-red-500';
-      case 'warning':
-        return 'border-l-yellow-500';
-      case 'info':
-        return 'border-l-blue-500';
-      default:
-        return 'border-l-gray-500';
-    }
-  };
-
   const formatTime = (timestamp) => {
     if (!timestamp) return 'Unknown time';
     
@@ -40,25 +11,20 @@ const NotificationToast = ({ notification, onRemove, onMarkAsRead }) => {
     
     // Handle different timestamp formats
     if (typeof timestamp === 'string') {
-      // Try parsing as ISO string first
       notificationDate = new Date(timestamp);
       
-      // If that fails, try parsing as a different format
       if (isNaN(notificationDate.getTime())) {
-        // Try parsing as Unix timestamp (if it's a number string)
         const numTimestamp = parseFloat(timestamp);
         if (!isNaN(numTimestamp)) {
-          notificationDate = new Date(numTimestamp * 1000); // Convert from seconds to milliseconds
+          notificationDate = new Date(numTimestamp * 1000);
         }
       }
     } else if (typeof timestamp === 'number') {
-      // Handle Unix timestamp (in seconds)
       notificationDate = new Date(timestamp * 1000);
     } else {
       notificationDate = new Date(timestamp);
     }
     
-    // Check if the date is valid
     if (isNaN(notificationDate.getTime())) {
       return 'Unknown time';
     }
@@ -76,52 +42,57 @@ const NotificationToast = ({ notification, onRemove, onMarkAsRead }) => {
     return `${days}d ago`;
   };
 
-  return (
-    <div
-      className={`bg-white border-l-4 ${getBorderColor(notification.type)} shadow-lg rounded-lg p-4 mb-3 transition-all duration-300 hover:shadow-xl ${
-        !notification.read ? 'ring-2 ring-blue-200' : ''
-      }`}
-    >
-      <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-3 flex-1">
-          {getIcon(notification.type)}
-          <div className="flex-1 min-w-0">
-            <h4 className="text-sm font-medium text-gray-900 truncate">
-              {notification.title}
-            </h4>
-            <p className="text-sm text-gray-600 mt-1 line-clamp-2">
-              {notification.message}
-            </p>
-            <div className="flex items-center justify-between mt-2">
-              <span className="text-xs text-gray-500">
-                {formatTime(notification.created_at)}
-              </span>
-              {!notification.read && (
-                <div className="flex items-center space-x-1">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                </div>
-              )}
-            </div>
+  // Map notification types to banner types
+  const getBannerType = (type) => {
+    switch (type) {
+      case 'success':
+        return 'success';
+      case 'error':
+        return 'error';
+      case 'warning':
+        return 'warning';
+      case 'info':
+        return 'info';
+      default:
+        return 'info';
+    }
+  };
+
+  const messageWithTime = (
+    <div>
+      <p className="mb-1">{notification.message}</p>
+      <div className="flex items-center justify-between mt-2">
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <Clock className="w-3 h-3" />
+          {formatTime(notification.created_at)}
+        </span>
+        {!notification.read && (
+          <div className="flex items-center space-x-1">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+            {onMarkAsRead && (
+              <button
+                onClick={() => onMarkAsRead(notification.id)}
+                className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors ml-2"
+              >
+                Mark as read
+              </button>
+            )}
           </div>
-        </div>
-        
-        <div className="flex items-center space-x-2 ml-2">
-          {!notification.read && (
-            <button
-              onClick={() => onMarkAsRead(notification.id)}
-              className="text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-            >
-              Mark as read
-            </button>
-          )}
-          <button
-            onClick={() => onRemove(notification.id)}
-            className="text-gray-400 hover:text-gray-600 transition-colors"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
+        )}
       </div>
+    </div>
+  );
+
+  return (
+    <div className={`mb-3 transition-all duration-300 ${
+      !notification.read ? 'ring-2 ring-blue-200 rounded-lg' : ''
+    }`}>
+      <NotificationBanner
+        type={getBannerType(notification.type)}
+        title={notification.title}
+        message={messageWithTime}
+        onClose={() => onRemove(notification.id)}
+      />
     </div>
   );
 };

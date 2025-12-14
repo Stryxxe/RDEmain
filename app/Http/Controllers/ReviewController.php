@@ -8,6 +8,8 @@ use App\Models\ReviewDecision;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class ReviewController extends Controller
@@ -84,6 +86,9 @@ class ReviewController extends Controller
                     'decisionID' => $decision->decisionID
                 ]);
 
+                // Clear proposal cache
+                $this->clearProposalCache($request->proposalID);
+
                 return response()->json([
                     'success' => true,
                     'message' => 'Review updated successfully',
@@ -101,6 +106,9 @@ class ReviewController extends Controller
                 'decisionID' => $decision->decisionID
             ]);
 
+            // Clear proposal cache
+            $this->clearProposalCache($request->proposalID);
+
             return response()->json([
                 'success' => true,
                 'message' => 'Review submitted successfully',
@@ -113,6 +121,41 @@ class ReviewController extends Controller
                 'message' => 'Failed to submit review',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Clear proposal cache for all users
+     * 
+     * @param int $proposalId
+     * @return void
+     */
+    private function clearProposalCache(int $proposalId): void
+    {
+        try {
+            // Clear cache with wildcard pattern for this proposal
+            $pattern = "proposal_{$proposalId}_user_*";
+            
+            try {
+                $store = Cache::getStore();
+                if ($store instanceof \Illuminate\Cache\RedisStore) {
+                    // Redis supports pattern matching
+                    $keys = Cache::getRedis()->keys($pattern);
+                    if (!empty($keys)) {
+                        Cache::getRedis()->del($keys);
+                    }
+                } else {
+                    // For non-Redis stores, we can't use wildcard patterns
+                    // Instead, we'll clear the cache entry for the current user if we have access to it
+                    // Note: This is a limitation - we can't clear all user-specific caches for this proposal
+                    // without knowing all user IDs. Consider using cache tags if your store supports them.
+                    Log::info("Cache wildcard pattern not supported for non-Redis store. Skipping cache clear for pattern: {$pattern}");
+                }
+            } catch (\Exception $e) {
+                Log::warning("Failed to clear proposal cache: " . $e->getMessage());
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to clear proposal cache: " . $e->getMessage());
         }
     }
 }

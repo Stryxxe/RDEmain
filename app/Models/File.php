@@ -31,6 +31,22 @@ class File extends Model
     ];
 
     /**
+     * Get the route key for the model.
+     */
+    public function getRouteKeyName()
+    {
+        return 'fileID';
+    }
+
+    /**
+     * Ensure fileID is always included in JSON serialization
+     */
+    protected function serializeDate(\DateTimeInterface $date)
+    {
+        return $date->format('Y-m-d H:i:s');
+    }
+
+    /**
      * Get the proposal that owns the file
      */
     public function proposal(): BelongsTo

@@ -19,13 +19,20 @@ class Endorsement extends Model
         'proposalID',
         'endorserID',
         'endorsementComments',
-        'endorsementDate',
+        'endorsedAt',
         'endorsementStatus'
     ];
 
     protected $casts = [
-        'endorsementDate' => 'datetime'
+        'endorsedAt' => 'datetime'
     ];
+
+    protected $appends = ['endorsementDate'];
+
+    public function getEndorsementDateAttribute()
+    {
+        return $this->endorsedAt;
+    }
 
     /**
      * Get the proposal for this endorsement

@@ -1,20 +1,79 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import { useEffect } from 'react';
 import bg from '../../../assets/bg.png';
 import logo from '../../../assets/logo.png';
 import google from '../../../assets/google.png';
 
 export default function Login({ status, canResetPassword }) {
+    const { flash, csrf_token } = usePage().props;
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
         remember: false,
     });
 
-    const submit = (e) => {
+    // Update CSRF token in meta tag when it changes
+    useEffect(() => {
+        if (csrf_token) {
+            const metaTag = document.querySelector('meta[name="csrf-token"]');
+            if (metaTag) {
+                metaTag.setAttribute('content', csrf_token);
+            }
+        }
+    }, [csrf_token]);
+
+    const submit = async (e) => {
         e.preventDefault();
 
         post('/login', {
             onFinish: () => reset('password'),
+            onError: async (errors) => {
+                // Check if the error is about pending account
+                const errorMessage = errors.email || errors.password || '';
+                if (errorMessage.toLowerCase().includes('pending') || 
+                    errorMessage.toLowerCase().includes('pending approval')) {
+                    // Show popup for pending account
+                    if (window.customAlert) {
+                        await window.customAlert(
+                            'Your account is currently pending for approval. You will be able to log in once an administrator activates your account. Please contact the administrator if you have any questions.',
+                            'Notification'
+                        );
+                    } else {
+                        alert('Your account is currently pending for approval. You will be able to log in once an administrator activates your account.');
+                    }
+                    // Reload the page to refresh CSRF token after failed login
+                    // Navigate to login page to get fresh CSRF token
+                    router.visit('/login', { 
+                        only: [],
+                        preserveState: false,
+                        preserveScroll: false
+                    });
+                } else if (errorMessage.toLowerCase().includes('inactive')) {
+                    // Show popup for inactive account
+                    if (window.customAlert) {
+                        await window.customAlert(
+                            'Your account is inactive. Please contact the administrator to activate your account.',
+                            'Account Inactive'
+                        );
+                    } else {
+                        alert('Your account is inactive. Please contact the administrator.');
+                    }
+                    // Reload the page to refresh CSRF token after failed login
+                    // Navigate to login page to get fresh CSRF token
+                    router.visit('/login', { 
+                        only: [],
+                        preserveState: false,
+                        preserveScroll: false
+                    });
+                } else if (errors.message && errors.message.includes('419')) {
+                    // Handle CSRF token mismatch - reload to get fresh token
+                    router.visit('/login', { 
+                        only: [],
+                        preserveState: false,
+                        preserveScroll: false
+                    });
+                }
+            },
         });
     };
 
@@ -22,7 +81,7 @@ export default function Login({ status, canResetPassword }) {
         <>
             <Head title="Log in" />
             <div
-                className="min-h-screen flex items-center justify-center bg-cover bg-center"
+                className="fixed inset-0 min-h-screen flex items-center justify-center bg-cover bg-center bg-no-repeat"
                 style={{ backgroundImage: `url(${bg})` }}
             >
                 <div className="absolute inset-0 bg-black opacity-50"></div>
@@ -47,9 +106,9 @@ export default function Login({ status, canResetPassword }) {
                             />
                         </div>
                         
-                        {status && (
-                            <div className="mb-4 text-sm font-medium text-green-600 text-center">
-                                {status}
+                        {(status || flash?.status) && (
+                            <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded text-sm text-center">
+                                {status || flash?.status}
                             </div>
                         )}
 
@@ -65,7 +124,9 @@ export default function Login({ status, canResetPassword }) {
                                     autoComplete="username"
                                     required
                                 />
-                                {errors.email && (
+                                {errors.email && 
+                                 !errors.email.toLowerCase().includes('pending') && 
+                                 !errors.email.toLowerCase().includes('inactive') && (
                                     <div className="mt-2 text-sm text-red-600">{errors.email}</div>
                                 )}
                             </div>
@@ -94,6 +155,26 @@ export default function Login({ status, canResetPassword }) {
                                 {processing ? 'Logging in...' : 'Log In'}
                             </button>
                         </form>
+
+                        <div className="text-center mt-6 space-y-2">
+                            <div>
+                                <Link
+                                    href="/password/request-otp"
+                                    className="text-orange-500 hover:text-orange-600 underline font-semibold transition duration-300 text-sm"
+                                >
+                                    Forgot Password?
+                                </Link>
+                            </div>
+                            <div>
+                                <span className="text-gray-600">Don't have an account? </span>
+                                <Link
+                                    href="/register"
+                                    className="text-orange-500 hover:text-orange-600 underline font-semibold transition duration-300"
+                                >
+                                    Create Account
+                                </Link>
+                            </div>
+                        </div>
                         
                         {/* Temporarily hidden */}
                         {false && (

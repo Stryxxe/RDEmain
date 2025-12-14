@@ -19,7 +19,10 @@ class User extends Authenticatable
         'phone',
         'password',
         'departmentID',
+        'researchCenterID',
         'userRolesID',
+        'avatar',
+        'status',
     ];
 
     protected $hidden = [
@@ -46,6 +49,11 @@ class User extends Authenticatable
     public function department()
     {
         return $this->belongsTo(Department::class, 'departmentID', 'departmentID');
+    }
+
+    public function researchCenter()
+    {
+        return $this->belongsTo(ResearchCenter::class, 'researchCenterID', 'centerID');
     }
 
     public function proposals()

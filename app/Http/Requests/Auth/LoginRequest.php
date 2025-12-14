@@ -49,6 +49,36 @@ class LoginRequest extends FormRequest
             ]);
         }
 
+        // Check if user account is pending or inactive
+        // Admin users can always log in regardless of status
+        $user = Auth::user();
+        if ($user) {
+            // Load role relationship to check if user is admin
+            $user->load('role');
+            $isAdmin = $user->role && strtolower($user->role->userRole) === 'admin';
+            
+            // Skip status check for admin users
+            if (!$isAdmin) {
+                $status = strtolower($user->status ?? 'active');
+                
+                if ($status === 'pending') {
+                    Auth::logout();
+                    RateLimiter::hit($this->throttleKey());
+                    throw ValidationException::withMessages([
+                        'email' => 'Your account is pending approval. Please wait for administrator approval.',
+                    ]);
+                }
+                
+                if ($status === 'inactive') {
+                    Auth::logout();
+                    RateLimiter::hit($this->throttleKey());
+                    throw ValidationException::withMessages([
+                        'email' => 'Account is inactive. Please contact administrator.',
+                    ]);
+                }
+            }
+        }
+
         RateLimiter::clear($this->throttleKey());
     }
 

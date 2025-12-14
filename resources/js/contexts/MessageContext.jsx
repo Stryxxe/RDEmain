@@ -161,8 +161,8 @@ export const MessageProvider = ({ children }) => {
       });
       setConversations(response.data.data || []);
     } catch (error) {
-      // Error handling for fetching conversations
-      setConversations([]);
+      // Don't clear conversations on error - keep existing data
+      console.error('Error fetching conversations:', error);
     }
   };
 

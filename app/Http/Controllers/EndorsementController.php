@@ -10,6 +10,8 @@ use App\Events\ProposalEndorsed;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 
 class EndorsementController extends Controller
@@ -35,17 +37,26 @@ class EndorsementController extends Controller
 
         try {
             $user = Auth::user();
+            
+            // Explicitly load role and department relationships
+            if (!$user->relationLoaded('role')) {
+                $user->load('role');
+            }
+            if (!$user->relationLoaded('department')) {
+                $user->load('department');
+            }
 
-            // Check if user has CM role
-            if (!$user->role || $user->role->userRole !== 'CM') {
+            // Check if user has CM or RDD role (or other authorized roles)
+            $authorizedRoles = ['CM', 'RDD', 'RDE'];
+            if (!$user->role || !in_array($user->role->userRole, $authorizedRoles)) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Only CM users can endorse proposals'
+                    'message' => 'Only authorized users (CM, RDD, RDE) can endorse proposals'
                 ], 403);
             }
 
             // Get the proposal
-            $proposal = Proposal::with('user')->find($request->proposalID);
+            $proposal = Proposal::with(['user', 'endorsements.endorser.role'])->find($request->proposalID);
 
             if (!$proposal) {
                 return response()->json([
@@ -54,24 +65,103 @@ class EndorsementController extends Controller
                 ], 404);
             }
 
-            // Check if the proposal belongs to a user in the same department
-            if ($proposal->user->departmentID !== $user->departmentID) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'You can only endorse proposals from your department'
-                ], 403);
+            // Research center check only applies to CM users
+            // RDD and RDE can endorse proposals from any research center
+            if ($user->role->userRole === 'CM') {
+                // CM must have a research center assigned
+                if (!$user->researchCenterID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'CM users must be assigned to a research center to endorse proposals'
+                    ], 403);
+                }
+                
+                // Proposal author must have a research center assigned
+                if (!$proposal->user->researchCenterID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Cannot endorse: Proposal author is not assigned to a research center'
+                    ], 403);
+                }
+                
+                // CM can only endorse proposals from their research center
+                if ($proposal->user->researchCenterID !== $user->researchCenterID) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'CM users can only endorse proposals from their research center'
+                    ], 403);
+                }
+            }
+
+            // For RDD users, check if proposal has been endorsed by CM
+            if ($user->role->userRole === 'RDD') {
+                $hasCMEndorsement = $proposal->endorsements->contains(function ($endorsement) {
+                    return $endorsement->endorser && 
+                           $endorsement->endorser->role && 
+                           $endorsement->endorser->role->userRole === 'CM' &&
+                           $endorsement->endorsementStatus === 'approved';
+                });
+
+                if (!$hasCMEndorsement) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This proposal must be endorsed by CM before RDD can endorse it'
+                    ], 403);
+                }
+            }
+
+            // For RDE users (future), check if proposal has been endorsed by RDD
+            if ($user->role->userRole === 'RDE') {
+                $hasRDDEndorsement = $proposal->endorsements->contains(function ($endorsement) {
+                    return $endorsement->endorser && 
+                           $endorsement->endorser->role && 
+                           $endorsement->endorser->role->userRole === 'RDD' &&
+                           $endorsement->endorsementStatus === 'approved';
+                });
+
+                if (!$hasRDDEndorsement) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This proposal must be endorsed by RDD before RDE can endorse it'
+                    ], 403);
+                }
             }
 
             // Check if already endorsed
+            // For CM users: Allow second endorsement if it's from Endorsement view (final endorsement to RDD)
+            // The first endorsement is from For Revision page, the second is from Endorsement view
             $existingEndorsement = Endorsement::where('proposalID', $request->proposalID)
                 ->where('endorserID', $user->userID)
                 ->first();
 
             if ($existingEndorsement) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'This proposal has already been endorsed by you'
-                ], 409);
+                // For CM users, allow a second endorsement if:
+                // 1. They've already endorsed once (from For Revision - Accept button)
+                // 2. The proposal can be statusID 4 (For Revision) or statusID 1 (Under Review)
+                // 3. This is the final endorsement to forward to RDD
+                if ($user->role && $user->role->userRole === 'CM' && ($proposal->statusID == 1 || $proposal->statusID == 4)) {
+                    // Count how many times this CM has endorsed this proposal
+                    $endorsementCount = Endorsement::where('proposalID', $request->proposalID)
+                        ->where('endorserID', $user->userID)
+                        ->where('endorsementStatus', 'approved')
+                        ->count();
+                    
+                    // If CM has already endorsed twice, don't allow another endorsement
+                    if ($endorsementCount >= 2) {
+                        return response()->json([
+                            'success' => false,
+                            'message' => 'This proposal has already been forwarded to RDD'
+                        ], 409);
+                    }
+                    // If CM has endorsed once, allow the second endorsement (final endorsement to RDD)
+                    // This will be handled below, continue with creating the endorsement
+                } else {
+                    // For other cases, prevent duplicate endorsement
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'This proposal has already been endorsed by you'
+                    ], 409);
+                }
             }
 
             // Create the endorsement
@@ -79,9 +169,57 @@ class EndorsementController extends Controller
                 'proposalID' => $request->proposalID,
                 'endorserID' => $user->userID,
                 'endorsementComments' => $request->endorsementComments,
-                'endorsementAt' => now(),
+                'endorsedAt' => now(),
                 'endorsementStatus' => $request->endorsementStatus
             ]);
+
+            // If CM user approves a proposal
+            // Count endorsements AFTER creating the new one (so count includes the one just created)
+            if ($user->role && $user->role->userRole === 'CM' && $request->endorsementStatus === 'approved') {
+                // Count how many times this CM has endorsed this proposal (includes the one just created)
+                $endorsementCount = Endorsement::where('proposalID', $request->proposalID)
+                    ->where('endorserID', $user->userID)
+                    ->where('endorsementStatus', 'approved')
+                    ->count();
+                
+                // On the SECOND endorsement (final endorsement to RDD), ensure status is 1 (Under Review)
+                // This ensures the proposal appears in RDD's view
+                // The filtering logic will automatically exclude it from CM views (endorsed twice)
+                $isFinalEndorsement = false;
+                if ($endorsementCount >= 2) {
+                    $isFinalEndorsement = true;
+                    
+                    // Find "Under Review" status
+                    $underReviewStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['under review'])->first();
+                    if ($underReviewStatus) {
+                        $proposal->update(['statusID' => $underReviewStatus->statusID]);
+                    } else {
+                        // Fallback to statusID 1 if status name not found
+                        $proposal->update(['statusID' => 1]);
+                    }
+                    
+                    // CRITICAL: Clear all proposal caches IMMEDIATELY to ensure proposal disappears from all CM views
+                    // This must happen BEFORE any other operations to ensure immediate removal
+                    $this->clearProposalCache($request->proposalID);
+                    
+                    // Force refresh the proposal to ensure status is updated
+                    $proposal->refresh();
+                    
+                    Log::info('CM final endorsement - proposal forwarded to RDD - IMMEDIATE REMOVAL FROM CM VIEWS', [
+                        'proposal_id' => $request->proposalID,
+                        'cm_user_id' => $user->userID,
+                        'endorsement_count' => $endorsementCount,
+                        'new_status_id' => $underReviewStatus ? $underReviewStatus->statusID : 1,
+                        'action' => 'Proposal will be excluded from all CM views (Dashboard, Endorsement, For Revision)',
+                        'filter_logic' => 'CM endorsement count >= 2 will exclude from all CM queries'
+                    ]);
+                }
+            }
+
+            // If RDD user approves, archive the proposal
+            if ($user->role && $user->role->userRole === 'RDD' && $request->endorsementStatus === 'approved') {
+                $proposal->update(['archivedByRDD' => now()]);
+            }
 
             // If approved, notify RDD users and dispatch the ProposalEndorsed event
             if ($request->endorsementStatus === 'approved') {
@@ -96,16 +234,46 @@ class EndorsementController extends Controller
                 // Get department name
                 $departmentName = $proposal->user->department ? $proposal->user->department->name : 'Unknown Department';
 
+                // Ensure user role is loaded
+                if (!$user->relationLoaded('role')) {
+                    $user->load('role');
+                }
+                $endorserRole = $user->role ? $user->role->userRole : 'Unknown';
+
+                // Notify the endorser about their successful endorsement action
+                Notification::create([
+                    'userID' => $user->userID,
+                    'type' => 'success',
+                    'title' => 'Endorsement Successful',
+                    'message' => "You have successfully endorsed proposal \"{$proposal->researchTitle}\" (ID: {$proposal->proposalID}) by {$proposal->user->fullName}.",
+                    'data' => [
+                        'proposal_id' => $proposal->proposalID,
+                        'proposal_title' => $proposal->researchTitle,
+                        'proponent_name' => $proposal->user->fullName,
+                        'endorsement_comments' => $request->endorsementComments,
+                        'event' => 'proposal.endorsed.cm'
+                    ]
+                ]);
+
                 // Notify the proponent that their proposal has been endorsed
+                // Message varies based on endorser role
+                $proponentMessage = match($endorserRole) {
+                    'CM' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and forwarded to RDD.",
+                    'RDD' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and archived.",
+                    'RDE' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName}.",
+                    default => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName}.",
+                };
+
                 Notification::create([
                     'userID' => $proposal->userID,
                     'type' => 'success',
                     'title' => 'Proposal Endorsed',
-                    'message' => "Your proposal \"{$proposal->researchTitle}\" has been endorsed by {$user->fullName} and forwarded to RDD.",
+                    'message' => $proponentMessage,
                     'data' => [
                         'proposal_id' => $proposal->proposalID,
                         'proposal_title' => $proposal->researchTitle,
                         'endorser_name' => $user->fullName,
+                        'endorsement_comments' => $request->endorsementComments,
                         'event' => 'proposal.endorsed.proponent'
                     ]
                 ]);
@@ -127,6 +295,7 @@ class EndorsementController extends Controller
                             'endorser_name' => $user->fullName,
                             'proponent_name' => $proposal->user->fullName,
                             'department' => $departmentName,
+                            'endorsement_comments' => $request->endorsementComments,
                             'event' => 'proposal.endorsed.rdd'
                         ]
                     ]);
@@ -136,10 +305,29 @@ class EndorsementController extends Controller
                 event(new ProposalEndorsed($proposal, $user));
             }
 
+            // Clear proposal cache since endorsement data has changed
+            // Note: If this was a final endorsement, cache was already cleared above
+            // But we clear again here to ensure all caches are fresh
+            $this->clearProposalCache($request->proposalID);
+
+            // Determine if this was a final endorsement (CM endorsed twice)
+            $isFinalEndorsement = false;
+            if ($user->role && $user->role->userRole === 'CM' && $request->endorsementStatus === 'approved') {
+                $endorsementCount = Endorsement::where('proposalID', $request->proposalID)
+                    ->where('endorserID', $user->userID)
+                    ->where('endorsementStatus', 'approved')
+                    ->count();
+                $isFinalEndorsement = $endorsementCount >= 2;
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => 'Endorsement created successfully',
-                'data' => $endorsement->load(['proposal', 'endorser'])
+                'message' => $isFinalEndorsement 
+                    ? 'Proposal successfully forwarded to RDD. It will no longer appear in your views.'
+                    : 'Endorsement created successfully',
+                'data' => $endorsement->load(['proposal', 'endorser']),
+                'is_final_endorsement' => $isFinalEndorsement,
+                'proposal_id' => $request->proposalID
             ], 201);
         } catch (\Exception $e) {
             return response()->json([
@@ -183,7 +371,7 @@ class EndorsementController extends Controller
 
             $endorsements = Endorsement::with(['proposal.user', 'endorser'])
                 ->where('endorserID', $user->userID)
-                ->orderBy('endorsementDate', 'desc')
+                ->orderBy('endorsedAt', 'desc')
                 ->get();
 
             return response()->json([
@@ -196,6 +384,64 @@ class EndorsementController extends Controller
                 'message' => 'Failed to fetch endorsements',
                 'error' => $e->getMessage()
             ], 500);
+        }
+    }
+
+    /**
+     * Clear proposal cache for all users
+     * CRITICAL: This ensures proposals disappear from all CM views immediately after final endorsement
+     * 
+     * @param int $proposalId
+     * @return void
+     */
+    private function clearProposalCache(int $proposalId): void
+    {
+        try {
+            // Clear cache with wildcard pattern for this proposal
+            $pattern = "proposal_{$proposalId}_user_*";
+            
+            try {
+                $store = Cache::getStore();
+                if ($store instanceof \Illuminate\Cache\RedisStore) {
+                    // Redis supports pattern matching
+                    $keys = Cache::getRedis()->keys($pattern);
+                    if (!empty($keys)) {
+                        Cache::getRedis()->del($keys);
+                    }
+                } else {
+                    // For non-Redis stores, try to clear using cache tags if supported
+                    if (method_exists($store, 'tags')) {
+                        try {
+                            Cache::tags(["proposal_{$proposalId}"])->flush();
+                        } catch (\Exception $e) {
+                            // Tags might not be supported, fall back to manual clearing
+                            Log::info("Cache tags not supported, attempting manual cache clear");
+                        }
+                    }
+                    
+                    // Also try to clear common cache keys manually
+                    // Get all users who might have cached this proposal
+                    $users = \App\Models\User::pluck('userID');
+                    foreach ($users as $userId) {
+                        $cacheKey = "proposal_{$proposalId}_user_{$userId}";
+                        Cache::forget($cacheKey);
+                    }
+                    
+                    // Clear the general proposal cache
+                    Cache::forget("proposal_{$proposalId}");
+                }
+                
+                // Also clear any list caches that might include this proposal
+                Cache::forget("cm_for_revision_proposals");
+                Cache::forget("rdd_for_revision_proposals");
+                Cache::forget("proponent_proposals");
+                
+                Log::info("Proposal cache cleared for all users", ['proposal_id' => $proposalId]);
+            } catch (\Exception $e) {
+                Log::warning("Failed to clear proposal cache: " . $e->getMessage());
+            }
+        } catch (\Exception $e) {
+            Log::warning("Failed to clear proposal cache: " . $e->getMessage());
         }
     }
 }

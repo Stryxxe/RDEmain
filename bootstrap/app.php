@@ -1,5 +1,6 @@
 <?php
 
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -11,6 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
     )
+    ->withSchedule(function (Schedule $schedule): void {
+        // Run backup command every minute; command self-enforces frequency
+        $schedule->command('backup:run')->everyMinute()->withoutOverlapping();
+    })
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->use([
             \Illuminate\Http\Middleware\HandleCors::class,
@@ -33,6 +38,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'request.deduplication' => \App\Http\Middleware\RequestDeduplication::class,
             'verify.csrf' => \App\Http\Middleware\VerifyCsrfToken::class,
+            'active.user' => \App\Http\Middleware\EnsureUserIsActive::class,
         ]);
 
         //

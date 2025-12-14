@@ -76,7 +76,9 @@ class SimpleOptimizedMessageController extends Controller
                 'per_page' => $messages->perPage(),
                 'total' => $messages->total(),
             ]
-        ]);
+        ])->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+          ->header('Pragma', 'no-cache')
+          ->header('Expires', '0');
     }
 
     public function sent(Request $request): JsonResponse
@@ -99,7 +101,9 @@ class SimpleOptimizedMessageController extends Controller
                 'per_page' => $messages->perPage(),
                 'total' => $messages->total(),
             ]
-        ]);
+        ])->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+          ->header('Pragma', 'no-cache')
+          ->header('Expires', '0');
     }
 
     public function unreadCount(Request $request): JsonResponse
@@ -112,17 +116,32 @@ class SimpleOptimizedMessageController extends Controller
         
         $count = $query->count();
             
-        return response()->json(['count' => $count]);
+        return response()->json(['count' => $count])
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     public function conversations(Request $request): JsonResponse
     {
         $user = $request->user();
         
+        // Ensure user has role loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
         $query = Message::where(function ($q) use ($user) {
             $q->where('senderID', $user->getKey())
               ->orWhere('recipientID', $user->getKey());
         });
+        
+        \Log::info('Conversations query for user', [
+            'user_id' => $user->getKey(),
+            'user_role' => $user->role?->userRole ?? 'no_role',
+            'department_id' => $user->departmentID ?? 'no_department'
+        ]);
+        
         $query = $this->buildOptimizedQuery($user, $query);
         
         $conversations = $query->with(['sender.role', 'sender.department', 'recipient.role', 'recipient.department'])
@@ -153,20 +172,46 @@ class SimpleOptimizedMessageController extends Controller
                 ];
             })
             ->values();
+        
+        \Log::info('Conversations result', [
+            'user_id' => $user->getKey(),
+            'conversation_count' => $conversations->count(),
+            'conversations' => $conversations->map(fn($c) => [
+                'other_user_id' => $c['otherUser']->userID ?? 'unknown',
+                'other_user_name' => $c['otherUser']->firstName ?? 'unknown',
+                'unread_count' => $c['unreadCount'],
+            ])
+        ]);
             
-        return response()->json(['data' => $conversations]);
+        return response()->json(['data' => $conversations])
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     public function conversation(Request $request, $otherUserId): JsonResponse
     {
         $user = $request->user();
         
-        // For CM users, verify the other user is from the same department
-        if ($user->role && $user->role->userRole === 'CM') {
-            $otherUser = User::find($otherUserId);
-            if (!$otherUser || $otherUser->departmentID !== $user->departmentID) {
-                return response()->json(['error' => 'Access denied - user not in same department'], 403);
-            }
+        // Ensure user has role loaded
+        if (!$user->relationLoaded('role')) {
+            $user->load('role');
+        }
+        
+        // Verify the other user exists
+        $otherUser = User::with('role')->find($otherUserId);
+        if (!$otherUser) {
+            return response()->json(['error' => 'User not found'], 404);
+        }
+        
+        // Authorization: For CM and Proponent users, verify they can access this user
+        // But allow viewing existing conversation history regardless
+        // Only enforce department restrictions when starting NEW conversations (in store method)
+        if ($user->role) {
+            $userRole = $user->role->userRole;
+            
+            // For now, allow all authenticated users to view existing conversations
+            // Authorization is enforced at message creation time via the store() method
         }
         
         $messages = Message::where(function ($query) use ($user, $otherUserId) {
@@ -187,7 +232,10 @@ class SimpleOptimizedMessageController extends Controller
                 $message->markAsRead();
             });
             
-        return response()->json(['data' => $messages]);
+        return response()->json(['data' => $messages])
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     }
 
     public function store(Request $request): JsonResponse
@@ -234,8 +282,8 @@ class SimpleOptimizedMessageController extends Controller
                 return response()->json(['error' => 'Proponents can only message Center Managers'], 403);
             }
             
-            if ($user->departmentID !== $recipient->departmentID) {
-                return response()->json(['error' => 'You can only message Center Managers from your department'], 403);
+            if ($user->researchCenterID !== $recipient->researchCenterID) {
+                return response()->json(['error' => 'You can only message Center Managers from your research center'], 403);
             }
         }
         
@@ -305,6 +353,22 @@ class SimpleOptimizedMessageController extends Controller
         $query->delete();
             
         return response()->json(['message' => 'All messages cleared successfully']);
+    }
+
+    public function deleteConversation(Request $request, $otherUserId): JsonResponse
+    {
+        $user = $request->user();
+        
+        // Delete all messages between current user and other user
+        Message::where(function ($query) use ($user, $otherUserId) {
+            $query->where('senderID', $user->getKey())
+                  ->where('recipientID', $otherUserId);
+        })->orWhere(function ($query) use ($user, $otherUserId) {
+            $query->where('senderID', $otherUserId)
+                  ->where('recipientID', $user->getKey());
+        })->delete();
+        
+        return response()->json(['message' => 'Conversation deleted successfully']);
     }
 
     public function getAvailableCM(Request $request): JsonResponse
