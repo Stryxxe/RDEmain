@@ -146,22 +146,79 @@ class ProposalExtractionService:
         return None
     
     def _extract_objectives(self, text):
-        """Extract objectives/goals"""
+        """Extract objectives/goals.
+
+        Goal: capture the full objectives block (general + specific,
+        including items a., b., c., d., etc.) instead of just the
+        first sentence, but stop before unrelated sections like
+        RESEARCH AGENDA, SDGs, DOST 6Ps, or BUDGET.
+
+        Strategy:
+        - Look for headings like "General Objective", "Specific Objectives",
+          "Objectives", or "Aims and Objectives".
+        - Capture everything after the heading up to the next major section
+          (roman‑numeral heading or known section names).
+        - Only use the first match to avoid duplicated blocks when the
+          template appears more than once in the document.
+        - If that fails, fall back to a broader roman‑numeral based
+          OBJECTIVES section capture.
+        """
+
+        # Common end-of-section boundary: next roman-numeral heading or
+        # known section names (methodology, research agenda, SDGs, DOST, budget, etc.).
+        boundary = (
+            r'(?=\n\s*(?:'
+            r'[IVXLCDM]+\.[ \t]+[A-Z]|'                 # "III. SOMETHING"
+            r'methodology|timeline|budget|expected\s+output|'
+            r'research\s+agenda|sustainable\s+development\s+goals?|'
+            r'dost\s+strategic\s+priorities'
+            r')|\Z)'
+        )
+
+        # 1) Look for specific objectives-style headings
         patterns = [
-            # Between II. OBJECTIVES and the next roman numeral heading (e.g., III.)
-            r'II\.\s+OBJECTIVES?.*?\n(.+?)(?=\n[IVXLCDM]+\.|$)',
-            r'(?:OBJECTIVE|OBJECTIVES|GOALS?)\s*[:]\s*(.+?)(?=\n[A-Z]{3,}|METHODOLOGY|TIMELINE|BUDGET)',
-            r'(?:OBJECTIVE|OBJECTIVES)\s*\n\s*(.+?)(?=\n[A-Z]{3,}|METHODOLOGY)',
+            # Starts at "General Objective" heading
+            r'General\s+Objective[s]?\s*:?[ \t]*\n?(.*?' + boundary + ')',
+            # General or Specific Objectives headings
+            r'(?:general|specific)\s+objectives?\s*:?[ \t]*\n?(.*?' + boundary + ')',
+            # Generic "Objectives" heading
+            r'objectives?\s*:?[ \t]*\n?(.*?' + boundary + ')',
+            # "Aims and Objectives" heading
+            r'aims?\s+and\s+objectives?\s*:?[ \t]*\n?(.*?' + boundary + ')',
         ]
-        
+
         for pattern in patterns:
             match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
             if match:
-                objectives = match.group(1).strip()
-                if len(objectives) > 20:
-                    logger.debug(f"Found objectives: {len(objectives)} chars")
-                    return objectives
-        
+                segment = match.group(1).strip()
+                if len(segment) > 20:
+                    logger.debug(f"Found objectives (heading patterns): {len(segment)} chars")
+                    return segment
+
+        # 2) Fallback: broader OBJECTIVES section based on roman‑numeral headings
+        section_pattern = (
+            r'(?:^|\n)'
+            r'(?:(?:[IVXLCDM]+\.)\s+)?'  # Optional roman numeral like "II. "
+            r'(?:GENERAL\s+AND\s+SPECIFIC\s+)?'
+            r'(?:OBJECTIVE|OBJECTIVES|GOALS?)'
+            r'(?:\s+OF\s+THE\s+STUDY)?'
+            r'[^\n]*\n'  # Rest of the heading line
+            r'(.+?)'       # Capture everything after heading
+            r'(?=\n(?:[IVXLCDM]+\.[ \t]+[A-Z]|'  # Next roman numeral section like "III. METHODOLOGY"
+            r'[A-Z][A-Z \t]{3,}|'                 # Or ALL CAPS heading
+            r'METHODOLOGY|TIMELINE|BUDGET)|\Z)'   # Or specific keywords or end of text
+        )
+
+        matches = list(re.finditer(section_pattern, text, re.IGNORECASE | re.DOTALL | re.MULTILINE))
+
+        if matches:
+            sections = [m.group(1).strip() for m in matches if m.group(1).strip()]
+            objectives = "\n\n".join(sections).strip()
+
+            if len(objectives) > 20:
+                logger.debug(f"Found objectives (fallback section): {len(objectives)} chars")
+                return objectives
+
         logger.warning("Objectives not found")
         return None
     
