@@ -342,13 +342,13 @@ const CMForRevision = () => {
                                         No
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Title
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Author
+                                        Title & Author
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Status
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                        Date Submitted
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Date Resubmitted
@@ -400,9 +400,7 @@ const CMForRevision = () => {
                                                     >
                                                         {proposal.researchTitle}
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm text-gray-700">
+                                                    <div className="text-xs text-gray-500 mt-1">
                                                         {proposal.user
                                                             ?.fullName ||
                                                             "Unknown"}
@@ -421,14 +419,26 @@ const CMForRevision = () => {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm text-gray-700">
-                                                        {proposal.resubmittedAfterRevision
-                                                            ? new Date(
-                                                                  proposal.resubmittedAfterRevision
-                                                              ).toLocaleDateString()
-                                                            : new Date(
-                                                                  proposal.updatedAt ||
-                                                                      proposal.created_at
-                                                              ).toLocaleDateString()}
+                                                        {/* Date Submitted: When CM marked proposal for revision (updatedAt when status changed to 4) */}
+                                                        {new Date(
+                                                            proposal.updatedAt ||
+                                                                proposal.updated_at ||
+                                                                proposal.created_at
+                                                        ).toLocaleDateString()}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-700">
+                                                        {/* Date Resubmitted: When proponent resubmits their proposal */}
+                                                        {proposal.resubmittedAfterRevision ? (
+                                                            new Date(
+                                                                proposal.resubmittedAfterRevision
+                                                            ).toLocaleDateString()
+                                                        ) : (
+                                                            <span className="text-gray-400 italic">
+                                                                Pending
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">

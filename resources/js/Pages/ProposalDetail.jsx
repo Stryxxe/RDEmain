@@ -699,6 +699,10 @@ const ProposalDetail = () => {
                         (f) => f.fileType === "matrix_compliance"
                     );
                     const otherFiles = proposal.files.filter((f) => {
+                        // Exclude revision images - they are shown in revision comments section
+                        if (f.fileType === "revision_image") {
+                            return false;
+                        }
                         // Exclude SETI, GAD, MOC files
                         if (
                             f.fileType === "seti_scorecard" ||

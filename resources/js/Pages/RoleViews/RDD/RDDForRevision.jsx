@@ -3,7 +3,14 @@ import { router } from "@inertiajs/react";
 import { useAuth } from "../../../contexts/AuthContext";
 import { useNotifications } from "../../../contexts/NotificationContext";
 import { useMessages } from "../../../contexts/MessageContext";
-import { RefreshCw, Eye, X, FileText, Image as ImageIcon } from "lucide-react";
+import {
+    RefreshCw,
+    Eye,
+    X,
+    FileText,
+    Image as ImageIcon,
+    MessageSquare,
+} from "lucide-react";
 import { BiSearch } from "react-icons/bi";
 import axios from "axios";
 import AppLayout from "../../../Components/Layouts/AppLayout";
@@ -28,6 +35,8 @@ const RDDForRevision = () => {
     const [proposalDetails, setProposalDetails] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [loadingDetails, setLoadingDetails] = useState(false);
+    const [viewingImage, setViewingImage] = useState(null); // For image popup modal
+    const [imageZoom, setImageZoom] = useState(100); // Zoom percentage
 
     // Helper function to check if a file is a research proposal file
     // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
@@ -303,13 +312,13 @@ const RDDForRevision = () => {
                                         No
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Title
-                                    </th>
-                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                                        Author
+                                        Title & Author
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Status
+                                    </th>
+                                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                                        Date Submitted
                                     </th>
                                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
                                         Date Resubmitted
@@ -367,9 +376,7 @@ const RDDForRevision = () => {
                                                     >
                                                         {proposal.researchTitle}
                                                     </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="text-sm text-gray-700">
+                                                    <div className="text-xs text-gray-500 mt-1">
                                                         {proposal.user
                                                             ?.fullName ||
                                                             "Unknown"}
@@ -388,56 +395,25 @@ const RDDForRevision = () => {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm text-gray-700">
+                                                        {/* Date Submitted: When RDD marked proposal for revision (updatedAt when status changed to 4) */}
+                                                        {new Date(
+                                                            proposal.updatedAt ||
+                                                                proposal.updated_at ||
+                                                                proposal.created_at
+                                                        ).toLocaleDateString()}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-700">
+                                                        {/* Date Resubmitted: When proponent resubmits their proposal */}
                                                         {proposal.resubmittedAfterRevision ? (
-                                                            <>
-                                                                {new Date(
-                                                                    proposal.resubmittedAfterRevision
-                                                                ).toLocaleDateString(
-                                                                    "en-US",
-                                                                    {
-                                                                        year: "numeric",
-                                                                        month: "2-digit",
-                                                                        day: "2-digit",
-                                                                    }
-                                                                )}{" "}
-                                                                at{" "}
-                                                                {new Date(
-                                                                    proposal.resubmittedAfterRevision
-                                                                ).toLocaleTimeString(
-                                                                    "en-US",
-                                                                    {
-                                                                        hour: "2-digit",
-                                                                        minute: "2-digit",
-                                                                        hour12: true,
-                                                                    }
-                                                                )}
-                                                            </>
+                                                            new Date(
+                                                                proposal.resubmittedAfterRevision
+                                                            ).toLocaleDateString()
                                                         ) : (
-                                                            <>
-                                                                {new Date(
-                                                                    proposal.updatedAt ||
-                                                                        proposal.created_at
-                                                                ).toLocaleDateString(
-                                                                    "en-US",
-                                                                    {
-                                                                        year: "numeric",
-                                                                        month: "2-digit",
-                                                                        day: "2-digit",
-                                                                    }
-                                                                )}{" "}
-                                                                at{" "}
-                                                                {new Date(
-                                                                    proposal.updatedAt ||
-                                                                        proposal.created_at
-                                                                ).toLocaleTimeString(
-                                                                    "en-US",
-                                                                    {
-                                                                        hour: "2-digit",
-                                                                        minute: "2-digit",
-                                                                        hour12: true,
-                                                                    }
-                                                                )}
-                                                            </>
+                                                            <span className="text-gray-400 italic">
+                                                                Pending
+                                                            </span>
                                                         )}
                                                     </div>
                                                 </td>
@@ -521,6 +497,9 @@ const RDDForRevision = () => {
                                 <div className="space-y-6 animate-fadeIn">
                                     {/* Basic Information - Title and Author Only */}
                                     <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+                                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                                            Research Title
+                                        </p>
                                         <h3 className="text-xl font-bold text-gray-900 mb-4">
                                             {proposalDetails.researchTitle}
                                         </h3>
@@ -751,110 +730,6 @@ const RDDForRevision = () => {
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Revision Images/Attachments */}
-                                    {(() => {
-                                        const revisionImages =
-                                            proposalDetails.files?.filter(
-                                                (f) =>
-                                                    f.fileType?.toLowerCase() ===
-                                                    "revision_image"
-                                            ) || [];
-
-                                        if (revisionImages.length > 0) {
-                                            return (
-                                                <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-6">
-                                                    <div className="flex items-center gap-2 mb-4">
-                                                        <ImageIcon className="w-5 h-5 text-blue-600" />
-                                                        <h3 className="text-lg font-bold text-gray-900">
-                                                            Revision Attachments
-                                                        </h3>
-                                                    </div>
-                                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                        {revisionImages.map(
-                                                            (file, idx) => {
-                                                                const isImage =
-                                                                    file.fileName
-                                                                        ?.toLowerCase()
-                                                                        .match(
-                                                                            /\.(jpg|jpeg|png|gif|webp)$/
-                                                                        );
-                                                                const fileUrl = `/api/files/view?path=${encodeURIComponent(
-                                                                    file.filePath
-                                                                )}`;
-
-                                                                return (
-                                                                    <div
-                                                                        key={
-                                                                            idx
-                                                                        }
-                                                                        className="relative group"
-                                                                    >
-                                                                        {isImage ? (
-                                                                            <a
-                                                                                href={
-                                                                                    fileUrl
-                                                                                }
-                                                                                target="_blank"
-                                                                                rel="noopener noreferrer"
-                                                                                className="block"
-                                                                            >
-                                                                                <img
-                                                                                    src={
-                                                                                        fileUrl
-                                                                                    }
-                                                                                    alt={
-                                                                                        file.fileName ||
-                                                                                        `Revision image ${
-                                                                                            idx +
-                                                                                            1
-                                                                                        }`
-                                                                                    }
-                                                                                    className="w-full h-32 object-cover rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-all cursor-pointer shadow-sm hover:shadow-md"
-                                                                                />
-                                                                            </a>
-                                                                        ) : (
-                                                                            <div className="w-full h-32 bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-all flex items-center justify-center p-3">
-                                                                                <div className="text-center">
-                                                                                    <FileText className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                                                                                    <p className="text-xs text-gray-700 truncate">
-                                                                                        {file.fileName ||
-                                                                                            `File ${
-                                                                                                idx +
-                                                                                                1
-                                                                                            }`}
-                                                                                    </p>
-                                                                                </div>
-                                                                            </div>
-                                                                        )}
-                                                                        <a
-                                                                            href={
-                                                                                fileUrl
-                                                                            }
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="absolute top-2 right-2 p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
-                                                                            title="View file"
-                                                                        >
-                                                                            <Eye className="w-3 h-3" />
-                                                                        </a>
-                                                                        {file.fileName && (
-                                                                            <p className="text-xs text-gray-600 mt-2 truncate text-center">
-                                                                                {
-                                                                                    file.fileName
-                                                                                }
-                                                                            </p>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            }
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            );
-                                        }
-                                        return null;
-                                    })()}
 
                                     {/* Research Proposal Section */}
                                     {(() => {
@@ -1616,19 +1491,193 @@ const RDDForRevision = () => {
                                         );
                                     })()}
 
-                                    {/* Revision Comments - Moved to after supporting documents */}
-                                    {proposalDetails.revisionComments && (
-                                        <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6">
-                                            <h3 className="text-lg font-bold text-gray-900 mb-3">
-                                                Revision Comments
-                                            </h3>
-                                            <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                                                {
-                                                    proposalDetails.revisionComments
-                                                }
-                                            </p>
-                                        </div>
-                                    )}
+                                    {/* RDD Revision Notes Section - Merged Attachments & Comments */}
+                                    {(() => {
+                                        const revisionImages =
+                                            proposalDetails.files?.filter(
+                                                (f) =>
+                                                    f.fileType?.toLowerCase() ===
+                                                    "revision_image"
+                                            ) || [];
+                                        const hasRevisionContent =
+                                            revisionImages.length > 0 ||
+                                            proposalDetails.revisionComments;
+
+                                        if (!hasRevisionContent) return null;
+
+                                        return (
+                                            <div className="bg-gradient-to-br from-orange-50 to-amber-50 border-2 border-orange-200 rounded-xl p-6 shadow-md">
+                                                <div className="flex items-center gap-3 mb-5 pb-4 border-b-2 border-orange-200">
+                                                    <div className="p-2 bg-orange-100 rounded-lg">
+                                                        <MessageSquare className="w-5 h-5 text-orange-600" />
+                                                    </div>
+                                                    <div>
+                                                        <h3 className="text-xl font-bold text-gray-900">
+                                                            RDD Revision Notes
+                                                        </h3>
+                                                        <p className="text-sm text-gray-600">
+                                                            Attachments and
+                                                            comments from RDD
+                                                            review
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="space-y-5">
+                                                    {/* Revision Attachments */}
+                                                    {revisionImages.length >
+                                                        0 && (
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <ImageIcon className="w-4 h-4 text-blue-600" />
+                                                                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                                                                    Attachments
+                                                                </h4>
+                                                                <span className="ml-auto text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">
+                                                                    {
+                                                                        revisionImages.length
+                                                                    }{" "}
+                                                                    file
+                                                                    {revisionImages.length !==
+                                                                    1
+                                                                        ? "s"
+                                                                        : ""}
+                                                                </span>
+                                                            </div>
+                                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                                                {revisionImages.map(
+                                                                    (
+                                                                        file,
+                                                                        idx
+                                                                    ) => {
+                                                                        const isImage =
+                                                                            file.fileName
+                                                                                ?.toLowerCase()
+                                                                                .match(
+                                                                                    /\.(jpg|jpeg|png|gif|webp)$/
+                                                                                );
+                                                                        const fileUrl = `/api/files/view?path=${encodeURIComponent(
+                                                                            file.filePath
+                                                                        )}`;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={
+                                                                                    idx
+                                                                                }
+                                                                                className="relative group"
+                                                                            >
+                                                                                {isImage ? (
+                                                                                    <div
+                                                                                        onClick={() => {
+                                                                                            setViewingImage(
+                                                                                                {
+                                                                                                    preview:
+                                                                                                        fileUrl,
+                                                                                                    name:
+                                                                                                        file.fileName ||
+                                                                                                        `Revision image ${
+                                                                                                            idx +
+                                                                                                            1
+                                                                                                        }`,
+                                                                                                }
+                                                                                            );
+                                                                                            setImageZoom(
+                                                                                                100
+                                                                                            );
+                                                                                        }}
+                                                                                        className="block cursor-pointer"
+                                                                                    >
+                                                                                        <img
+                                                                                            src={
+                                                                                                fileUrl
+                                                                                            }
+                                                                                            alt={
+                                                                                                file.fileName ||
+                                                                                                `Revision image ${
+                                                                                                    idx +
+                                                                                                    1
+                                                                                                }`
+                                                                                            }
+                                                                                            className="w-full h-24 object-cover rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-all cursor-pointer shadow-sm hover:shadow-md"
+                                                                                        />
+                                                                                    </div>
+                                                                                ) : (
+                                                                                    <div className="w-full h-24 bg-white rounded-lg border-2 border-blue-200 hover:border-blue-400 transition-all flex items-center justify-center p-2">
+                                                                                        <div className="text-center">
+                                                                                            <FileText className="w-6 h-6 text-blue-600 mx-auto mb-1" />
+                                                                                            <p className="text-xs text-gray-700 truncate">
+                                                                                                {file.fileName ||
+                                                                                                    `File ${
+                                                                                                        idx +
+                                                                                                        1
+                                                                                                    }`}
+                                                                                            </p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                )}
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        if (
+                                                                                            isImage
+                                                                                        ) {
+                                                                                            setViewingImage(
+                                                                                                {
+                                                                                                    preview:
+                                                                                                        fileUrl,
+                                                                                                    name:
+                                                                                                        file.fileName ||
+                                                                                                        `Revision image ${
+                                                                                                            idx +
+                                                                                                            1
+                                                                                                        }`,
+                                                                                                }
+                                                                                            );
+                                                                                            setImageZoom(
+                                                                                                100
+                                                                                            );
+                                                                                        } else {
+                                                                                            window.open(
+                                                                                                fileUrl,
+                                                                                                "_blank"
+                                                                                            );
+                                                                                        }
+                                                                                    }}
+                                                                                    className="absolute top-1 right-1 p-1 bg-blue-600 hover:bg-blue-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                                                                    title="View file"
+                                                                                >
+                                                                                    <Eye className="w-3 h-3" />
+                                                                                </button>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Revision Comments */}
+                                                    {proposalDetails.revisionComments && (
+                                                        <div>
+                                                            <div className="flex items-center gap-2 mb-3">
+                                                                <MessageSquare className="w-4 h-4 text-orange-600" />
+                                                                <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                                                                    Comments
+                                                                </h4>
+                                                            </div>
+                                                            <div className="bg-white rounded-lg p-4 border border-orange-200">
+                                                                <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
+                                                                    {
+                                                                        proposalDetails.revisionComments
+                                                                    }
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             )}
                         </div>
@@ -1657,6 +1706,129 @@ const RDDForRevision = () => {
                                     )}
                             </div>
                         )}
+                    </div>
+                </div>
+            )}
+
+            {/* Image Viewer Modal */}
+            {viewingImage && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-[60] p-4"
+                    onClick={() => setViewingImage(null)}
+                >
+                    <div
+                        className="relative max-w-5xl w-full max-h-[90vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header with controls */}
+                        <div className="bg-white rounded-t-xl px-4 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                                    {viewingImage.name || "Image Preview"}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {/* Zoom controls */}
+                                <button
+                                    onClick={() =>
+                                        setImageZoom(
+                                            Math.max(25, imageZoom - 25)
+                                        )
+                                    }
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Zoom out"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-gray-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"
+                                        />
+                                    </svg>
+                                </button>
+                                <span className="text-sm font-medium text-gray-600 min-w-[50px] text-center">
+                                    {imageZoom}%
+                                </span>
+                                <button
+                                    onClick={() =>
+                                        setImageZoom(
+                                            Math.min(300, imageZoom + 25)
+                                        )
+                                    }
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Zoom in"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-gray-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setImageZoom(100)}
+                                    className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                                    title="Reset zoom"
+                                >
+                                    Reset
+                                </button>
+                                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                {/* Download button */}
+                                <a
+                                    href={viewingImage.preview}
+                                    download={viewingImage.name}
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Download"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-gray-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                        />
+                                    </svg>
+                                </a>
+                                {/* Close button */}
+                                <button
+                                    onClick={() => setViewingImage(null)}
+                                    className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                                    title="Close"
+                                >
+                                    <X className="w-5 h-5 text-red-600" />
+                                </button>
+                            </div>
+                        </div>
+                        {/* Image container */}
+                        <div className="bg-gray-900 rounded-b-xl overflow-auto flex-1 flex items-center justify-center p-4">
+                            <img
+                                src={viewingImage.preview}
+                                alt={viewingImage.name}
+                                className="max-w-none transition-transform duration-200"
+                                style={{
+                                    transform: `scale(${imageZoom / 100})`,
+                                    transformOrigin: "center center",
+                                }}
+                            />
+                        </div>
                     </div>
                 </div>
             )}

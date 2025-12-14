@@ -1309,7 +1309,10 @@ const CMProposalDetail = () => {
                             (f) =>
                                 f.fileType !== "seti_scorecard" &&
                                 f.fileType !== "gad_certificate" &&
-                                f.fileType !== "matrix_compliance"
+                                f.fileType !== "matrix_compliance" &&
+                                f.fileType !== "revision_image" &&
+                                f.fileType !== "concept_paper" &&
+                                f.fileType !== "report"
                         );
 
                         const renderFileCard = (file) => (

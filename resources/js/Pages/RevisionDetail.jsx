@@ -58,6 +58,11 @@ const categorizeFiles = (files = []) => {
         const lowerName = (file.fileName || "").toLowerCase();
         const fileExtension = lowerName.split(".").pop() || "";
 
+        // Skip revision_image files - they are displayed separately in revision comments section
+        if (type === "revision_image") {
+            return;
+        }
+
         // Explicitly handle supporting_document type - always treat as supporting
         if (type === "supporting_document" || type === "supporting") {
             result.supporting.push(file);
@@ -165,6 +170,7 @@ const sdgOptions = [
     "Life Below Water",
     "Life on Land",
     "Peace, Justice and Strong Institutions",
+    "Partnerships for the Goals",
 ];
 
 const RevisionDetail = ({ id }) => {
@@ -180,6 +186,8 @@ const RevisionDetail = ({ id }) => {
     const [revisionComments, setRevisionComments] = useState("");
     const [revisionImages, setRevisionImages] = useState([]);
     const [revisionRequestedBy, setRevisionRequestedBy] = useState("CM"); // "CM" or "RDD"
+    const [viewingImage, setViewingImage] = useState(null); // For image popup modal
+    const [imageZoom, setImageZoom] = useState(100); // Zoom percentage
     const [existingFiles, setExistingFiles] = useState({
         proposal: null,
         seti: null,
@@ -322,7 +330,7 @@ const RevisionDetail = ({ id }) => {
                                     (notif.data?.event ===
                                         "proposal.revision_required" ||
                                         notif.data?.event ===
-                                        "proposal.revision_required.rdd" ||
+                                            "proposal.revision_required.rdd" ||
                                         notif.type === "revision")
                                 );
                             }
@@ -335,8 +343,11 @@ const RevisionDetail = ({ id }) => {
                         }
 
                         // Determine who requested the revision
-                        const requestedBy = revisionNotification?.data?.requested_by || 
-                                          (revisionNotification?.data?.event?.includes('rdd') ? 'RDD' : 'CM');
+                        const requestedBy =
+                            revisionNotification?.data?.requested_by ||
+                            (revisionNotification?.data?.event?.includes("rdd")
+                                ? "RDD"
+                                : "CM");
                         setRevisionRequestedBy(requestedBy);
 
                         // Get revision images from proposal files
@@ -350,7 +361,9 @@ const RevisionDetail = ({ id }) => {
                             setRevisionImages(
                                 revisionImageFiles.map((file) => ({
                                     id: file.fileID,
-                                    preview: `/storage/${file.filePath}`,
+                                    preview: `/api/files/view?path=${encodeURIComponent(
+                                        file.filePath
+                                    )}`,
                                     name: file.fileName,
                                 }))
                             );
@@ -444,13 +457,16 @@ const RevisionDetail = ({ id }) => {
             if (response.success) {
                 window.customAlert?.(
                     "✓",
-                    "Proposal resubmitted successfully!",
-                    2500
-                ) || alert("Proposal resubmitted successfully!");
-                // Redirect to proponent dashboard after resubmit
+                    "Proposal resubmitted successfully back to the R&D Division! You will receive a notification with details.",
+                    3500
+                ) ||
+                    alert(
+                        "Proposal resubmitted successfully back to the R&D Division!"
+                    );
+                // Redirect to proponent tracker after resubmit to see the proposal status
                 setTimeout(() => {
-                    router.visit("/proponent/", { replace: true });
-                }, 2600);
+                    router.visit("/proponent/tracker", { replace: true });
+                }, 3600);
             } else {
                 throw new Error(
                     response.message || "Failed to resubmit proposal"
@@ -834,9 +850,21 @@ const RevisionDetail = ({ id }) => {
 
                     {/* Revision Comments Section */}
                     {(revisionComments || revisionImages.length > 0) && (
-                        <div className={`mb-8 bg-gradient-to-br ${revisionRequestedBy === 'RDD' ? 'from-red-50 to-orange-50 border-2 border-red-200' : 'from-orange-50 to-red-50 border-2 border-orange-200'} rounded-xl p-6 shadow-sm`}>
+                        <div
+                            className={`mb-8 bg-gradient-to-br ${
+                                revisionRequestedBy === "RDD"
+                                    ? "from-red-50 to-orange-50 border-2 border-red-200"
+                                    : "from-orange-50 to-red-50 border-2 border-orange-200"
+                            } rounded-xl p-6 shadow-sm`}
+                        >
                             <div className="flex items-center gap-3 mb-4">
-                                <div className={`w-10 h-10 ${revisionRequestedBy === 'RDD' ? 'bg-red-500' : 'bg-orange-500'} rounded-lg flex items-center justify-center shadow-md`}>
+                                <div
+                                    className={`w-10 h-10 ${
+                                        revisionRequestedBy === "RDD"
+                                            ? "bg-red-500"
+                                            : "bg-orange-500"
+                                    } rounded-lg flex items-center justify-center shadow-md`}
+                                >
                                     <svg
                                         className="w-5 h-5 text-white"
                                         fill="none"
@@ -853,7 +881,10 @@ const RevisionDetail = ({ id }) => {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900">
-                                        Revision Comments from {revisionRequestedBy === 'RDD' ? 'R&D Division' : 'Center Manager'}
+                                        Revision Comments from{" "}
+                                        {revisionRequestedBy === "RDD"
+                                            ? "R&D Division"
+                                            : "Center Manager"}
                                     </h3>
                                     <p className="text-sm text-gray-600">
                                         Please address the following comments
@@ -884,20 +915,29 @@ const RevisionDetail = ({ id }) => {
                                                 key={image.id}
                                                 className="relative group"
                                             >
-                                                <img
-                                                    src={image.preview}
-                                                    alt={image.name}
-                                                    className="w-full h-32 object-cover rounded-lg border border-gray-300 cursor-pointer hover:opacity-90 transition-opacity"
-                                                    onClick={() =>
-                                                        window.open(
-                                                            image.preview,
-                                                            "_blank"
-                                                        )
-                                                    }
-                                                />
-                                                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all rounded-lg flex items-center justify-center">
+                                                <div
+                                                    onClick={() => {
+                                                        setViewingImage(image);
+                                                        setImageZoom(100);
+                                                    }}
+                                                    className="block cursor-pointer"
+                                                >
+                                                    <img
+                                                        src={image.preview}
+                                                        alt={image.name}
+                                                        className="w-full h-32 object-cover rounded-lg border-2 border-gray-300 hover:border-blue-400 cursor-pointer transition-all shadow-sm hover:shadow-md"
+                                                    />
+                                                </div>
+                                                <button
+                                                    onClick={() => {
+                                                        setViewingImage(image);
+                                                        setImageZoom(100);
+                                                    }}
+                                                    className="absolute top-2 right-2 p-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                                                    title="View image"
+                                                >
                                                     <svg
-                                                        className="w-6 h-6 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className="w-4 h-4"
                                                         fill="none"
                                                         stroke="currentColor"
                                                         viewBox="0 0 24 24"
@@ -906,10 +946,21 @@ const RevisionDetail = ({ id }) => {
                                                             strokeLinecap="round"
                                                             strokeLinejoin="round"
                                                             strokeWidth={2}
-                                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                        />
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
                                                         />
                                                     </svg>
-                                                </div>
+                                                </button>
+                                                {image.name && (
+                                                    <p className="text-xs text-gray-600 mt-1 truncate text-center">
+                                                        {image.name}
+                                                    </p>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -941,6 +992,141 @@ const RevisionDetail = ({ id }) => {
                     </div>
                 </form>
             </div>
+
+            {/* Image Viewer Modal */}
+            {viewingImage && (
+                <div
+                    className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4"
+                    onClick={() => setViewingImage(null)}
+                >
+                    <div
+                        className="relative max-w-5xl w-full max-h-[90vh] flex flex-col"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Header with controls */}
+                        <div className="bg-white rounded-t-xl px-4 py-3 flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-gray-700 truncate max-w-[200px]">
+                                    {viewingImage.name || "Image Preview"}
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {/* Zoom controls */}
+                                <button
+                                    onClick={() =>
+                                        setImageZoom(
+                                            Math.max(25, imageZoom - 25)
+                                        )
+                                    }
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Zoom out"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-gray-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"
+                                        />
+                                    </svg>
+                                </button>
+                                <span className="text-sm font-medium text-gray-600 min-w-[50px] text-center">
+                                    {imageZoom}%
+                                </span>
+                                <button
+                                    onClick={() =>
+                                        setImageZoom(
+                                            Math.min(300, imageZoom + 25)
+                                        )
+                                    }
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Zoom in"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-gray-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+                                        />
+                                    </svg>
+                                </button>
+                                <button
+                                    onClick={() => setImageZoom(100)}
+                                    className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded transition-colors"
+                                    title="Reset zoom"
+                                >
+                                    Reset
+                                </button>
+                                <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                                {/* Download button */}
+                                <a
+                                    href={viewingImage.preview}
+                                    download={viewingImage.name}
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                                    title="Download"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-gray-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                        />
+                                    </svg>
+                                </a>
+                                {/* Close button */}
+                                <button
+                                    onClick={() => setViewingImage(null)}
+                                    className="p-2 hover:bg-red-100 rounded-lg transition-colors"
+                                    title="Close"
+                                >
+                                    <svg
+                                        className="w-5 h-5 text-red-600"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        viewBox="0 0 24 24"
+                                    >
+                                        <path
+                                            strokeLinecap="round"
+                                            strokeLinejoin="round"
+                                            strokeWidth={2}
+                                            d="M6 18L18 6M6 6l12 12"
+                                        />
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
+                        {/* Image container */}
+                        <div className="bg-gray-900 rounded-b-xl overflow-auto flex-1 flex items-center justify-center p-4">
+                            <img
+                                src={viewingImage.preview}
+                                alt={viewingImage.name}
+                                className="max-w-none transition-transform duration-200"
+                                style={{
+                                    transform: `scale(${imageZoom / 100})`,
+                                    transformOrigin: "center center",
+                                }}
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

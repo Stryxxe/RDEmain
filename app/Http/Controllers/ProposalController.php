@@ -1067,26 +1067,46 @@ class ProposalController extends Controller
                 ]);
             }
 
-            // Save revision comments when marking for revision
-            if ($wasRevisionStatusChange && $request->has('revisionComments')) {
-                $updateData['revisionComments'] = $request->input('revisionComments');
+            // Delete old revision images AND clear old comments when marking for revision again
+            // This ensures only the current revision's images and comments are shown
+            if ($wasRevisionStatusChange) {
+                // Clear previous revision comments - new ones will be set below if provided
+                $updateData['revisionComments'] = $request->input('revisionComments', null);
+                
+                // Delete old revision images
+                $oldRevisionImages = File::where('proposalID', $proposal->proposalID)
+                    ->where('fileType', 'revision_image')
+                    ->get();
+                
+                foreach ($oldRevisionImages as $oldImage) {
+                    // Delete from storage
+                    if ($oldImage->filePath && Storage::disk('public')->exists($oldImage->filePath)) {
+                        Storage::disk('public')->delete($oldImage->filePath);
+                    }
+                    // Delete from database
+                    $oldImage->delete();
+                }
+                
+                Log::info('Cleared old revision images', [
+                    'proposal_id' => $proposal->proposalID,
+                    'deleted_count' => $oldRevisionImages->count()
+                ]);
             }
 
             // When resubmitting after revision, set resubmittedAfterRevision timestamp
-            // IMPORTANT: Change statusID to 1 (Under Review) so proposal disappears from Proponent's For Revision page
-            // The proposal will still appear in CM's For Revision page because we filter by resubmittedAfterRevision
-            // This allows the proposal to be visible in both Dashboard/Endorsement AND For Revision views
+            // IMPORTANT: Change statusID back to 1 (Under Review) so proposal appears in Dashboard and Endorsement pages
+            // The For Revision page will still show it by checking resubmittedAfterRevision (status shows "Updated")
+            // This also increments the "Under Review" card count
             if ($isResubmitAfterRevision) {
                 $updateData['resubmittedAfterRevision'] = now();
-                // Change statusID to 1 (Under Review) so proposal disappears from Proponent's For Revision page
-                // The proposal will still appear in CM's For Revision page (filtered by resubmittedAfterRevision)
-                // And will also appear in Dashboard/Endorsement views (statusID = 1)
+                // Change statusID to 1 so it appears in Dashboard and Endorsement pages
+                // Under Review card will increment
                 $updateData['statusID'] = 1;
                 
                 Log::info('Setting resubmission data - changing statusID to 1', [
                     'proposal_id' => $proposal->proposalID,
                     'resubmitted_after_revision' => now(),
-                    'new_status_id' => 1,
+                    'status_id' => 1,
                     'current_status_id' => $currentStatusID
                 ]);
             }
@@ -1429,18 +1449,54 @@ class ProposalController extends Controller
                     $proposal->load('user');
                 }
                 
-                // Check who originally sent for revision by looking at the most recent revision comment
-                // If there's an RDD endorsement with revision status, it was RDD
-                // Otherwise, assume it was CM
-                $rddRevisionEndorsement = $proposal->endorsements()
-                    ->whereHas('endorser.role', function ($q) {
-                        $q->where('userRole', 'RDD');
-                    })
-                    ->where('endorsementStatus', 'rejected') // RDD revision is typically rejected status
-                    ->latest('endorsedAt')
-                    ->first();
+                // Check who originally sent for revision
+                // RDD revision is detected by:
+                // 1. Check for RDD notification in proposal's revision workflow
+                // 2. Check if proposal has been endorsed by CM (forwarded to RDD level)
+                // 3. Check if revision comments contain RDD indicators
                 
-                $wasRddRevision = $rddRevisionEndorsement !== null;
+                // Get CM user IDs
+                $cmUserIds = User::whereHas('role', function ($q) {
+                    $q->where('userRole', 'CM');
+                })->pluck('userID')->toArray();
+                
+                // Check if proposal has CM endorsement (meaning it was forwarded to RDD)
+                $hasCmEndorsement = $proposal->endorsements()
+                    ->whereIn('endorserID', $cmUserIds)
+                    ->where('endorsementStatus', 'approved')
+                    ->exists();
+                
+                // If proposal has CM endorsement (forwarded to RDD level), this is RDD revision
+                $wasRddRevision = $hasCmEndorsement;
+                
+                Log::info('Resubmission workflow detection', [
+                    'proposal_id' => $proposal->proposalID,
+                    'has_cm_endorsement' => $hasCmEndorsement,
+                    'was_rdd_revision' => $wasRddRevision
+                ]);
+                
+                // Create notification for the proponent that their proposal was resubmitted successfully
+                try {
+                    $targetRole = $wasRddRevision ? 'R&D Division' : 'Center Manager';
+                    Notification::create([
+                        'userID' => $proposal->userID,
+                        'type' => 'success',
+                        'title' => 'Proposal Resubmitted Successfully',
+                        'message' => "Your proposal \"{$proposal->researchTitle}\" has been resubmitted successfully to the {$targetRole}.",
+                        'data' => [
+                            'proposal_id' => $proposal->proposalID,
+                            'proposal_title' => $proposal->researchTitle,
+                            'event' => $wasRddRevision ? 'proposal.resubmitted.to_rdd' : 'proposal.resubmitted.to_cm',
+                            'resubmitted_to' => $wasRddRevision ? 'RDD' : 'CM'
+                        ]
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error('Failed to create resubmission success notification for proponent', [
+                        'proposal_id' => $proposal->proposalID,
+                        'proponent_id' => $proposal->userID,
+                        'error' => $e->getMessage()
+                    ]);
+                }
                 
                 if ($wasRddRevision) {
                     // RDD workflow: Notify RDD users directly
@@ -1454,14 +1510,15 @@ class ProposalController extends Controller
                             Notification::create([
                                 'userID' => $rddUser->userID,
                                 'type' => 'proposal',
-                                'title' => 'Revised Proposal Resubmitted',
-                                'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" after RDD revision. Please review the updated proposal.",
+                                'title' => 'Proposal Revision Resubmitted',
+                                'message' => "{$proposal->user->fullName} has resubmitted the revised proposal \"{$proposal->researchTitle}\". Please review the updated proposal in the For Revision page.",
                                 'data' => [
                                     'proposal_id' => $proposal->proposalID,
                                     'proposal_title' => $proposal->researchTitle,
                                     'proponent_name' => $proposal->user->fullName,
                                     'event' => 'proposal.resubmitted_after_revision.rdd',
-                                    'is_resubmission' => true
+                                    'is_resubmission' => true,
+                                    'redirect_to' => '/rdd/for-revision'
                                 ]
                             ]);
                             $notificationsCreated++;
@@ -1487,14 +1544,15 @@ class ProposalController extends Controller
                                 Notification::create([
                                     'userID' => $cmUser->userID,
                                     'type' => 'info',
-                                    'title' => 'Proposal Resubmitted to RDD',
-                                    'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" to the R&D Division after revision.",
+                                    'title' => 'Proponent Resubmitted Proposal Revision',
+                                    'message' => "{$proposal->user->fullName} has resubmitted proposal revision \"{$proposal->researchTitle}\" back to the R&D Division.",
                                     'data' => [
                                         'proposal_id' => $proposal->proposalID,
                                         'proposal_title' => $proposal->researchTitle,
                                         'proponent_name' => $proposal->user->fullName,
                                         'event' => 'proposal.resubmitted_after_revision.rdd.cm_notification',
-                                        'is_view_only' => true
+                                        'is_view_only' => true,
+                                        'is_awareness_only' => true
                                     ]
                                 ]);
                             } catch (\Exception $e) {
@@ -2771,7 +2829,14 @@ class ProposalController extends Controller
 
             // CRITICAL: Use fresh() to ensure we get the latest data from database, bypassing any query cache
             // This is important when endorsements are created just before this query runs
-            $allProposals = $query->get()->fresh(['endorsements']);
+            // Include all necessary relationships to avoid losing user data
+            $allProposals = $query->get()->fresh([
+                'status:statusID,statusName,statusDescription',
+                'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
+                'user:userID,firstName,lastName,email,researchCenterID,departmentID',
+                'user.department:departmentID,name',
+                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt,created_at'
+            ]);
 
             // CRITICAL: Double-check filter - Remove proposals where CM has endorsed twice or more
             // Use a fresh query to get the latest endorsement count for each proposal
@@ -2864,8 +2929,9 @@ class ProposalController extends Controller
             // RDD's For Revision should ONLY show proposals that:
             // 1. Have been endorsed by CM (forwarded to RDD level)
             // 2. Have statusID = 4 (sent for revision by RDD) OR statusID = 1 with resubmittedAfterRevision (resubmitted after RDD revision)
-            // NOTE: For statusID = 4 proposals, we don't require an RDD endorsement because marking for revision doesn't create one
-            // For resubmitted proposals (statusID = 1 with resubmittedAfterRevision), we require an RDD endorsement to ensure they're at RDD level
+            // NOTE: For both cases, we don't require an RDD endorsement because:
+            // - Marking for revision (statusID = 4) doesn't create an endorsement
+            // - Resubmitted proposals (statusID = 1 with resubmittedAfterRevision) should show with "Updated" status
             $query = Proposal::with([
                 'status:statusID,statusName,statusDescription',
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
@@ -2880,19 +2946,14 @@ class ProposalController extends Controller
                 $query->where('endorsementStatus', 'approved')
                     ->whereIn('endorserID', $cmUserIds);
             })
-            ->where(function($q) use ($rddUserIds) {
-                // Proposals sent for revision by RDD (statusID = 4)
-                // These don't require an RDD endorsement because marking for revision doesn't create one
+            ->where(function($q) {
+                // Proposals sent for revision by RDD (statusID = 4) - "In Progress"
                 $q->where('statusID', 4)
-                // OR resubmitted proposals after RDD sent for revision (statusID = 1 but resubmittedAfterRevision is set)
-                // These require an RDD endorsement to ensure they're at RDD level
-                ->orWhere(function($subQ) use ($rddUserIds) {
+                // OR resubmitted proposals after RDD sent for revision (statusID = 1 but resubmittedAfterRevision is set) - "Updated"
+                // No RDD endorsement required because they were already at RDD level before revision
+                ->orWhere(function($subQ) {
                     $subQ->where('statusID', 1)
-                         ->whereNotNull('resubmittedAfterRevision')
-                         // Must have been reviewed by RDD (has an endorsement from RDD)
-                         ->whereHas('endorsements', function ($query) use ($rddUserIds) {
-                             $query->whereIn('endorserID', $rddUserIds);
-                         });
+                         ->whereNotNull('resubmittedAfterRevision');
                 });
             });
 
@@ -2982,8 +3043,12 @@ class ProposalController extends Controller
                 
                 // Clear statistics cache if it exists
                 Cache::forget("proposal_statistics");
+                Cache::forget("rdd_statistics_cache");
+                Cache::forget("cm_statistics_cache");
+                Cache::forget("rdd_dashboard_statistics_cache");
+                Cache::forget("cm_dashboard_statistics_cache");
                 
-                Log::info("Proposal cache cleared", ['proposal_id' => $proposalId]);
+                Log::info("Proposal cache cleared including statistics", ['proposal_id' => $proposalId]);
             } catch (\Exception $e) {
                 Log::warning("Failed to clear proposal cache: " . $e->getMessage());
             }
