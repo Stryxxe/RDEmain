@@ -26,6 +26,10 @@ class StatusSeeder extends Seeder
                 'statusDescription' => 'Proposal has been rejected and needs revision'
             ],
             [
+                'statusName' => 'Revisions Required',
+                'statusDescription' => 'Proposal needs revisions before approval'
+            ],
+            [
                 'statusName' => 'Ongoing',
                 'statusDescription' => 'Proposal is approved and research is in progress'
             ],

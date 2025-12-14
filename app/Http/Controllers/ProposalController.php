@@ -36,7 +36,7 @@ class ProposalController extends Controller
                 'files:fileID,proposalID,fileName,filePath,fileType',
                 'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
                 'user.department:departmentID,name',
-                'user.researchCenter:centerID,centerName,name',
+                'user.researchCenter:centerID,name',
                 'user.role:userRoleID,userRole',
                 // Don't use column selection for many-to-many relationships - it can cause issues
                 'proponents',
@@ -2753,18 +2753,18 @@ class ProposalController extends Controller
                 // Original proposals sent for revision (statusID = 4)
                 $q->where(function($status4Q) use ($user) {
                     $status4Q->where('statusID', 4)
-                             // CRITICAL: Use a fresh subquery to check endorsement count
-                             // This ensures we get the latest count even if endorsement was just created in the same transaction
-                             ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                             // CRITICAL: Exclude proposals where CM has endorsed at least once
+                             // Once CM accepts the revision (endorses once), it should not appear in For Revision section
+                             ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) = 0', 
                                  [$user->userID, 'approved']);
                 })
                 // OR resubmitted proposals (statusID = 1 but resubmittedAfterRevision is set)
                 ->orWhere(function($subQ) use ($user) {
                     $subQ->where('statusID', 1)
                          ->whereNotNull('resubmittedAfterRevision')
-                         // CRITICAL: Use a fresh subquery to check endorsement count
-                         // This ensures we get the latest count even if endorsement was just created in the same transaction
-                         ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                         // CRITICAL: Exclude proposals where CM has endorsed at least once
+                         // Once CM accepts the revision (endorses once), it should not appear in For Revision section
+                         ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) = 0', 
                              [$user->userID, 'approved']);
                 });
             });
@@ -2773,9 +2773,9 @@ class ProposalController extends Controller
             // This is important when endorsements are created just before this query runs
             $allProposals = $query->get()->fresh(['endorsements']);
 
-            // CRITICAL: Double-check filter - Remove proposals where CM has endorsed twice or more
+            // CRITICAL: Double-check filter - Remove proposals where CM has endorsed at least once
             // Use a fresh query to get the latest endorsement count for each proposal
-            // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
+            // This ensures immediate removal when CM accepts the revision - does NOT wait for RDD endorsement
             $filteredProposals = $allProposals->filter(function($proposal) use ($user) {
                 // Use a fresh query to get the latest endorsement count
                 // This ensures we catch endorsements that were just created
@@ -2784,9 +2784,9 @@ class ProposalController extends Controller
                     ->where('endorsementStatus', 'approved')
                     ->count();
                 
-                // Exclude if CM has endorsed twice or more (count >= 2)
-                // This removal is IMMEDIATE - based on CM's action, not RDD's
-                return $endorsementCount < 2;
+                // Exclude if CM has endorsed at least once (count >= 1)
+                // Once CM accepts the revision (endorses once), it should not appear in For Revision section
+                return $endorsementCount === 0;
             });
 
             // Log for debugging
@@ -2871,7 +2871,7 @@ class ProposalController extends Controller
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
                 'user:userID,firstName,lastName,email,researchCenterID,departmentID',
                 'user.department:departmentID,name',
-                'user.researchCenter:centerID,centerName,name',
+                'user.researchCenter:centerID,name',
                 'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt'
             ])
             ->whereNull('archivedByRDD')
