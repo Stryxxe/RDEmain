@@ -45,10 +45,13 @@ const RDDDashboard = () => {
     const fetchResearchCenters = async () => {
         try {
             setLoadingCenters(true);
-            const response = await axiosInstance.get("/admin/research-centers", {
-                headers: { Accept: "application/json" },
-                withCredentials: true,
-            });
+            const response = await axiosInstance.get(
+                "/admin/research-centers",
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
             if (response.data.success) {
                 setResearchCenters(response.data.data || []);
             }
@@ -58,7 +61,6 @@ const RDDDashboard = () => {
             setLoadingCenters(false);
         }
     };
-
 
     const fetchDashboardData = async () => {
         try {
@@ -144,7 +146,12 @@ const RDDDashboard = () => {
 
                         return {
                             id: proposal.proposalID, // Use actual database ID for routing
-                            displayId: proposal.custom_proposal_id || `PRO-${String(proposal.proposalID).padStart(6, "0")}`, // Use custom ID format
+                            displayId:
+                                proposal.custom_proposal_id ||
+                                `PRO-${String(proposal.proposalID).padStart(
+                                    6,
+                                    "0"
+                                )}`, // Use custom ID format
                             title: proposal.researchTitle,
                             author: proposal.user
                                 ? `${proposal.user.firstName} ${proposal.user.lastName}`
@@ -247,12 +254,15 @@ const RDDDashboard = () => {
     // Pagination calculations
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentItems = filteredResearch.slice(indexOfFirstItem, indexOfLastItem);
+    const currentItems = filteredResearch.slice(
+        indexOfFirstItem,
+        indexOfLastItem
+    );
     const totalPages = Math.ceil(filteredResearch.length / itemsPerPage);
 
     const handlePageChange = (pageNumber) => {
         setCurrentPage(pageNumber);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        window.scrollTo({ top: 0, behavior: "smooth" });
     };
 
     const getStatusClass = (statusName) => getStatusBadgeClass(statusName);
@@ -292,9 +302,9 @@ const RDDDashboard = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-            <Breadcrumbs items={[
-                { label: 'R&D Initiative Status', href: null }
-            ]} />
+            <Breadcrumbs
+                items={[{ label: "R&D Initiative Status", href: null }]}
+            />
             <div className="max-w-7xl mx-auto px-6 py-8">
                 <div className="text-center">
                     <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
@@ -354,13 +364,19 @@ const RDDDashboard = () => {
                             onChange={(e) => setSortBy(e.target.value)}
                             className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                         >
-                            <option value="Date">Date (Latest to Oldest)</option>
+                            <option value="Date">
+                                Date (Latest to Oldest)
+                            </option>
                             <option value="Title">Title</option>
                             <option value="Author">Author</option>
                             <option value="Status">Status</option>
                         </select>
-                        {sortBy === "Date" && <span className="text-gray-500">↓</span>}
-                        {sortBy !== "Date" && <span className="text-gray-500">↑</span>}
+                        {sortBy === "Date" && (
+                            <span className="text-gray-500 ml-1">↓</span>
+                        )}
+                        {sortBy !== "Date" && (
+                            <span className="text-gray-500 ml-1">↑</span>
+                        )}
                     </div>
                 </div>
 
@@ -373,7 +389,9 @@ const RDDDashboard = () => {
                                     type="text"
                                     placeholder="Search projects..."
                                     value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    onChange={(e) =>
+                                        setSearchTerm(e.target.value)
+                                    }
                                     className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
                                 />
                                 <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
@@ -389,7 +407,11 @@ const RDDDashboard = () => {
                             <select
                                 value={selectedCenter || ""}
                                 onChange={(e) => {
-                                    setSelectedCenter(e.target.value ? parseInt(e.target.value) : null);
+                                    setSelectedCenter(
+                                        e.target.value
+                                            ? parseInt(e.target.value)
+                                            : null
+                                    );
                                     setCurrentPage(1); // Reset to first page when filter changes
                                 }}
                                 className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white text-gray-900 min-w-[200px]"
@@ -397,7 +419,10 @@ const RDDDashboard = () => {
                             >
                                 <option value="">All Centers</option>
                                 {researchCenters.map((center) => (
-                                    <option key={center.centerID} value={center.centerID}>
+                                    <option
+                                        key={center.centerID}
+                                        value={center.centerID}
+                                    >
                                         {center.centerName || center.name}
                                     </option>
                                 ))}
@@ -463,7 +488,7 @@ const RDDDashboard = () => {
 
                                 {/* Actions */}
                                 <div className="flex items-center justify-center">
-                                    <Link 
+                                    <Link
                                         href={`/rdd/proposal/${research.id}`}
                                         className="text-blue-600 hover:text-blue-800 text-sm"
                                     >
@@ -478,7 +503,12 @@ const RDDDashboard = () => {
                     {totalPages > 1 && (
                         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
                             <div className="text-sm text-gray-600">
-                                Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredResearch.length)} of {filteredResearch.length} results
+                                Showing {indexOfFirstItem + 1} to{" "}
+                                {Math.min(
+                                    indexOfLastItem,
+                                    filteredResearch.length
+                                )}{" "}
+                                of {filteredResearch.length} results
                             </div>
                         </div>
                     )}
@@ -491,9 +521,7 @@ const RDDDashboard = () => {
 // Set the persistent layout
 RDDDashboard.layout = (page) => (
     <AppLayout>
-        <RDDLayout>
-            {page}
-        </RDDLayout>
+        <RDDLayout>{page}</RDDLayout>
     </AppLayout>
 );
 

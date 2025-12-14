@@ -23,8 +23,8 @@ const CMReviewProposal = () => {
     const { user } = useAuth();
     const { refreshAllNotifications } = useNotifications();
     const { refreshAllMessages } = useMessages();
-    const [year, setYear] = useState("2025");
     const [search, setSearch] = useState("");
+    const [sortBy, setSortBy] = useState("Pending");
     const [selectedProposal, setSelectedProposal] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [proposals, setProposals] = useState([]);
@@ -177,28 +177,78 @@ const CMReviewProposal = () => {
         }
     };
 
-    // Filter proposals based on search
+    // Filter proposals based on search and sortBy
     // Note: Proposals in Endorsement view are already filtered by backend to show
     // proposals that have been initially endorsed by CM but not yet forwarded to RDD
     const filteredProposals = proposals.filter((proposal) => {
+        // Apply "Pending" filter if selected
+        if (sortBy === "Pending") {
+            // Only show proposals with statusID === 1 (Under Review)
+            if (proposal.statusID !== 1) {
+                return false;
+            }
+            
+            // CRITICAL: Exclude proposals where the current CM has endorsed (even once)
+            // Pending should ONLY show proposals that are NOT yet endorsed by CM
+            const endorsements = proposal.endorsements || [];
+            if (Array.isArray(endorsements) && user?.userID) {
+                const currentUserID = String(user.userID);
+                const cmEndorsements = endorsements.filter((endorsement) => {
+                    const endorserID = endorsement?.endorserID
+                        ? String(endorsement.endorserID)
+                        : null;
+                    const status = endorsement?.endorsementStatus;
+                    return (
+                        endorserID === currentUserID && status === "approved"
+                    );
+                });
+                
+                // If CM has endorsed even once, exclude from pending
+                if (cmEndorsements.length >= 1) {
+                    return false;
+                }
+            }
+        }
+        
+        // Apply search filter
         const matchesSearch =
             proposal.researchTitle
                 .toLowerCase()
                 .includes(search.toLowerCase()) ||
             proposal.user?.fullName
                 .toLowerCase()
+                .includes(search.toLowerCase()) ||
+            proposal.researchCenter
+                ?.toLowerCase()
                 .includes(search.toLowerCase());
         return matchesSearch;
+    });
+    
+    // Sort proposals based on sortBy
+    const sortedProposals = filteredProposals.sort((a, b) => {
+        switch (sortBy) {
+            case "Pending":
+                // When filtering by Pending, sort by ID (oldest first)
+                return a.proposalID - b.proposalID;
+            case "Title":
+                return a.researchTitle.localeCompare(b.researchTitle);
+            case "Author":
+                return (a.user?.fullName || "").localeCompare(
+                    b.user?.fullName || ""
+                );
+            default:
+                return a.proposalID - b.proposalID;
+        }
     });
 
     // Pagination
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-    const currentProposals = filteredProposals.slice(
+    const currentProposals = sortedProposals.slice(
         indexOfFirstItem,
         indexOfLastItem
     );
-    const totalPages = Math.ceil(filteredProposals.length / itemsPerPage);
+    const totalPages = Math.ceil(sortedProposals.length / itemsPerPage);
 
     const handlePageChange = (page) => setCurrentPage(page);
 
@@ -239,38 +289,6 @@ const CMReviewProposal = () => {
         </svg>
     );
 
-    const FilterIcon = () => (
-        <svg
-            className="w-4 h-4 text-gray-500"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-            />
-        </svg>
-    );
-
-    const SortIcon = () => (
-        <svg
-            className="w-4 h-4 text-gray-400 hover:text-gray-600 cursor-pointer transition-colors"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-        >
-            <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"
-            />
-        </svg>
-    );
-
     const FilterBar = () => (
         <div className="px-6 py-4 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
             <div className="flex flex-wrap items-center gap-4">
@@ -289,21 +307,20 @@ const CMReviewProposal = () => {
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center space-x-4">
-                    <div className="flex items-center space-x-2">
-                        <FilterIcon />
-                        <span className="text-sm font-medium text-gray-700">
-                            Year:
-                        </span>
-                        <input
-                            type="text"
-                            value={year}
-                            onChange={(e) => setYear(e.target.value)}
-                            className="border border-gray-300 rounded-md px-3 py-2 text-sm w-20 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
-                        />
-                    </div>
-
-                    <SortIcon />
+                <div className="flex items-center gap-2">
+                    <label className="text-sm font-medium text-gray-700">
+                        Sort by:
+                    </label>
+                    <select
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value)}
+                        className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 hover:bg-white hover:border-gray-300"
+                    >
+                        <option value="Pending">Pending</option>
+                        <option value="Title">Title</option>
+                        <option value="Author">Author</option>
+                    </select>
+                    <span className="text-gray-500 ml-1">↑</span>
                 </div>
             </div>
         </div>
@@ -353,7 +370,7 @@ const CMReviewProposal = () => {
                             Research Proposals for Review
                         </h2>
                         <p className="text-sm text-gray-600 mt-1">
-                            {filteredProposals.length} records found
+                            {sortedProposals.length} records found
                         </p>
                     </div>
 
@@ -457,9 +474,9 @@ const CMReviewProposal = () => {
                                     Showing {indexOfFirstItem + 1} to{" "}
                                     {Math.min(
                                         indexOfLastItem,
-                                        filteredProposals.length
+                                        sortedProposals.length
                                     )}{" "}
-                                    of {filteredProposals.length} results
+                                    of {sortedProposals.length} results
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <button

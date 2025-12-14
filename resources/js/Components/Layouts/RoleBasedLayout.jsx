@@ -18,7 +18,7 @@ const RoleBasedLayout = ({ children, roleName, hideSidebar = false }) => {
 
             {/* Sidebar - Hidden when hideSidebar is true */}
             {!hideSidebar && (
-                <aside className="hidden md:block fixed top-[92px] left-0 bottom-0 w-64 bg-red-900 text-white z-20 overflow-y-auto">
+                <aside className="hidden md:block fixed top-[92px] left-0 bottom-0 w-64 bg-red-900 text-white z-20 overflow-y-auto shadow-lg">
                     <RoleBasedNavigation role={role} className="py-4" />
                 </aside>
             )}

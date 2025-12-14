@@ -36,18 +36,10 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         const fetchFullProposal = async () => {
             if (!proposal || !user) return;
 
-            // If proposal already has files, use it as is
-            if (
-                proposal.files &&
-                Array.isArray(proposal.files) &&
-                proposal.files.length > 0
-            ) {
-                setFullProposal(proposal);
-                return;
-            }
-
-            // Otherwise, fetch the full proposal with files
-            // Use force_refresh to ensure we get the latest updated content from proponent
+            // CRITICAL: Always fetch the full proposal with force_refresh to ensure we get ALL files
+            // including "Other Supporting Documents" (supporting_document type files)
+            // The proposal passed from the list might not have all files loaded, especially
+            // when coming from localStorage or the proposals index endpoint
             try {
                 const response = await axiosInstance.get(
                     `/proposals/${proposal.proposalID || proposal.id}`,
@@ -59,10 +51,34 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                 );
 
                 if (response.data.success && response.data.data) {
-                    setFullProposal(response.data.data);
+                    const fetchedProposal = response.data.data;
+                    setFullProposal(fetchedProposal);
+
+                    // Debug logging to verify files are loaded
+                    if (process.env.NODE_ENV === "development") {
+                        console.log("Full proposal fetched with files:", {
+                            proposal_id:
+                                fetchedProposal.proposalID ||
+                                fetchedProposal.id,
+                            total_files: fetchedProposal.files?.length || 0,
+                            file_types:
+                                fetchedProposal.files?.map((f) => f.fileType) ||
+                                [],
+                            supporting_documents:
+                                fetchedProposal.files?.filter(
+                                    (f) => f.fileType === "supporting_document"
+                                ) || [],
+                        });
+                    }
+                } else {
+                    // Fallback to original proposal if fetch fails
+                    console.warn(
+                        "Failed to fetch full proposal, using original data"
+                    );
+                    setFullProposal(proposal);
                 }
             } catch (error) {
-                // If fetch fails, use the original proposal
+                // If fetch fails, use the original proposal but log the error
                 console.error("Error fetching full proposal:", error);
                 setFullProposal(proposal);
             }
@@ -175,13 +191,16 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
 
     // Helper function to check if a file is a research proposal file
     const isResearchProposalFile = (file) => {
+        if (!file) return false;
         const fileName = file.fileName?.toLowerCase() || "";
+        const fileType = file.fileType?.toLowerCase() || "";
         return (
-            file.fileType === "concept_paper" ||
-            file.fileType === "report" ||
+            fileType === "concept_paper" ||
+            fileType === "report" ||
             fileName.includes("concept") ||
             fileName.includes("research") ||
-            fileName.includes("paper")
+            fileName.includes("paper") ||
+            fileName.includes("proposal")
         );
     };
 
@@ -206,7 +225,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
         };
 
         // Create document list from actual uploaded files
-        return fullProposal.files
+        const documents = fullProposal.files
             .filter((file) => file.filePath) // Only include files with valid paths
             .map((file) => {
                 const fileType = file.fileType || "";
@@ -223,6 +242,24 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                     fileSize: file.fileSize,
                 };
             });
+
+        // Debug logging to help identify issues with supporting documents
+        if (process.env.NODE_ENV === "development") {
+            const supportingDocs = documents.filter(
+                (d) => d.fileType === "supporting_document"
+            );
+            if (supportingDocs.length > 0) {
+                console.log("Supporting documents found:", {
+                    count: supportingDocs.length,
+                    files: supportingDocs.map((d) => ({
+                        fileName: d.fileName,
+                        fileType: d.fileType,
+                    })),
+                });
+            }
+        }
+
+        return documents;
     };
 
     const attachedDocuments = getAttachedDocuments();
@@ -274,7 +311,8 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
 
             if (responseData.success) {
                 const proposalId = fullProposal.proposalID || fullProposal.id;
-                const isFinalEndorsement = responseData.is_final_endorsement === true;
+                const isFinalEndorsement =
+                    responseData.is_final_endorsement === true;
 
                 // Close the endorsement modal first
                 setShowEndorsementModal(false);
@@ -299,7 +337,8 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                     // Show success message
                     window.customAlert(
                         "",
-                        responseData.message || "Proposal successfully forwarded to RDD! It will no longer appear in your views.",
+                        responseData.message ||
+                            "Proposal successfully forwarded to RDD! It will no longer appear in your views.",
                         3000
                     );
 
@@ -313,7 +352,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                         if (onBack) {
                             onBack();
                         }
-                        
+
                         // Redirect to dashboard to refresh all data
                         // Using replace: true ensures browser history is clean
                         // preserveState: false ensures all data is fresh
@@ -325,7 +364,7 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                 } else {
                     // First endorsement - show success and redirect to review-proposal page
                     window.customAlert("", "Endorsed Successfully!", 3000);
-                    
+
                     setTimeout(() => {
                         router.visit("/cm/review-proposal", {
                             replace: true,
@@ -1247,106 +1286,164 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
 
                     {/* Research Proposal Section */}
                     {(() => {
-                        const researchPaper = fullProposal?.files?.find((f) => {
-                            const fileName = f.fileName?.toLowerCase() || "";
-                            return (
-                                f.fileType === "concept_paper" ||
-                                f.fileType === "report" ||
-                                fileName.includes("concept") ||
-                                fileName.includes("research") ||
-                                fileName.includes("paper")
-                            );
-                        });
+                        // Get all research proposal files
+                        const researchProposalFiles =
+                            fullProposal?.files?.filter((f) => {
+                                if (!f.filePath) return false;
+                                return isResearchProposalFile(f);
+                            }) || [];
 
-                        if (!researchPaper || !researchPaper.filePath) {
+                        if (researchProposalFiles.length === 0) {
                             return null;
                         }
 
-                        const fileUrl = `/storage/${researchPaper.filePath}`;
-
                         return (
                             <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8 mb-8">
-                                <div className="flex items-center mb-8">
-                                    <div className="w-10 h-10 bg-gradient-to-br from-red-600 to-red-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
-                                        <svg
-                                            className="w-5 h-5 text-white"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                            />
-                                        </svg>
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center">
+                                        <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center mr-4">
+                                            <svg
+                                                className="w-5 h-5 text-red-600"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                />
+                                            </svg>
+                                        </div>
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-gray-900">
+                                                Research Proposal
+                                            </h3>
+                                            <p className="text-sm text-gray-600">
+                                                Main research proposal document
+                                            </p>
+                                        </div>
                                     </div>
-                                    <h3 className="text-2xl font-bold text-gray-900">
-                                        Research Proposal
-                                    </h3>
+                                    <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
+                                        {researchProposalFiles.length} file
+                                        {researchProposalFiles.length !== 1
+                                            ? "s"
+                                            : ""}
+                                    </span>
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                    <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm w-full md:col-span-2 md:col-start-1">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h4 className="text-base font-bold text-red-900">
-                                                Main Document
-                                            </h4>
-                                            <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
-                                                1 file
-                                            </span>
-                                        </div>
-                                        <p className="text-sm text-gray-600 mb-4">
-                                            Primary research document
-                                        </p>
-                                        <div className="p-4 bg-gray-50 rounded-lg">
-                                            <p className="text-sm font-semibold text-gray-900 truncate">
-                                                {researchPaper.fileName}
-                                            </p>
-                                            {researchPaper.fileSize && (
-                                                <p className="text-xs text-gray-500 mt-1">
-                                                    {(
-                                                        researchPaper.fileSize /
-                                                        1024
-                                                    ).toFixed(0)}{" "}
-                                                    KB
-                                                </p>
-                                            )}
-                                            <div className="mt-3">
-                                                <button
-                                                    onClick={() =>
-                                                        handleDocumentClick({
-                                                            ...researchPaper,
-                                                            pdfPath: fileUrl,
-                                                        })
-                                                    }
-                                                    className="w-full flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {researchProposalFiles.map(
+                                        (file, index) => {
+                                            const fileUrl = `/storage/${file.filePath}`;
+                                            return (
+                                                <div
+                                                    key={file.fileID || index}
+                                                    className="p-6 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
                                                 >
-                                                    <svg
-                                                        className="w-4 h-4 mr-1"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                        />
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                                        />
-                                                    </svg>
-                                                    View
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
+                                                    <div className="flex items-start gap-4">
+                                                        <div className="flex-1 min-w-0">
+                                                            <h4 className="text-sm font-medium text-gray-900 mb-1 truncate">
+                                                                {file.fileName}
+                                                            </h4>
+                                                            {file.fileSize && (
+                                                                <p className="text-xs text-gray-500 mb-3">
+                                                                    {(
+                                                                        file.fileSize /
+                                                                        1024
+                                                                    ).toFixed(
+                                                                        0
+                                                                    )}{" "}
+                                                                    KB
+                                                                </p>
+                                                            )}
+                                                            <div className="flex items-center gap-2">
+                                                                <button
+                                                                    onClick={() =>
+                                                                        handleDocumentClick(
+                                                                            {
+                                                                                ...file,
+                                                                                pdfPath:
+                                                                                    fileUrl,
+                                                                            }
+                                                                        )
+                                                                    }
+                                                                    className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
+                                                                    title="View file"
+                                                                >
+                                                                    <svg
+                                                                        className="w-4 h-4"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                        />
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                        />
+                                                                    </svg>
+                                                                    View
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const link =
+                                                                            document.createElement(
+                                                                                "a"
+                                                                            );
+                                                                        link.href =
+                                                                            fileUrl;
+                                                                        link.download =
+                                                                            file.fileName;
+                                                                        link.target =
+                                                                            "_blank";
+                                                                        document.body.appendChild(
+                                                                            link
+                                                                        );
+                                                                        link.click();
+                                                                        document.body.removeChild(
+                                                                            link
+                                                                        );
+                                                                    }}
+                                                                    className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
+                                                                    title="Download file"
+                                                                >
+                                                                    <svg
+                                                                        className="w-4 h-4"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24"
+                                                                    >
+                                                                        <path
+                                                                            strokeLinecap="round"
+                                                                            strokeLinejoin="round"
+                                                                            strokeWidth={
+                                                                                2
+                                                                            }
+                                                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                        />
+                                                                    </svg>
+                                                                    Download
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        }
+                                    )}
                                 </div>
                             </div>
                         );
@@ -1692,161 +1789,198 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                     )}
 
                     {/* Other Supporting Documents */}
-                    {attachedDocuments.filter(
-                        (d) => {
-                            // Exclude SETI, GAD, MOC files
-                            if (["seti_scorecard", "gad_certificate", "matrix_compliance"].includes(d.fileType)) {
-                                return false;
-                            }
-                            // Exclude research proposal files to avoid duplication
-                            const file = fullProposal?.files?.find(f => f.fileName === d.fileName);
-                            if (file && isResearchProposalFile(file)) {
-                                return false;
-                            }
-                            return true;
-                        }
-                    ).length > 0 && (
-                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="flex items-center">
-                                    <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center mr-4">
-                                        <svg
-                                            className="w-5 h-5 text-orange-600"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <h3 className="text-2xl font-bold text-gray-900">
-                                            Other Supporting Documents
-                                        </h3>
-                                        <p className="text-sm text-gray-600">
-                                            Additional files and attachments
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
-                                    {
-                                        attachedDocuments.filter(
-                                            (d) => {
-                                                // Exclude SETI, GAD, MOC files
-                                                if (["seti_scorecard", "gad_certificate", "matrix_compliance"].includes(d.fileType)) {
-                                                    return false;
-                                                }
-                                                // Exclude research proposal files to avoid duplication
-                                                const file = fullProposal?.files?.find(f => f.fileName === d.fileName);
-                                                if (file && isResearchProposalFile(file)) {
-                                                    return false;
-                                                }
-                                                return true;
-                                            }
-                                        ).length
-                                    }{" "}
-                                    files
-                                </span>
-                            </div>
+                    {(() => {
+                        // Filter for other supporting documents (exclude SETI, GAD, MOC, and research proposal files)
+                        const otherSupportingDocs = attachedDocuments.filter(
+                            (d) => {
+                                // Exclude SETI, GAD, MOC files
+                                if (
+                                    [
+                                        "seti_scorecard",
+                                        "gad_certificate",
+                                        "matrix_compliance",
+                                    ].includes(d.fileType)
+                                ) {
+                                    return false;
+                                }
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {attachedDocuments
-                                    .filter(
-                                        (d) => {
-                                            // Exclude SETI, GAD, MOC files
-                                            if (["seti_scorecard", "gad_certificate", "matrix_compliance"].includes(d.fileType)) {
-                                                return false;
-                                            }
-                                            // Exclude research proposal files to avoid duplication
-                                            const file = fullProposal?.files?.find(f => f.fileName === d.fileName);
-                                            if (file && isResearchProposalFile(file)) {
-                                                return false;
-                                            }
-                                            return true;
-                                        }
-                                    )
-                                    .map((document, index) => (
-                                        <div
-                                            key={index}
-                                            className="p-6 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
-                                        >
-                                            <p className="text-sm font-semibold text-gray-900 mb-1">
-                                                {document.fileName}
-                                            </p>
-                                            {document.fileSize && (
-                                                <p className="text-xs text-gray-500 mb-4">
-                                                    {(
-                                                        document.fileSize / 1024
-                                                    ).toFixed(0)}{" "}
-                                                    KB
-                                                </p>
-                                            )}
-                                            <div className="flex gap-3">
-                                                <button
-                                                    onClick={() =>
-                                                        handleDocumentClick(
-                                                            document
-                                                        )
-                                                    }
-                                                    className="flex items-center justify-center px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium text-sm transition-colors"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4 mr-2"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                                                        />
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
-                                                        />
-                                                    </svg>
-                                                    View
-                                                </button>
-                                                <button
-                                                    onClick={() =>
-                                                        window.open(
-                                                            document.pdfPath,
-                                                            "_blank",
-                                                            "noopener"
-                                                        )
-                                                    }
-                                                    className="flex items-center justify-center px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium text-sm transition-colors"
-                                                >
-                                                    <svg
-                                                        className="w-4 h-4 mr-2"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                                                        />
-                                                    </svg>
-                                                    Download
-                                                </button>
-                                            </div>
+                                // Exclude research proposal files - check both fileType and fileName
+                                // First check fileType
+                                if (
+                                    d.fileType === "concept_paper" ||
+                                    d.fileType === "report"
+                                ) {
+                                    return false;
+                                }
+
+                                // Then check fileName patterns in the document
+                                const fileName =
+                                    d.fileName?.toLowerCase() || "";
+                                if (
+                                    fileName.includes("concept") ||
+                                    fileName.includes("research") ||
+                                    fileName.includes("paper") ||
+                                    fileName.includes("proposal")
+                                ) {
+                                    return false;
+                                }
+
+                                // Also check the original file object from fullProposal.files
+                                const originalFile = fullProposal?.files?.find(
+                                    (f) => f.fileName === d.fileName
+                                );
+                                if (
+                                    originalFile &&
+                                    isResearchProposalFile(originalFile)
+                                ) {
+                                    return false;
+                                }
+
+                                // Include all other files, especially supporting_document type
+                                return true;
+                            }
+                        );
+
+                        // Debug logging to help identify issues
+                        if (process.env.NODE_ENV === "development") {
+                            console.log("Other Supporting Documents Filter:", {
+                                totalAttachedDocs: attachedDocuments.length,
+                                otherSupportingDocsCount:
+                                    otherSupportingDocs.length,
+                                allFileTypes: attachedDocuments.map(
+                                    (d) => d.fileType
+                                ),
+                                supportingDocumentFiles:
+                                    attachedDocuments.filter(
+                                        (d) =>
+                                            d.fileType === "supporting_document"
+                                    ),
+                                filteredFiles: otherSupportingDocs.map((d) => ({
+                                    fileName: d.fileName,
+                                    fileType: d.fileType,
+                                })),
+                            });
+                        }
+
+                        if (otherSupportingDocs.length === 0) {
+                            return null;
+                        }
+
+                        return (
+                            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center">
+                                        <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center mr-4">
+                                            <svg
+                                                className="w-5 h-5 text-orange-600"
+                                                fill="none"
+                                                stroke="currentColor"
+                                                viewBox="0 0 24 24"
+                                            >
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    strokeWidth={2}
+                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                />
+                                            </svg>
                                         </div>
-                                    ))}
+                                        <div>
+                                            <h3 className="text-2xl font-bold text-gray-900">
+                                                Other Supporting Documents
+                                            </h3>
+                                            <p className="text-sm text-gray-600">
+                                                Additional files and attachments
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                                        {otherSupportingDocs.length} files
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {otherSupportingDocs.map(
+                                        (document, index) => (
+                                            <div
+                                                key={index}
+                                                className="p-6 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                                            >
+                                                <p className="text-sm font-semibold text-gray-900 mb-1">
+                                                    {document.fileName}
+                                                </p>
+                                                {document.fileSize && (
+                                                    <p className="text-xs text-gray-500 mb-4">
+                                                        {(
+                                                            document.fileSize /
+                                                            1024
+                                                        ).toFixed(0)}{" "}
+                                                        KB
+                                                    </p>
+                                                )}
+                                                <div className="flex gap-3">
+                                                    <button
+                                                        onClick={() =>
+                                                            handleDocumentClick(
+                                                                document
+                                                            )
+                                                        }
+                                                        className="flex items-center justify-center px-4 py-2 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium text-sm transition-colors"
+                                                    >
+                                                        <svg
+                                                            className="w-4 h-4 mr-2"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                            />
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                            />
+                                                        </svg>
+                                                        View
+                                                    </button>
+                                                    <button
+                                                        onClick={() =>
+                                                            window.open(
+                                                                document.pdfPath,
+                                                                "_blank",
+                                                                "noopener"
+                                                            )
+                                                        }
+                                                        className="flex items-center justify-center px-4 py-2 bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium text-sm transition-colors"
+                                                    >
+                                                        <svg
+                                                            className="w-4 h-4 mr-2"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                                            />
+                                                        </svg>
+                                                        Download
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )
+                                    )}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        );
+                    })()}
 
                     {/* Action Buttons */}
                     <div className="flex justify-end space-x-4 pt-8 border-t border-gray-200 mt-8">

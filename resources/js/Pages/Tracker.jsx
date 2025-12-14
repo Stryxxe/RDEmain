@@ -32,7 +32,7 @@ const Tracker = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [searchTerm, setSearchTerm] = useState("");
-    const [sortBy, setSortBy] = useState("ID");
+    const [sortBy, setSortBy] = useState("Title");
     const [sortOrder, setSortOrder] = useState("asc");
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [fromYear, setFromYear] = useState("2025");
@@ -293,8 +293,6 @@ const Tracker = () => {
 
     const sortedProposals = filteredProposals.sort((a, b) => {
         switch (sortBy) {
-            case "ID":
-                return a.proposalID - b.proposalID; // Oldest first
             case "Title":
                 return a.researchTitle.localeCompare(b.researchTitle);
             case "Author":
@@ -305,10 +303,8 @@ const Tracker = () => {
                 return (a.status?.statusName || "").localeCompare(
                     b.status?.statusName || ""
                 );
-            case "Date":
-                return new Date(a.created_at) - new Date(b.created_at);
             default:
-                return a.proposalID - b.proposalID; // Default to ID sorting (oldest first)
+                return a.researchTitle.localeCompare(b.researchTitle);
         }
     });
 
@@ -398,14 +394,25 @@ const Tracker = () => {
 
             {/* Header Section */}
             <div className="p-6 border-b border-gray-200">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                            Research Projects
-                        </h1>
-                        <p className="text-gray-600">
-                            Comprehensive list of all research initiatives
-                        </p>
+                <div className="mb-4">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                        Research Projects
+                    </h1>
+                    <p className="text-gray-600">
+                        Comprehensive list of all research initiatives
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className="relative flex-1 max-w-md">
+                        <input
+                            type="text"
+                            placeholder="Search projects..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
+                        />
+                        <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
                     </div>
                     <div className="flex items-center gap-2">
                         <label className="text-sm font-medium text-gray-700">
@@ -414,27 +421,14 @@ const Tracker = () => {
                         <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
-                            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-white hover:border-gray-300"
                         >
-                            <option value="ID">ID (Oldest First)</option>
                             <option value="Title">Title</option>
                             <option value="Author">Author</option>
                             <option value="Status">Status</option>
-                            <option value="Date">Date</option>
                         </select>
-                        <span className="text-gray-500">↑</span>
+                        <span className="text-gray-500 ml-1">↑</span>
                     </div>
-                </div>
-
-                <div className="relative max-w-md">
-                    <input
-                        type="text"
-                        placeholder="Search projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
-                    />
-                    <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
                 </div>
             </div>
 
@@ -442,7 +436,8 @@ const Tracker = () => {
             <div className="p-6">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[2fr_1fr_1fr_140px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+                    <div className="grid grid-cols-[60px_2fr_1fr_1fr_140px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+                        <div className="flex items-center justify-center">No</div>
                         <div>Research Title</div>
                         <div>Author & College</div>
                         <div>Proposed Funding</div>
@@ -459,8 +454,15 @@ const Tracker = () => {
                             sortedProposals.map((proposal, index) => (
                                 <div
                                     key={proposal.proposalID}
-                                    className="grid grid-cols-[2fr_1fr_1fr_140px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
+                                    className="grid grid-cols-[60px_2fr_1fr_1fr_140px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
                                 >
+                                    {/* No Column */}
+                                    <div className="flex items-center justify-center">
+                                        <span className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-800 text-sm font-medium rounded-full">
+                                            {String(index + 1).padStart(2, "0")}
+                                        </span>
+                                    </div>
+
                                     {/* Research Title */}
                                     <div>
                                         <div

@@ -31,7 +31,7 @@ const CMDashboard = () => {
     const [fromYear, setFromYear] = useState("2025");
     const [toYear, setToYear] = useState("2025");
     const [searchTerm, setSearchTerm] = useState("");
-    const [sortBy, setSortBy] = useState("ID");
+    const [sortBy, setSortBy] = useState("Pending");
     const [proposals, setProposals] = useState([]);
     const [stats, setStats] = useState({
         total: 0,
@@ -45,7 +45,9 @@ const CMDashboard = () => {
     const [isRefreshing, setIsRefreshing] = useState(false);
 
     useEffect(() => {
-        console.log("[CM Dashboard Debug] Component mounted, fetching proposals...");
+        console.log(
+            "[CM Dashboard Debug] Component mounted, fetching proposals..."
+        );
         fetchProposals();
         fetchStatistics();
     }, []);
@@ -60,24 +62,27 @@ const CMDashboard = () => {
                 fetchStatistics();
             }
         };
-        
-        document.addEventListener('visibilitychange', handleVisibilityChange);
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
-            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            document.removeEventListener(
+                "visibilitychange",
+                handleVisibilityChange
+            );
         };
     }, []);
-    
+
     // Debug: Log when proposals state changes
     useEffect(() => {
         console.log("[CM Dashboard Debug] Proposals state updated:", {
             count: proposals.length,
-            proposals: proposals.map(p => ({
+            proposals: proposals.map((p) => ({
                 proposalID: p.proposalID,
                 title: p.researchTitle,
                 statusID: p.statusID,
                 statusName: p.status?.statusName,
-                user: p.user?.fullName
-            }))
+                user: p.user?.fullName,
+            })),
         });
     }, [proposals]);
 
@@ -93,62 +98,139 @@ const CMDashboard = () => {
                 success: response.data.success,
                 dataLength: response.data.data?.length || 0,
                 data: response.data.data,
-                debug: response.data.debug || null
+                debug: response.data.debug || null,
             });
-            
+
             // Log debug info if available
             if (response.data.debug) {
-                console.log("[CM Dashboard Debug] Backend Debug Info:", response.data.debug);
-                console.log("[CM Dashboard Debug] Total proposals in center:", response.data.debug.total_proposals_in_center);
-                console.log("[CM Dashboard Debug] Under Review proposals:", response.data.debug.under_review_proposals_count);
-                console.log("[CM Dashboard Debug] Final proposals returned:", response.data.debug.final_proposals_count);
-                
+                console.log(
+                    "[CM Dashboard Debug] Backend Debug Info:",
+                    response.data.debug
+                );
+                console.log(
+                    "[CM Dashboard Debug] Total proposals in center:",
+                    response.data.debug.total_proposals_in_center
+                );
+                console.log(
+                    "[CM Dashboard Debug] Under Review proposals:",
+                    response.data.debug.under_review_proposals_count
+                );
+                console.log(
+                    "[CM Dashboard Debug] Final proposals returned:",
+                    response.data.debug.final_proposals_count
+                );
+
                 // Show what statuses the proposals actually have
-                if (response.data.debug.all_center_proposals && response.data.debug.all_center_proposals.length > 0) {
-                    console.log("[CM Dashboard Debug] ⚠️ ISSUE FOUND: Proposals exist but don't have 'Under Review' status");
-                    console.log("[CM Dashboard Debug] All proposals in center with their statuses:", 
-                        response.data.debug.all_center_proposals.map(p => ({
+                if (
+                    response.data.debug.all_center_proposals &&
+                    response.data.debug.all_center_proposals.length > 0
+                ) {
+                    console.log(
+                        "[CM Dashboard Debug] ⚠️ ISSUE FOUND: Proposals exist but don't have 'Under Review' status"
+                    );
+                    console.log(
+                        "[CM Dashboard Debug] All proposals in center with their statuses:",
+                        response.data.debug.all_center_proposals.map((p) => ({
                             proposalID: p.proposalID,
                             title: p.title,
                             statusID: p.statusID,
-                            statusName: p.statusName || 'NULL'
+                            statusName: p.statusName || "NULL",
                         }))
                     );
-                    console.log("[CM Dashboard Debug] 🔍 The query is looking for status: 'Under Review' (case-insensitive)");
+                    console.log(
+                        "[CM Dashboard Debug] 🔍 The query is looking for status: 'Under Review' (case-insensitive)"
+                    );
                     console.log("[CM Dashboard Debug] 💡 Possible solutions:");
-                    console.log("[CM Dashboard Debug]    1. Check if status name in database matches exactly 'Under Review'");
-                    console.log("[CM Dashboard Debug]    2. Or update the query to show proposals with the actual status these proposals have");
+                    console.log(
+                        "[CM Dashboard Debug]    1. Check if status name in database matches exactly 'Under Review'"
+                    );
+                    console.log(
+                        "[CM Dashboard Debug]    2. Or update the query to show proposals with the actual status these proposals have"
+                    );
                 }
-                
-                if (response.data.debug.under_review_proposals && response.data.debug.under_review_proposals.length > 0) {
-                    console.log("[CM Dashboard Debug] Under Review proposals details:", response.data.debug.under_review_proposals);
+
+                if (
+                    response.data.debug.under_review_proposals &&
+                    response.data.debug.under_review_proposals.length > 0
+                ) {
+                    console.log(
+                        "[CM Dashboard Debug] Under Review proposals details:",
+                        response.data.debug.under_review_proposals
+                    );
                 }
             }
-            
+
             if (response.data.success) {
-                console.log("[CM Dashboard Debug] Setting proposals in state:", {
-                    count: response.data.data.length,
-                    proposals: response.data.data.map(p => ({
+                // Enhanced logging to check endorsements
+                const proposalsWithEndorsements = response.data.data.map(
+                    (p) => ({
                         proposalID: p.proposalID,
                         title: p.researchTitle,
                         statusID: p.statusID,
                         statusName: p.status?.statusName,
                         user: p.user?.fullName,
-                        researchCenter: p.researchCenter
-                    }))
-                });
+                        researchCenter: p.researchCenter,
+                        hasEndorsements: !!p.endorsements,
+                        endorsementsCount: p.endorsements?.length || 0,
+                        endorsements: p.endorsements || [],
+                    })
+                );
+
+                console.log(
+                    "[CM Dashboard Debug] Setting proposals in state:",
+                    {
+                        count: response.data.data.length,
+                        proposals: proposalsWithEndorsements,
+                        currentUserID: user?.userID,
+                    }
+                );
+
+                // Log specific proposals that should be filtered
+                const problemProposals = response.data.data.filter(
+                    (p) =>
+                        p.researchTitle === "tetsjda" ||
+                        p.researchTitle === "test"
+                );
+                if (problemProposals.length > 0) {
+                    console.log(
+                        "[CM Dashboard Debug] ⚠️ Problem proposals found (should be filtered):",
+                        problemProposals.map((p) => ({
+                            proposalID: p.proposalID,
+                            title: p.researchTitle,
+                            statusID: p.statusID,
+                            statusName: p.status?.statusName,
+                            endorsements: p.endorsements || [],
+                            endorsementsCount: p.endorsements?.length || 0,
+                        }))
+                    );
+                }
+
                 setProposals(response.data.data);
-                console.log("[CM Dashboard Debug] Proposals state updated. Current proposals count:", response.data.data.length);
+                console.log(
+                    "[CM Dashboard Debug] Proposals state updated. Current proposals count:",
+                    response.data.data.length
+                );
             } else {
-                console.warn("[CM Dashboard Debug] API returned success: false", response.data);
+                console.warn(
+                    "[CM Dashboard Debug] API returned success: false",
+                    response.data
+                );
             }
         } catch (error) {
-            console.error("[CM Dashboard Debug] Error fetching proposals:", error);
+            console.error(
+                "[CM Dashboard Debug] Error fetching proposals:",
+                error
+            );
             if (error.response?.status === 401) {
-                console.error("[CM Dashboard Debug] Unauthorized - session may have expired");
+                console.error(
+                    "[CM Dashboard Debug] Unauthorized - session may have expired"
+                );
             }
             if (error.response?.data) {
-                console.error("[CM Dashboard Debug] Error response data:", error.response.data);
+                console.error(
+                    "[CM Dashboard Debug] Error response data:",
+                    error.response.data
+                );
             }
         } finally {
             setLoading(false);
@@ -189,8 +271,94 @@ const CMDashboard = () => {
         }
     };
 
-    const filteredProposals = proposals.filter(
-        (proposal) =>
+    const filteredProposals = proposals.filter((proposal) => {
+        // First, apply the "Pending" filter if selected
+        // Only show proposals that are NOT yet endorsed by CM (priority)
+        // Proposals that are endorsed/forwarded to RDD should not be shown
+        if (sortBy === "Pending") {
+            // Only show proposals that are still pending (statusID === 1)
+            if (proposal.statusID !== 1) {
+                return false;
+            }
+
+            // CRITICAL: Exclude proposals where the current CM has endorsed (even once)
+            // Pending should ONLY show proposals that are NOT yet endorsed by CM
+            // If CM has endorsed, the proposal is in the endorsement process and should not appear in pending
+            // Check if endorsements exist and are an array
+            const endorsements = proposal.endorsements || [];
+
+            // Debug: Log endorsements for proposals that might be excluded
+            if (
+                proposal.researchTitle === "tetsjda" ||
+                proposal.researchTitle === "test"
+            ) {
+                console.log(
+                    "[CM Dashboard Debug] Checking endorsements for proposal:",
+                    {
+                        proposalID: proposal.proposalID,
+                        title: proposal.researchTitle,
+                        statusID: proposal.statusID,
+                        endorsements: endorsements,
+                        endorsementsType: typeof endorsements,
+                        isArray: Array.isArray(endorsements),
+                        userID: user?.userID,
+                    }
+                );
+            }
+
+            if (Array.isArray(endorsements) && user?.userID) {
+                // Use type-safe comparison (handle both string and number IDs)
+                const currentUserID = String(user.userID);
+                const cmEndorsements = endorsements.filter((endorsement) => {
+                    const endorserID = endorsement?.endorserID
+                        ? String(endorsement.endorserID)
+                        : null;
+                    const status = endorsement?.endorsementStatus;
+                    return (
+                        endorserID === currentUserID && status === "approved"
+                    );
+                });
+
+                // CRITICAL: Exclude proposals if CM has endorsed even once
+                // Pending should ONLY show proposals that are NOT yet endorsed by CM
+                // If CM has endorsed (even once), the proposal is in the endorsement process
+                // and should not appear in pending
+                if (cmEndorsements.length >= 1) {
+                    console.log(
+                        "[CM Dashboard Debug] ✅ Excluding proposal from pending - CM has endorsed (not pending):",
+                        {
+                            proposalID: proposal.proposalID,
+                            title: proposal.researchTitle,
+                            endorsementCount: cmEndorsements.length,
+                            cmEndorsements: cmEndorsements,
+                            currentUserID: currentUserID,
+                        }
+                    );
+                    return false;
+                }
+            } else if (user?.userID) {
+                // If endorsements are not loaded or not in expected format, log for debugging
+                if (
+                    proposal.researchTitle === "tetsjda" ||
+                    proposal.researchTitle === "test"
+                ) {
+                    console.warn(
+                        "[CM Dashboard Debug] ⚠️ Endorsements not available or not in expected format:",
+                        {
+                            proposalID: proposal.proposalID,
+                            title: proposal.researchTitle,
+                            endorsements: endorsements,
+                            hasEndorsements: !!proposal.endorsements,
+                            endorsementsType: typeof proposal.endorsements,
+                            isArray: Array.isArray(proposal.endorsements),
+                        }
+                    );
+                }
+            }
+        }
+
+        // Then apply search term filter
+        return (
             proposal.researchTitle
                 .toLowerCase()
                 .includes(searchTerm.toLowerCase()) ||
@@ -200,33 +368,64 @@ const CMDashboard = () => {
             proposal.researchCenter
                 .toLowerCase()
                 .includes(searchTerm.toLowerCase())
-    );
-    
+        );
+    });
+
     // Debug logging for filtering
     useEffect(() => {
         console.log("[CM Dashboard Debug] Proposals state changed:", {
             totalProposals: proposals.length,
             searchTerm: searchTerm,
+            sortBy: sortBy,
             filteredCount: filteredProposals.length,
-            proposals: proposals.map(p => ({
+            currentUserID: user?.userID,
+            proposals: proposals.map((p) => ({
                 proposalID: p.proposalID,
                 title: p.researchTitle,
+                statusID: p.statusID,
                 statusName: p.status?.statusName,
-                user: p.user?.fullName
-            }))
+                user: p.user?.fullName,
+                hasEndorsements: !!p.endorsements,
+                endorsementsCount: p.endorsements?.length || 0,
+            })),
         });
-    }, [proposals, searchTerm, filteredProposals.length]);
+
+        // Log filtered proposals when Pending is selected
+        if (sortBy === "Pending") {
+            const pendingProposals = filteredProposals.filter(
+                (p) => p.statusID === 1
+            );
+            console.log("[CM Dashboard Debug] Pending filter results:", {
+                totalPending: pendingProposals.length,
+                pendingProposals: pendingProposals.map((p) => ({
+                    proposalID: p.proposalID,
+                    title: p.researchTitle,
+                    statusID: p.statusID,
+                    endorsementsCount: p.endorsements?.length || 0,
+                    cmEndorsementsCount:
+                        p.endorsements?.filter(
+                            (e) =>
+                                e?.endorserID === user?.userID &&
+                                e?.endorsementStatus === "approved"
+                        ).length || 0,
+                })),
+            });
+        }
+    }, [proposals, searchTerm, sortBy, filteredProposals.length, user?.userID]);
 
     const sortedProposals = filteredProposals.sort((a, b) => {
         switch (sortBy) {
-            case "ID":
-                return a.proposalID - b.proposalID; // Oldest first
+            case "Pending":
+                // When filtering by Pending, sort by ID (oldest first)
+                return a.proposalID - b.proposalID;
             case "Title":
                 return a.researchTitle.localeCompare(b.researchTitle);
             case "Author":
                 return (a.user?.fullName || "").localeCompare(
                     b.user?.fullName || ""
                 );
+            case "ID":
+                return a.proposalID - b.proposalID; // Oldest first
             case "Status":
                 return (a.status?.statusName || "").localeCompare(
                     b.status?.statusName || ""
@@ -237,18 +436,18 @@ const CMDashboard = () => {
                 return a.proposalID - b.proposalID; // Default to ID sorting (oldest first)
         }
     });
-    
+
     // Debug logging for sorted proposals
     useEffect(() => {
         console.log("[CM Dashboard Debug] Sorted proposals for rendering:", {
             sortedCount: sortedProposals.length,
             sortBy: sortBy,
-            sortedProposals: sortedProposals.map(p => ({
+            sortedProposals: sortedProposals.map((p) => ({
                 proposalID: p.proposalID,
                 title: p.researchTitle,
                 statusName: p.status?.statusName,
-                statusID: p.statusID
-            }))
+                statusID: p.statusID,
+            })),
         });
     }, [sortedProposals.length, sortBy]);
 
@@ -378,9 +577,7 @@ const CMDashboard = () => {
 
     return (
         <div className="min-h-screen bg-gray-50">
-            <Breadcrumbs items={[
-                { label: 'Dashboard', href: null }
-            ]} />
+            <Breadcrumbs items={[{ label: "Dashboard", href: null }]} />
             {/* Header Section */}
             <div className="bg-white pt-8 pb-12">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -464,14 +661,25 @@ const CMDashboard = () => {
 
             {/* Header Section */}
             <div className="p-6 border-b border-gray-200">
-                <div className="flex justify-between items-start mb-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900 mb-1">
-                            Research Projects
-                        </h1>
-                        <p className="text-gray-600">
-                            Comprehensive list of all research initiatives
-                        </p>
+                <div className="mb-4">
+                    <h1 className="text-2xl font-bold text-gray-900 mb-1">
+                        Research Projects
+                    </h1>
+                    <p className="text-gray-600">
+                        Comprehensive list of all research initiatives
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-4">
+                    <div className="relative flex-1 max-w-md">
+                        <input
+                            type="text"
+                            placeholder="Search projects..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
+                        />
+                        <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
                     </div>
                     <div className="flex items-center gap-2">
                         <label className="text-sm font-medium text-gray-700">
@@ -480,27 +688,14 @@ const CMDashboard = () => {
                         <select
                             value={sortBy}
                             onChange={(e) => setSortBy(e.target.value)}
-                            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 hover:bg-white hover:border-gray-300"
                         >
-                            <option value="ID">ID (Oldest First)</option>
+                            <option value="Pending">Pending</option>
                             <option value="Title">Title</option>
                             <option value="Author">Author</option>
-                            <option value="Status">Status</option>
-                            <option value="Date">Date</option>
                         </select>
-                        <span className="text-gray-500">↑</span>
+                        <span className="text-gray-500 ml-1">↑</span>
                     </div>
-                </div>
-
-                <div className="relative max-w-md">
-                    <input
-                        type="text"
-                        placeholder="Search projects..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full pl-4 pr-10 py-2 bg-gray-100 rounded-lg text-gray-700 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all duration-200"
-                    />
-                    <BiSearch className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 text-lg" />
                 </div>
             </div>
 
@@ -508,7 +703,10 @@ const CMDashboard = () => {
             <div className="p-6">
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                     {/* Table Header */}
-                    <div className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+                    <div className="grid grid-cols-[60px_2fr_1fr_1fr_120px] gap-4 p-4 border-b border-gray-200 font-semibold text-gray-700">
+                        <div className="flex items-center justify-center">
+                            No
+                        </div>
                         <div>Research Title</div>
                         <div>Author & College</div>
                         <div>Proposed Funding</div>
@@ -520,95 +718,136 @@ const CMDashboard = () => {
                         {sortedProposals.length === 0 ? (
                             <div className="p-8 text-center text-gray-500">
                                 No proposals found
-                                {console.log("[CM Dashboard Debug] No proposals to display. State check:", {
-                                    proposalsLength: proposals.length,
-                                    filteredLength: filteredProposals.length,
-                                    sortedLength: sortedProposals.length,
-                                    searchTerm: searchTerm,
-                                    loading: loading
-                                })}
+                                {console.log(
+                                    "[CM Dashboard Debug] No proposals to display. State check:",
+                                    {
+                                        proposalsLength: proposals.length,
+                                        filteredLength:
+                                            filteredProposals.length,
+                                        sortedLength: sortedProposals.length,
+                                        searchTerm: searchTerm,
+                                        loading: loading,
+                                    }
+                                )}
                             </div>
                         ) : (
                             sortedProposals.map((proposal, index) => {
                                 // Debug log for each proposal being rendered
                                 if (index === 0) {
-                                    console.log("[CM Dashboard Debug] Rendering table body:", {
-                                        sortedProposalsLength: sortedProposals.length,
-                                        firstProposal: {
-                                            proposalID: proposal.proposalID,
-                                            title: proposal.researchTitle,
-                                            statusName: proposal.status?.statusName
+                                    console.log(
+                                        "[CM Dashboard Debug] Rendering table body:",
+                                        {
+                                            sortedProposalsLength:
+                                                sortedProposals.length,
+                                            firstProposal: {
+                                                proposalID: proposal.proposalID,
+                                                title: proposal.researchTitle,
+                                                statusName:
+                                                    proposal.status?.statusName,
+                                            },
                                         }
-                                    });
+                                    );
                                 }
                                 return (
-                                <div
-                                    key={proposal.proposalID}
-                                    className="grid grid-cols-[2fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
-                                >
-                                    {/* Research Title */}
-                                    <div style={{ pointerEvents: 'auto' }}>
-                                        <div 
-                                            className="font-bold text-gray-900 mb-1 flex items-center gap-2"
-                                            style={{ pointerEvents: 'none', cursor: 'default', userSelect: 'text' }}
-                                            onClick={(e) => e.preventDefault()}
-                                            onMouseDown={(e) => e.preventDefault()}
-                                        >
-                                            <span style={{ pointerEvents: 'none', cursor: 'default' }}>{proposal.researchTitle}</span>
-                                            {proposal.statusID === 1 && proposal.revisionHistory && proposal.revisionHistory.length > 0 && (
-                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
-                                                    Revised
+                                    <div
+                                        key={proposal.proposalID}
+                                        className="grid grid-cols-[60px_2fr_1fr_1fr_120px] gap-4 p-4 hover:bg-gray-50 transition-colors duration-150"
+                                    >
+                                        {/* No Column */}
+                                        <div className="flex items-center justify-center">
+                                            <span className="inline-flex items-center justify-center w-8 h-8 bg-emerald-100 text-emerald-800 text-sm font-medium rounded-full">
+                                                {String(index + 1).padStart(
+                                                    2,
+                                                    "0"
+                                                )}
+                                            </span>
+                                        </div>
+
+                                        {/* Research Title */}
+                                        <div style={{ pointerEvents: "auto" }}>
+                                            <div
+                                                className="font-bold text-gray-900 mb-1 flex items-center gap-2"
+                                                style={{
+                                                    pointerEvents: "none",
+                                                    cursor: "default",
+                                                    userSelect: "text",
+                                                }}
+                                                onClick={(e) =>
+                                                    e.preventDefault()
+                                                }
+                                                onMouseDown={(e) =>
+                                                    e.preventDefault()
+                                                }
+                                            >
+                                                <span
+                                                    style={{
+                                                        pointerEvents: "none",
+                                                        cursor: "default",
+                                                    }}
+                                                >
+                                                    {proposal.researchTitle}
                                                 </span>
-                                            )}
+                                                {proposal.statusID === 1 &&
+                                                    proposal.revisionHistory &&
+                                                    proposal.revisionHistory
+                                                        .length > 0 && (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800 border border-orange-200">
+                                                            Revised
+                                                        </span>
+                                                    )}
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                ID:{" "}
+                                                {proposal.custom_proposal_id ||
+                                                    `PRO-${proposal.proposalID
+                                                        .toString()
+                                                        .padStart(6, "0")}`}
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                Submitted:{" "}
+                                                {new Date(
+                                                    proposal.uploadedAt ||
+                                                        proposal.created_at
+                                                ).toLocaleDateString()}
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-gray-600">
-                                            ID: {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
-                                        </div>
-                                        <div className="text-sm text-gray-600">
-                                            Submitted:{" "}
-                                            {new Date(
-                                                proposal.uploadedAt ||
-                                                    proposal.created_at
-                                            ).toLocaleDateString()}
-                                        </div>
-                                    </div>
 
-                                    {/* Author & College */}
-                                    <div>
-                                        <div className="font-medium text-gray-900">
-                                            {proposal.user?.fullName ||
-                                                "Unknown"}
+                                        {/* Author & College */}
+                                        <div>
+                                            <div className="font-medium text-gray-900">
+                                                {proposal.user?.fullName ||
+                                                    "Unknown"}
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                {proposal.researchCenter}
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-gray-600">
-                                            {proposal.researchCenter}
-                                        </div>
-                                    </div>
 
-                                    {/* Budget */}
-                                    <div>
-                                        <div className="font-semibold text-gray-900">
-                                            ₱
-                                            {proposal.proposedBudget?.toLocaleString() ||
-                                                "0"}
+                                        {/* Budget */}
+                                        <div>
+                                            <div className="font-semibold text-gray-900">
+                                                ₱
+                                                {proposal.proposedBudget?.toLocaleString() ||
+                                                    "0"}
+                                            </div>
+                                            <div className="text-sm text-gray-600">
+                                                Total Budget
+                                            </div>
                                         </div>
-                                        <div className="text-sm text-gray-600">
-                                            Total Budget
-                                        </div>
-                                    </div>
 
-                                    {/* Actions */}
-                                    <div className="flex items-center justify-center">
-                                        <Link
-                                            href={`/cm/proposal/${proposal.proposalID}`}
-                                        >
-                                            <button className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1">
-                                                <BiShow className="text-sm" />
-                                                View Details
-                                            </button>
-                                        </Link>
+                                        {/* Actions */}
+                                        <div className="flex items-center justify-center">
+                                            <Link
+                                                href={`/cm/proposal/${proposal.proposalID}`}
+                                            >
+                                                <button className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1">
+                                                    <BiShow className="text-sm" />
+                                                    View Details
+                                                </button>
+                                            </Link>
+                                        </div>
                                     </div>
-                                </div>
-                            );
+                                );
                             })
                         )}
                     </div>

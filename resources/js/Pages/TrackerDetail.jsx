@@ -1179,17 +1179,98 @@ const TrackerDetail = ({ id: propId }) => {
                 })()}
             </div>
 
+            {/* Research Proposal Section */}
+            {proposal.files && proposal.files.length > 0 && (() => {
+                // Helper function to check if a file is a research proposal file
+                const isResearchProposalFile = (file) => {
+                    const fileName = file.fileName?.toLowerCase() || "";
+                    return (
+                        file.fileType === "concept_paper" ||
+                        file.fileType === "report" ||
+                        fileName.includes("concept") ||
+                        fileName.includes("research") ||
+                        fileName.includes("paper") ||
+                        fileName.includes("proposal")
+                    );
+                };
+
+                const researchProposalFiles = proposal.files.filter(f => isResearchProposalFile(f));
+
+                const renderFileCard = (file) => (
+                    <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
+                        <div className="flex items-start gap-4">
+                            <div className="flex-1 min-w-0">
+                                <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">{file.fileName}</h3>
+                                <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => window.open(`/storage/${file.filePath}`, "_blank")} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200" title="View file">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+                                        View
+                                    </button>
+                                    <button onClick={() => { const link = document.createElement("a"); link.href = `/storage/${file.filePath}`; link.download = file.fileName; link.target = "_blank"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200" title="Download file">
+                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                                        Download
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                );
+
+                if (researchProposalFiles.length > 0) {
+                    return (
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-3 sm:p-4 md:p-6 lg:p-8">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900">Research Proposal</h2>
+                                    <p className="text-sm text-gray-600">Main research proposal document</p>
+                                </div>
+                                <span className="ml-auto bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">{researchProposalFiles.length} file{researchProposalFiles.length !== 1 ? "s" : ""}</span>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{researchProposalFiles.map(renderFileCard)}</div>
+                        </div>
+                    );
+                }
+                return null;
+            })()}
+
             {/* Supporting Documents - SETI, GAD, MOC */}
             {proposal.files && proposal.files.length > 0 && (() => {
+                // Helper function to check if a file is a research proposal file
+                const isResearchProposalFile = (file) => {
+                    const fileName = file.fileName?.toLowerCase() || "";
+                    return (
+                        file.fileType === "concept_paper" ||
+                        file.fileType === "report" ||
+                        fileName.includes("concept") ||
+                        fileName.includes("research") ||
+                        fileName.includes("paper") ||
+                        fileName.includes("proposal")
+                    );
+                };
+
                 const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
                 const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
                 const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
-                // Other files exclude only SETI/GAD/MOC - include report and supporting_document
-                const otherFiles = proposal.files.filter(f => 
-                  f.fileType !== 'seti_scorecard' && 
-                  f.fileType !== 'gad_certificate' && 
-                  f.fileType !== 'matrix_compliance'
-                );
+                // Other files exclude SETI/GAD/MOC and research proposal files
+                const otherFiles = proposal.files.filter(f => {
+                    // Exclude SETI, GAD, MOC files
+                    if (f.fileType === 'seti_scorecard' || 
+                        f.fileType === 'gad_certificate' || 
+                        f.fileType === 'matrix_compliance') {
+                        return false;
+                    }
+                    // Exclude research proposal files
+                    if (isResearchProposalFile(f)) {
+                        return false;
+                    }
+                    return true;
+                });
 
                 const renderFileCard = (file) => (
                     <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">

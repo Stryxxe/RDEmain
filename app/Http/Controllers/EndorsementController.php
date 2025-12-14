@@ -198,15 +198,20 @@ class EndorsementController extends Controller
                         $proposal->update(['statusID' => 1]);
                     }
                     
-                    // Clear all proposal caches for this proposal to ensure fresh data
-                    // This ensures the proposal disappears from all CM views immediately
+                    // CRITICAL: Clear all proposal caches IMMEDIATELY to ensure proposal disappears from all CM views
+                    // This must happen BEFORE any other operations to ensure immediate removal
                     $this->clearProposalCache($request->proposalID);
                     
-                    Log::info('CM final endorsement - proposal forwarded to RDD', [
+                    // Force refresh the proposal to ensure status is updated
+                    $proposal->refresh();
+                    
+                    Log::info('CM final endorsement - proposal forwarded to RDD - IMMEDIATE REMOVAL FROM CM VIEWS', [
                         'proposal_id' => $request->proposalID,
                         'cm_user_id' => $user->userID,
                         'endorsement_count' => $endorsementCount,
-                        'new_status_id' => $underReviewStatus ? $underReviewStatus->statusID : 1
+                        'new_status_id' => $underReviewStatus ? $underReviewStatus->statusID : 1,
+                        'action' => 'Proposal will be excluded from all CM views (Dashboard, Endorsement, For Revision)',
+                        'filter_logic' => 'CM endorsement count >= 2 will exclude from all CM queries'
                     ]);
                 }
             }
@@ -301,6 +306,8 @@ class EndorsementController extends Controller
             }
 
             // Clear proposal cache since endorsement data has changed
+            // Note: If this was a final endorsement, cache was already cleared above
+            // But we clear again here to ensure all caches are fresh
             $this->clearProposalCache($request->proposalID);
 
             // Determine if this was a final endorsement (CM endorsed twice)
@@ -382,6 +389,7 @@ class EndorsementController extends Controller
 
     /**
      * Clear proposal cache for all users
+     * CRITICAL: This ensures proposals disappear from all CM views immediately after final endorsement
      * 
      * @param int $proposalId
      * @return void
@@ -401,12 +409,34 @@ class EndorsementController extends Controller
                         Cache::getRedis()->del($keys);
                     }
                 } else {
-                    // For non-Redis stores, we can't use wildcard patterns
-                    // Instead, we'll clear the cache entry for the current user if we have access to it
-                    // Note: This is a limitation - we can't clear all user-specific caches for this proposal
-                    // without knowing all user IDs. Consider using cache tags if your store supports them.
-                    Log::info("Cache wildcard pattern not supported for non-Redis store. Skipping cache clear for pattern: {$pattern}");
+                    // For non-Redis stores, try to clear using cache tags if supported
+                    if (method_exists($store, 'tags')) {
+                        try {
+                            Cache::tags(["proposal_{$proposalId}"])->flush();
+                        } catch (\Exception $e) {
+                            // Tags might not be supported, fall back to manual clearing
+                            Log::info("Cache tags not supported, attempting manual cache clear");
+                        }
+                    }
+                    
+                    // Also try to clear common cache keys manually
+                    // Get all users who might have cached this proposal
+                    $users = \App\Models\User::pluck('userID');
+                    foreach ($users as $userId) {
+                        $cacheKey = "proposal_{$proposalId}_user_{$userId}";
+                        Cache::forget($cacheKey);
+                    }
+                    
+                    // Clear the general proposal cache
+                    Cache::forget("proposal_{$proposalId}");
                 }
+                
+                // Also clear any list caches that might include this proposal
+                Cache::forget("cm_for_revision_proposals");
+                Cache::forget("rdd_for_revision_proposals");
+                Cache::forget("proponent_proposals");
+                
+                Log::info("Proposal cache cleared for all users", ['proposal_id' => $proposalId]);
             } catch (\Exception $e) {
                 Log::warning("Failed to clear proposal cache: " . $e->getMessage());
             }

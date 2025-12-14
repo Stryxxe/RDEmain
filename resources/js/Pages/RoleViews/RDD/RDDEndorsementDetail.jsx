@@ -9,6 +9,7 @@ import { updateProposal } from '../../../services/proposalService';
 import RDDLayout from '../../../Components/Layouts/RDDLayout';
 import AppLayout from '../../../Components/Layouts/AppLayout';
 import Breadcrumbs from '../../../Components/Breadcrumbs';
+import SimpleToast from '../../../Components/SimpleToast';
 
 const axiosInstance = window.axios || axios;
 if (!window.axios) {
@@ -36,6 +37,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
   const [revisionComments, setRevisionComments] = useState('');
   const [isSendingForRevision, setIsSendingForRevision] = useState(false);
   const [revisionImages, setRevisionImages] = useState([]);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     const fetchFullProposal = async () => {
@@ -543,7 +545,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
 
       if (response.success) {
         setFullProposal(response.data);
-        alert('Proposal updated successfully!');
+        setToast({ message: 'Proposal updated successfully!', type: 'success' });
         setShowEditProposal(false);
         handleRefresh();
       } else {
@@ -552,7 +554,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
     } catch (error) {
       console.error('Error saving proposal:', error);
       const errorMessage = error.response?.data?.message || error.message || 'Failed to save proposal';
-      alert(`Error: ${errorMessage}`);
+      setToast({ message: `Error: ${errorMessage}`, type: 'error' });
     } finally {
       setIsEndorsing(false);
     }
@@ -600,6 +602,13 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
+      {toast && (
+        <SimpleToast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       <div className="max-w-7xl mx-auto px-6 pt-6">
         <Breadcrumbs items={[
           { label: 'Endorsement', href: '/rdd/review-proposal' },

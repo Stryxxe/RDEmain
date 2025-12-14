@@ -285,7 +285,7 @@ const ForRevision = () => {
               <option value="Status">Status</option>
               <option value="Date">Date</option>
             </select>
-            <span className="text-gray-500">↑</span>
+            <span className="text-gray-500 ml-1">↑</span>
           </div>
         </div>
 

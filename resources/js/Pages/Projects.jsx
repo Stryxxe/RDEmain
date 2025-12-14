@@ -256,7 +256,7 @@ const Projects = () => {
                 <option value="funding">Proposed Funding</option>
                 <option value="date">Date</option>
               </select>
-              <ChevronUp size={16} className="text-gray-500" />
+              <ChevronUp size={16} className="text-gray-500 ml-1" />
             </div>
           </div>
           

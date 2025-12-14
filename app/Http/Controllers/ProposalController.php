@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -110,12 +111,14 @@ class ProposalController extends Controller
                     // 1. Have statusID = 1 (Under Review) - includes resubmitted proposals
                     // 2. Have statusID 4 AND have been endorsed once by this CM (from For Revision Accept)
                     //    This allows proposals from For Revision to appear in Endorsement view for final checking
-                    // BUT EXCLUDE proposals where this CM has endorsed twice (forwarded to RDD)
+                    // CRITICAL: EXCLUDE proposals where this CM has endorsed twice (forwarded to RDD)
+                    // This removal happens IMMEDIATELY when CM endorses twice - does NOT wait for RDD endorsement
                     $query->where(function($q) use ($user) {
                         $q->where(function($statusQ) use ($user) {
                             // StatusID = 1 proposals (includes resubmitted)
                             $statusQ->where('statusID', 1)
-                                    // Exclude if CM has endorsed twice
+                                    // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
+                                    // This ensures immediate removal when CM forwards to RDD
                                     ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
                                         [$user->userID, 'approved']);
                         })
@@ -205,7 +208,7 @@ class ProposalController extends Controller
         
         // Cache for 2 minutes - balance between performance and data freshness
         // If force_refresh is true, we'll fetch fresh data (cache was cleared above)
-        $proposal = Cache::remember($cacheKey, $forceRefresh ? 0 : 120, function () use ($id, $user) {
+        $proposal = Cache::remember($cacheKey, $forceRefresh ? 0 : 120, function () use ($id, $user, $forceRefresh) {
             // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
             $query = Proposal::where('proposalID', $id)->with([
                 'status:statusID,statusName,statusDescription',
@@ -244,6 +247,22 @@ class ProposalController extends Controller
             }
 
             $result = $query->firstOrFail();
+            
+            // CRITICAL: When force_refresh is true, ensure files are loaded with a fresh query
+            // This is especially important after file uploads to ensure CM sees updated files
+            if ($forceRefresh) {
+                // Force a fresh query for files to bypass any relationship cache
+                $freshFiles = \App\Models\File::where('proposalID', $id)
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+                $result->setRelation('files', $freshFiles);
+                
+                Log::info('Force refresh - loaded fresh files', [
+                    'proposal_id' => $id,
+                    'files_count' => $freshFiles->count(),
+                    'file_types' => $freshFiles->pluck('fileType')->toArray()
+                ]);
+            }
             
             // Load project roles for proponents
             $result->proponents->each(function ($proponent) {
@@ -682,44 +701,82 @@ class ProposalController extends Controller
         }
 
         try {
-            $updateData = [];
+            // Use database transaction to ensure atomicity of file uploads and proposal updates
+            // This ensures files are committed to database before cache clearing
+            DB::beginTransaction();
             
-            // Only include fields that were sent
-            if ($request->has('researchTitle')) $updateData['researchTitle'] = $request->researchTitle;
-            if ($request->has('description')) $updateData['description'] = $request->description;
-            if ($request->has('objectives')) $updateData['objectives'] = $request->objectives;
-            if ($request->has('researchCenter')) $updateData['researchCenter'] = $request->researchCenter;
-            if ($request->has('researchAgenda')) $updateData['researchAgenda'] = $request->researchAgenda;
-            if ($request->has('dostSPs')) $updateData['dostSPs'] = $request->dostSPs;
-            if ($request->has('sustainableDevelopmentGoals')) $updateData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
-            if ($request->has('proposedBudget')) $updateData['proposedBudget'] = $request->proposedBudget;
-            
-            // Initialize requestedStatusID for logging purposes
-            $requestedStatusID = $request->has('statusID') ? (int) $request->input('statusID') : null;
-            
-            // Only allow statusID update if explicitly changing to For Revision (statusID 4) by CM/RDD
-            // When proponent resubmits, the statusID will be changed to 1 later in the resubmission logic (line ~937)
-            // This ensures the proposal becomes visible in R&D Initiatives and Endorsement pages again
-            if ($request->has('statusID')) {
-                // Only allow CM/RDD to set status to 4 (For Revision)
-                // Proponents should not be able to change statusID when resubmitting
-                if ($requestedStatusID === 4 && $user->role && in_array($user->role->userRole, ['CM', 'RDD'])) {
-                    $updateData['statusID'] = 4;
+            try {
+                $updateData = [];
+                
+                // Only include fields that were sent
+                if ($request->has('researchTitle')) $updateData['researchTitle'] = $request->researchTitle;
+                if ($request->has('description')) $updateData['description'] = $request->description;
+                if ($request->has('objectives')) $updateData['objectives'] = $request->objectives;
+                if ($request->has('researchCenter')) $updateData['researchCenter'] = $request->researchCenter;
+                if ($request->has('researchAgenda')) $updateData['researchAgenda'] = $request->researchAgenda;
+                if ($request->has('dostSPs')) $updateData['dostSPs'] = $request->dostSPs;
+                if ($request->has('sustainableDevelopmentGoals')) $updateData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
+                if ($request->has('proposedBudget')) $updateData['proposedBudget'] = $request->proposedBudget;
+                
+                // Initialize requestedStatusID for logging purposes
+                // Use input() to handle both JSON and FormData requests
+                $requestedStatusID = $request->has('statusID') ? (int) $request->input('statusID') : null;
+                
+                // Only allow statusID update if explicitly changing to For Revision (statusID 4) by CM/RDD
+                // When proponent resubmits, the statusID will be changed to 1 later in the resubmission logic
+                // This ensures the proposal becomes visible in R&D Initiatives and Endorsement pages again
+                if ($request->has('statusID') && $requestedStatusID === 4) {
+                    // Only allow CM/RDD to set status to 4 (For Revision)
+                    // Proponents should not be able to change statusID when resubmitting
+                    if ($user->role && in_array($user->role->userRole, ['CM', 'RDD'])) {
+                        $updateData['statusID'] = 4;
+                        Log::info('Early statusID update set to 4', [
+                            'proposal_id' => $proposal->proposalID,
+                            'user_role' => $user->role->userRole,
+                            'requested_statusid' => $requestedStatusID
+                        ]);
+                    }
                 }
-            }
 
-            // Handle file uploads if provided
+                // Handle file uploads if provided
+                // CRITICAL: Files must be saved and committed BEFORE proposal update to ensure they're visible
             // Main proposal file (updatedForm)
             if ($request->hasFile('updatedForm')) {
                 $file = $request->file('updatedForm');
                 $fileName = 'updated_form_' . time() . '.' . $file->getClientOriginalExtension();
-                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
-
-                // Create file record - replace existing report file if any
-                // First, mark old report files as replaced (optional: delete old files)
+                
+                // CRITICAL: Get old files BEFORE deleting database records, then delete physical files
+                $oldFiles = File::where('proposalID', $proposal->proposalID)
+                    ->whereIn('fileType', ['report', 'concept_paper', 'updated_form'])
+                    ->get();
+                
+                // Delete physical files from storage
+                foreach ($oldFiles as $oldFile) {
+                    try {
+                        if ($oldFile->filePath && Storage::disk('public')->exists($oldFile->filePath)) {
+                            Storage::disk('public')->delete($oldFile->filePath);
+                            Log::info('Deleted old proposal file from storage', [
+                                'proposal_id' => $proposal->proposalID,
+                                'file_path' => $oldFile->filePath,
+                                'file_name' => $oldFile->fileName
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to delete old proposal file from storage', [
+                            'proposal_id' => $proposal->proposalID,
+                            'file_path' => $oldFile->filePath,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+                
+                // Delete database records
                 File::where('proposalID', $proposal->proposalID)
                     ->whereIn('fileType', ['report', 'concept_paper', 'updated_form'])
                     ->delete();
+                
+                // Store new file
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
 
                 File::create([
                     'proposalID' => $proposal->proposalID,
@@ -734,12 +791,39 @@ class ProposalController extends Controller
             if ($request->hasFile('setiFile')) {
                 $file = $request->file('setiFile');
                 $fileName = 'seti_' . time() . '_' . $file->getClientOriginalName();
-                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
-
-                // Replace existing SETI files
+                
+                // CRITICAL: Get old files BEFORE deleting database records, then delete physical files
+                $oldFiles = File::where('proposalID', $proposal->proposalID)
+                    ->where('fileType', 'seti_scorecard')
+                    ->get();
+                
+                // Delete physical files from storage
+                foreach ($oldFiles as $oldFile) {
+                    try {
+                        if ($oldFile->filePath && Storage::disk('public')->exists($oldFile->filePath)) {
+                            Storage::disk('public')->delete($oldFile->filePath);
+                            Log::info('Deleted old SETI file from storage', [
+                                'proposal_id' => $proposal->proposalID,
+                                'file_path' => $oldFile->filePath,
+                                'file_name' => $oldFile->fileName
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to delete old SETI file from storage', [
+                            'proposal_id' => $proposal->proposalID,
+                            'file_path' => $oldFile->filePath,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+                
+                // Delete database records
                 File::where('proposalID', $proposal->proposalID)
                     ->where('fileType', 'seti_scorecard')
                     ->delete();
+                
+                // Store new file
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
 
                 File::create([
                     'proposalID' => $proposal->proposalID,
@@ -754,12 +838,39 @@ class ProposalController extends Controller
             if ($request->hasFile('gadFile')) {
                 $file = $request->file('gadFile');
                 $fileName = 'gad_' . time() . '_' . $file->getClientOriginalName();
-                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
-
-                // Replace existing GAD files
+                
+                // CRITICAL: Get old files BEFORE deleting database records, then delete physical files
+                $oldFiles = File::where('proposalID', $proposal->proposalID)
+                    ->where('fileType', 'gad_certificate')
+                    ->get();
+                
+                // Delete physical files from storage
+                foreach ($oldFiles as $oldFile) {
+                    try {
+                        if ($oldFile->filePath && Storage::disk('public')->exists($oldFile->filePath)) {
+                            Storage::disk('public')->delete($oldFile->filePath);
+                            Log::info('Deleted old GAD file from storage', [
+                                'proposal_id' => $proposal->proposalID,
+                                'file_path' => $oldFile->filePath,
+                                'file_name' => $oldFile->fileName
+                            ]);
+                        }
+                    } catch (\Exception $e) {
+                        Log::warning('Failed to delete old GAD file from storage', [
+                            'proposal_id' => $proposal->proposalID,
+                            'file_path' => $oldFile->filePath,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+                
+                // Delete database records
                 File::where('proposalID', $proposal->proposalID)
                     ->where('fileType', 'gad_certificate')
                     ->delete();
+                
+                // Store new file
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
 
                 File::create([
                     'proposalID' => $proposal->proposalID,
@@ -901,9 +1012,28 @@ class ProposalController extends Controller
             $currentStatusID = (int) $proposal->statusID;
             
             // Track status change before updating
-            $wasRevisionStatusChange = $request->has('statusID')
-                && (int) $request->statusID === 4
-                && $currentStatusID !== 4;
+            // Handle both JSON and FormData requests - use input() instead of direct property access
+            $requestedStatusID = null;
+            if ($request->has('statusID')) {
+                $requestedStatusID = (int) $request->input('statusID');
+            }
+            
+            $wasRevisionStatusChange = $requestedStatusID === 4 && $currentStatusID !== 4;
+            
+            // Debug logging for RDD marking for revision
+            if ($user->role && $user->role->userRole === 'RDD' && $request->has('statusID')) {
+                Log::info('RDD marking proposal for revision - CHECKING', [
+                    'proposal_id' => $proposal->proposalID,
+                    'user_id' => $user->userID,
+                    'current_status_id' => $currentStatusID,
+                    'requested_status_id' => $requestedStatusID,
+                    'was_revision_status_change' => $wasRevisionStatusChange,
+                    'request_has_statusid' => $request->has('statusID'),
+                    'request_statusid_value' => $request->input('statusID'),
+                    'request_statusid_type' => gettype($request->input('statusID')),
+                    'update_data_before' => $updateData ?? []
+                ]);
+            }
 
             // Track when resubmitting after revision
             // When proponent resubmits (status is 4), set resubmittedAfterRevision timestamp
@@ -947,10 +1077,18 @@ class ProposalController extends Controller
                 ]);
             }
             
-            // IMPORTANT: When CM marks proposal for revision, ensure statusID is 4
+            // IMPORTANT: When CM or RDD marks proposal for revision, ensure statusID is 4
             // Override any statusID sent from frontend to ensure it's always 4 when marked for revision
             if ($wasRevisionStatusChange) {
                 $updateData['statusID'] = 4;
+                Log::info('Proposal marked for revision', [
+                    'proposal_id' => $proposal->proposalID,
+                    'user_id' => $user->userID,
+                    'user_role' => $user->role?->userRole,
+                    'current_status_id' => $currentStatusID,
+                    'new_status_id' => 4,
+                    'revision_comments' => $request->has('revisionComments') ? 'provided' : 'not provided'
+                ]);
             }
 
             // Log what will be updated
@@ -958,31 +1096,41 @@ class ProposalController extends Controller
                 Log::info('Proposal update data', [
                     'proposal_id' => $proposal->proposalID,
                     'update_data' => $updateData,
-                    'is_resubmit' => $isResubmitAfterRevision
+                    'is_resubmit' => $isResubmitAfterRevision,
+                    'was_revision_status_change' => $wasRevisionStatusChange,
+                    'user_role' => $user->role?->userRole
                 ]);
             }
 
-            // Update the proposal
-            $proposal->update($updateData);
-            
-            // IMPORTANT: If files were uploaded, we need to ensure they're committed to the database
-            // before we refresh the proposal. Laravel auto-commits, but we'll force a fresh query.
-            // Check for file uploads - handle array file uploads properly
-            $hasRevisionImages = false;
-            if ($request->hasFile('revisionImages')) {
-                $revisionImageFiles = $request->file('revisionImages');
-                $hasRevisionImages = is_array($revisionImageFiles) ? count($revisionImageFiles) > 0 : $revisionImageFiles !== null;
-            }
-            
-            $hasFileUploads = $request->hasFile('updatedForm') || 
-                             $request->hasFile('setiFile') || 
-                             $request->hasFile('gadFile') || 
-                             $request->hasFile('matrixFile') || 
-                             $request->hasFile('supportingDocuments') ||
-                             $hasRevisionImages;
-            
-            // Clear proposal cache BEFORE updating to ensure fresh data
-            $this->clearProposalCache($proposal->proposalID);
+                // Update the proposal
+                $proposal->update($updateData);
+                
+                // Check for file uploads - handle array file uploads properly
+                $hasRevisionImages = false;
+                if ($request->hasFile('revisionImages')) {
+                    $revisionImageFiles = $request->file('revisionImages');
+                    $hasRevisionImages = is_array($revisionImageFiles) ? count($revisionImageFiles) > 0 : $revisionImageFiles !== null;
+                }
+                
+                $hasFileUploads = $request->hasFile('updatedForm') || 
+                                 $request->hasFile('setiFile') || 
+                                 $request->hasFile('gadFile') || 
+                                 $request->hasFile('matrixFile') || 
+                                 $request->hasFile('supportingDocuments') ||
+                                 $hasRevisionImages;
+                
+                // CRITICAL: Commit transaction to ensure all file uploads and proposal updates are persisted
+                // This must happen BEFORE cache clearing to ensure data consistency
+                DB::commit();
+                
+                Log::info('Proposal update transaction committed', [
+                    'proposal_id' => $proposal->proposalID,
+                    'has_file_uploads' => $hasFileUploads,
+                    'files_committed' => true
+                ]);
+                
+                // Clear proposal cache AFTER transaction commit to ensure fresh data
+                $this->clearProposalCache($proposal->proposalID);
             
             // Clear ALL relationships to force fresh load
             $proposal->unsetRelation('files');
@@ -1004,53 +1152,95 @@ class ProposalController extends Controller
                 ]);
             }
             
-            // If files were uploaded, query them directly from database to ensure we get the latest
-            if ($hasFileUploads) {
-                // Force a fresh query to get the actual files from database
-                $actualFiles = \App\Models\File::where('proposalID', $proposal->proposalID)->get();
+            // Verify status was updated correctly when marked for revision
+            if ($wasRevisionStatusChange) {
+                // Force refresh from database to get actual saved value
+                $proposal->refresh();
+                $actualStatusID = (int) $proposal->statusID;
                 
-                Log::info('Files uploaded - querying directly from database', [
+                Log::info('Proposal status after marking for revision', [
                     'proposal_id' => $proposal->proposalID,
-                    'files_count' => $actualFiles->count(),
-                    'file_types' => $actualFiles->pluck('fileType')->toArray(),
-                    'file_names' => $actualFiles->pluck('fileName')->toArray()
+                    'status_id' => $actualStatusID,
+                    'expected_status' => 4, // Status should be 4 (For Revision)
+                    'status_correct' => $actualStatusID === 4,
+                    'user_role' => $user->role?->userRole,
+                    'revision_comments' => $proposal->revisionComments ? 'set' : 'not set',
+                    'update_data_statusid' => $updateData['statusID'] ?? 'not set'
                 ]);
                 
-                // Set the files relationship directly with fresh data
-                $proposal->setRelation('files', $actualFiles);
+                // If status wasn't updated correctly, force update it
+                if ($actualStatusID !== 4) {
+                    Log::warning('StatusID was not updated correctly, forcing update', [
+                        'proposal_id' => $proposal->proposalID,
+                        'current_status' => $actualStatusID,
+                        'expected_status' => 4
+                    ]);
+                    $proposal->update(['statusID' => 4]);
+                    $proposal->refresh();
+                    Log::info('StatusID force-updated to 4', [
+                        'proposal_id' => $proposal->proposalID,
+                        'new_status' => $proposal->statusID
+                    ]);
+                }
             }
             
-            // Force reload all other relationships
-            $proposal->load([
-                'status',
-                'user.department',
-                'user.role',
-                'user.researchCenter',
-                'proponents',
-                'proponents.role'
-            ]);
-            
-            // If files weren't uploaded but we're resubmitting, still verify files are loaded
-            if ($isResubmitAfterRevision && !$hasFileUploads) {
-                // Ensure files relationship is loaded
-                if (!$proposal->relationLoaded('files')) {
-                    $proposal->load('files');
+                // CRITICAL: After transaction commit, force a fresh database query to get the latest files
+                // This ensures we get files that were just saved, even if there's any query cache
+                if ($hasFileUploads) {
+                    // Force a fresh query to get the actual files from database
+                    // Use fresh() to bypass any model cache
+                    $actualFiles = \App\Models\File::where('proposalID', $proposal->proposalID)
+                        ->orderBy('created_at', 'desc')
+                        ->get();
+                    
+                    Log::info('Files uploaded - querying directly from database after commit', [
+                        'proposal_id' => $proposal->proposalID,
+                        'files_count' => $actualFiles->count(),
+                        'file_types' => $actualFiles->pluck('fileType')->toArray(),
+                        'file_names' => $actualFiles->pluck('fileName')->toArray(),
+                        'file_ids' => $actualFiles->pluck('fileID')->toArray()
+                    ]);
+                    
+                    // Set the files relationship directly with fresh data
+                    $proposal->setRelation('files', $actualFiles);
+                } else {
+                    // Even if no new files, ensure files relationship is loaded
+                    if (!$proposal->relationLoaded('files')) {
+                        $proposal->load('files');
+                    }
                 }
                 
-                Log::info('Proposal files after resubmission (no new files)', [
-                    'proposal_id' => $proposal->proposalID,
-                    'files_count' => $proposal->files->count(),
-                    'file_types' => $proposal->files->pluck('fileType')->toArray()
+                // Force reload all other relationships
+                $proposal->load([
+                    'status',
+                    'user.department',
+                    'user.role',
+                    'user.researchCenter',
+                    'proponents',
+                    'proponents.role'
                 ]);
-            }
+                
+                // If files weren't uploaded but we're resubmitting, still verify files are loaded
+                if ($isResubmitAfterRevision && !$hasFileUploads) {
+                    Log::info('Proposal files after resubmission (no new files)', [
+                        'proposal_id' => $proposal->proposalID,
+                        'files_count' => $proposal->files->count(),
+                        'file_types' => $proposal->files->pluck('fileType')->toArray()
+                    ]);
+                }
 
-            // Load project roles for proponents
-            $proposal->proponents->each(function ($proponent) {
-                if ($proponent->pivot->projectRoleID) {
-                    $projectRole = \App\Models\ProjectRole::find($proponent->pivot->projectRoleID);
-                    $proponent->projectRole = $projectRole;
-                }
-            });
+                // Load project roles for proponents
+                $proposal->proponents->each(function ($proponent) {
+                    if ($proponent->pivot->projectRoleID) {
+                        $projectRole = \App\Models\ProjectRole::find($proponent->pivot->projectRoleID);
+                        $proponent->projectRole = $projectRole;
+                    }
+                });
+            } catch (\Exception $e) {
+                // Rollback transaction on error
+                DB::rollBack();
+                throw $e;
+            }
 
             // Notify proponent when proposal is set to revision and include comments
             // Handle both CM and RDD revision workflows
@@ -1322,14 +1512,22 @@ class ProposalController extends Controller
             }
 
             // Clear cache for this proposal for all users (do this BEFORE returning response)
+            // This ensures CM side will get fresh data when viewing the proposal
             $this->clearProposalCache($proposal->proposalID);
             
             // IMPORTANT: Make one final refresh to ensure all relationships are loaded with latest data
             // This is critical for file uploads - we need to ensure files are included in the response
+            // Use fresh() to bypass any model cache and get the latest from database
             $proposal->refresh();
+            
+            // Force reload files relationship with a fresh query to ensure we get the latest files
+            $freshFiles = \App\Models\File::where('proposalID', $proposal->proposalID)
+                ->orderBy('created_at', 'desc')
+                ->get();
+            $proposal->setRelation('files', $freshFiles);
+            
             $proposal->load([
                 'status',
-                'files', // Ensure files are loaded
                 'user.department',
                 'user.role',
                 'user.researchCenter',
@@ -1338,6 +1536,14 @@ class ProposalController extends Controller
                 'endorsements',
                 'endorsements.endorser',
                 'endorsements.endorser.role'
+            ]);
+            
+            // Log final file state for debugging
+            Log::info('Final proposal state before response', [
+                'proposal_id' => $proposal->proposalID,
+                'files_count' => $proposal->files->count(),
+                'file_types' => $proposal->files->pluck('fileType')->toArray(),
+                'is_resubmission' => $isResubmitAfterRevision
             ]);
 
             return response()->json([
@@ -1475,8 +1681,10 @@ class ProposalController extends Controller
         if ($userRole === 'RDD') {
             // Get CM and RDD user IDs (already defined above)
             // Card 1: Total proposals endorsed by CM but not archived
+            // EXCLUDE proposals sent for revision (statusID = 4) - these should only appear in For Revision page
             $card1Query = Proposal::query()
                 ->whereNull('archivedByRDD')
+                ->where('statusID', '!=', 4) // Exclude for revision proposals
                 ->whereHas('endorsements', function ($q) use ($cmUserIds) {
                     $q->whereIn('endorserID', $cmUserIds)
                       ->where('endorsementStatus', 'approved');
@@ -1549,7 +1757,7 @@ class ProposalController extends Controller
             // received_proposals = total count of all proposals from CM's research center
             // INCLUDES proposals with statusID 4 (For Revision) - these should still count as "received"
             // EXCLUDE proposals that have been forwarded to RDD (have RDD endorsement)
-            // EXCLUDE proposals where CM has endorsed twice (forwarded to RDD)
+            // CRITICAL: EXCLUDE proposals where CM has endorsed at least once (when CM endorses, card 1 decrements)
             // Create a new query that includes For Revision proposals (statusID 4)
             $receivedQuery = Proposal::query();
             if ($user->researchCenterID) {
@@ -1565,19 +1773,19 @@ class ProposalController extends Controller
                     $q->whereIn('endorserID', $rddUserIds)
                       ->where('endorsementStatus', 'approved');
                 })
-                ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) = 0', 
                     [$user->userID, 'approved'])
                 ->count();
             
             // under_review = proposals with statusID 1 that haven't been forwarded to RDD
             // INCLUDES resubmitted proposals (statusID = 1 with resubmittedAfterRevision set)
-            // and haven't been endorsed by this CM twice (not forwarded to RDD yet)
+            // CRITICAL: EXCLUDE proposals where CM has endorsed at least once (when CM endorses, card 2 decrements)
             $underReviewStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['under review'])->first();
             $underReviewStatusId = $underReviewStatus ? $underReviewStatus->statusID : 1;
             
             // Recalculate under_review with proper filters for CM
             // Include all proposals with statusID 1 (includes resubmitted proposals)
-            // Exclude proposals forwarded to RDD and proposals where CM has endorsed twice
+            // Exclude proposals forwarded to RDD and proposals where CM has endorsed at least once
             $underReviewQuery = clone $baseQuery;
             $stats['under_review'] = $underReviewQuery
                 ->where('statusID', $underReviewStatusId)
@@ -1585,7 +1793,7 @@ class ProposalController extends Controller
                     $q->whereIn('endorserID', $rddUserIds)
                       ->where('endorsementStatus', 'approved');
                 })
-                ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) = 0', 
                     [$user->userID, 'approved'])
                 ->count();
             
@@ -2468,7 +2676,8 @@ class ProposalController extends Controller
                 // Original proposals sent for revision (statusID = 4)
                 $q->where(function($status4Q) use ($user) {
                     $status4Q->where('statusID', 4)
-                             // Exclude if CM has endorsed twice
+                             // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
+                             // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
                              ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
                                  [$user->userID, 'approved']);
                 })
@@ -2476,7 +2685,8 @@ class ProposalController extends Controller
                 ->orWhere(function($subQ) use ($user) {
                     $subQ->where('statusID', 1)
                          ->whereNotNull('resubmittedAfterRevision')
-                         // Exclude if CM has endorsed twice
+                         // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
+                         // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
                          ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
                              [$user->userID, 'approved']);
                 });
@@ -2484,13 +2694,15 @@ class ProposalController extends Controller
 
             $allProposals = $query->get();
 
-            // Double-check: Filter out any proposals where CM has endorsed twice (safety check)
+            // CRITICAL: Double-check filter - Remove proposals where CM has endorsed twice or more
+            // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
             $filteredProposals = $allProposals->filter(function($proposal) use ($user) {
                 $cmEndorsements = $proposal->endorsements->filter(function($endorsement) use ($user) {
                     return $endorsement->endorserID === $user->userID 
                         && $endorsement->endorsementStatus === 'approved';
                 });
-                // Exclude if CM has endorsed twice or more
+                // Exclude if CM has endorsed twice or more (count >= 2)
+                // This removal is IMMEDIATE - based on CM's action, not RDD's
                 return $cmEndorsements->count() < 2;
             });
 
@@ -2568,9 +2780,9 @@ class ProposalController extends Controller
 
             // RDD's For Revision should ONLY show proposals that:
             // 1. Have been endorsed by CM (forwarded to RDD level)
-            // 2. Have been reviewed by RDD (have an endorsement record from RDD, regardless of status)
-            //    This ensures we only show proposals at the RDD level, not CM/Proponent level
-            // 3. Have statusID = 4 (sent for revision by RDD) OR statusID = 1 with resubmittedAfterRevision (resubmitted after RDD revision)
+            // 2. Have statusID = 4 (sent for revision by RDD) OR statusID = 1 with resubmittedAfterRevision (resubmitted after RDD revision)
+            // NOTE: For statusID = 4 proposals, we don't require an RDD endorsement because marking for revision doesn't create one
+            // For resubmitted proposals (statusID = 1 with resubmittedAfterRevision), we require an RDD endorsement to ensure they're at RDD level
             $query = Proposal::with([
                 'status:statusID,statusName,statusDescription',
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
@@ -2585,27 +2797,38 @@ class ProposalController extends Controller
                 $query->where('endorsementStatus', 'approved')
                     ->whereIn('endorserID', $cmUserIds);
             })
-            // CRITICAL: Must have been reviewed by RDD (has an endorsement from RDD)
-            // This ensures we only show proposals at RDD level, excluding CM/Proponent level proposals
-            ->whereHas('endorsements', function ($query) use ($rddUserIds) {
-                $query->whereIn('endorserID', $rddUserIds);
-                // Include both approved and rejected/revision endorsements from RDD
-            })
-            ->where(function($q) {
+            ->where(function($q) use ($rddUserIds) {
                 // Proposals sent for revision by RDD (statusID = 4)
+                // These don't require an RDD endorsement because marking for revision doesn't create one
                 $q->where('statusID', 4)
                 // OR resubmitted proposals after RDD sent for revision (statusID = 1 but resubmittedAfterRevision is set)
-                ->orWhere(function($subQ) {
+                // These require an RDD endorsement to ensure they're at RDD level
+                ->orWhere(function($subQ) use ($rddUserIds) {
                     $subQ->where('statusID', 1)
-                         ->whereNotNull('resubmittedAfterRevision');
+                         ->whereNotNull('resubmittedAfterRevision')
+                         // Must have been reviewed by RDD (has an endorsement from RDD)
+                         ->whereHas('endorsements', function ($query) use ($rddUserIds) {
+                             $query->whereIn('endorserID', $rddUserIds);
+                         });
                 });
             });
 
             $allProposals = $query->get();
 
+            // Debug logging to help identify issues
+            $debugProposals = Proposal::whereNull('archivedByRDD')
+                ->whereHas('endorsements', function ($query) use ($cmUserIds) {
+                    $query->where('endorsementStatus', 'approved')
+                        ->whereIn('endorserID', $cmUserIds);
+                })
+                ->where('statusID', 4)
+                ->get();
+
             Log::info('RDD For Revision proposals fetched', [
                 'count' => $allProposals->count(),
-                'user_id' => $user->userID
+                'user_id' => $user->userID,
+                'debug_status_4_count' => $debugProposals->count(),
+                'debug_status_4_proposal_ids' => $debugProposals->pluck('proposalID')->toArray()
             ]);
 
             return response()->json([
@@ -2673,6 +2896,9 @@ class ProposalController extends Controller
                 Cache::forget("cm_for_revision_proposals");
                 Cache::forget("rdd_for_revision_proposals");
                 Cache::forget("proponent_proposals");
+                
+                // Clear statistics cache if it exists
+                Cache::forget("proposal_statistics");
                 
                 Log::info("Proposal cache cleared", ['proposal_id' => $proposalId]);
             } catch (\Exception $e) {
