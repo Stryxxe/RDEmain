@@ -24,15 +24,15 @@ const RoleBasedHeader = ({ role }) => {
         const fetchNotifications = async () => {
             try {
                 const axiosInstance = window.axios || axios;
-                const response = await axiosInstance.get('/notifications', {
-                    headers: { Accept: 'application/json' },
+                const response = await axiosInstance.get("/notifications", {
+                    headers: { Accept: "application/json" },
                     withCredentials: true,
                 });
                 const data = response.data?.data || response.data || [];
                 setNotifications(data.slice(0, 5)); // Show only latest 5
-                setUnreadCount(data.filter(n => !n.read).length);
+                setUnreadCount(data.filter((n) => !n.read).length);
             } catch (error) {
-                console.error('Failed to fetch notifications:', error);
+                console.error("Failed to fetch notifications:", error);
             }
         };
 
@@ -44,17 +44,23 @@ const RoleBasedHeader = ({ role }) => {
     const markAsRead = async (notificationId) => {
         try {
             const axiosInstance = window.axios || axios;
-            await axiosInstance.put(`/notifications/${notificationId}/read`, {}, {
-                headers: { Accept: 'application/json' },
-                withCredentials: true,
-            });
+            await axiosInstance.put(
+                `/notifications/${notificationId}/read`,
+                {},
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
             // Update local state
-            setNotifications(prev => prev.map(n => 
-                n.id === notificationId ? { ...n, read: true } : n
-            ));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            setNotifications((prev) =>
+                prev.map((n) =>
+                    n.id === notificationId ? { ...n, read: true } : n
+                )
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
         } catch (error) {
-            console.error('Failed to mark notification as read:', error);
+            console.error("Failed to mark notification as read:", error);
         }
     };
 
@@ -300,7 +306,7 @@ const RoleBasedHeader = ({ role }) => {
     }, []);
 
     return (
-        <header className="bg-red-900 text-white px-8 py-4 flex justify-between items-center fixed top-0 inset-x-0 z-40">
+        <header className="bg-red-900 text-white px-8 h-[72px] flex justify-between items-center fixed top-0 inset-x-0 z-40">
             <div className="flex items-center">
                 <div className="flex items-center gap-4">
                     <div className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center flex-shrink-0">
