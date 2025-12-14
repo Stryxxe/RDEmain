@@ -329,7 +329,7 @@ const SubmitPage = () => {
                     (Array.isArray(extractedData[key]) ? extractedData[key].length > 0 : true)
                 ).length;
                 
-                alert(`✓ Successfully extracted ${fieldsExtracted} fields from PDF with ${extractedData.confidence_score}% confidence! Please review and edit as needed before submitting.`);
+                alert(`Successfully extracted ${fieldsExtracted} fields from PDF with ${extractedData.confidence_score}% confidence! Please review and edit as needed before submitting.`);
             } else {
                 setOcrError(result.message || "Failed to extract data from PDF");
             }
