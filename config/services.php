@@ -17,4 +17,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'python_ocr' => [
+        'url' => env('PYTHON_OCR_URL', 'http://localhost:8001/api'),
+    ],
+
 ];

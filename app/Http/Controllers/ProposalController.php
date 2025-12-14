@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\Endorsement;
 use App\Events\ProposalSubmitted;
 use App\Helpers\SettingsHelper;
+use App\Services\OCRService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Storage;
@@ -2906,6 +2907,129 @@ class ProposalController extends Controller
             }
         } catch (\Exception $e) {
             Log::warning("Failed to clear proposal cache: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Extract proposal fields from uploaded PDF using OCR
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function extractProposalFromPDF(Request $request): JsonResponse
+    {
+        $user = Auth::user();
+        $user->loadMissing('role');
+
+        // Only proponents can use OCR extraction
+        if ($user->role?->userRole !== 'Proponent') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only proponents can use OCR extraction'
+            ], 403);
+        }
+
+        try {
+            $validated = $request->validate([
+                'file' => 'required|file|mimes:pdf|max:10240', // 10MB max
+            ]);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        }
+
+        try {
+            $file = $request->file('file');
+            $originalName = $file->getClientOriginalName();
+            
+            // Store file temporarily
+            $tempPath = $file->store('temp/ocr', 'public');
+            $fullPath = Storage::disk('public')->path($tempPath);
+
+            Log::info('Processing OCR extraction', [
+                'file' => $originalName,
+                'size' => $file->getSize(),
+                'user_id' => $user->userID
+            ]);
+
+            // Call OCR service
+            $ocrService = app(OCRService::class);
+            $result = $ocrService->extractProposalFields($fullPath, $originalName);
+
+            // Clean up temporary file
+            Storage::disk('public')->delete($tempPath);
+
+            if ($result['success']) {
+                Log::info('OCR extraction completed successfully', [
+                    'fields_count' => count($result['data'])
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'data' => $result['data'],
+                    'message' => 'Proposal fields extracted successfully'
+                ]);
+            } else {
+                Log::error('OCR extraction failed', [
+                    'error' => $result['error']
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $result['error']
+                ], 500);
+            }
+
+        } catch (\Exception $e) {
+            Log::error('OCR extraction error', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            // Clean up temporary file if exists
+            if (isset($tempPath)) {
+                Storage::disk('public')->delete($tempPath);
+            }
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to extract proposal fields: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Check if Python OCR backend is available
+     * 
+     * @return JsonResponse
+     */
+    public function checkOCRStatus(): JsonResponse
+    {
+        try {
+            $ocrService = app(OCRService::class);
+            $status = $ocrService->getBackendStatus();
+
+            return response()->json([
+                'success' => true,
+                'status' => $status
+            ]);
+
+        } catch (\Exception $e) {
+            Log::error('OCR status check failed', [
+                'error' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to check OCR status: ' . $e->getMessage(),
+                'status' => [
+                    'status' => 'error',
+                    'available' => false
+                ]
+            ], 500);
         }
     }
 }

@@ -9,10 +9,43 @@ import TextAreaField from "../Components/TextAreaField";
 import DragDropUpload from "../Components/DragDropUpload";
 import MultiFileUpload from "../Components/MultiFileUpload";
 import apiService from "../services/api";
+import { processProposalOCR } from "../services/ocrService";
 import RoleBasedLayout from "../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../Components/Layouts/AppLayout";
 import Breadcrumbs from "../Components/Breadcrumbs";
 import { useUploadSettings } from "../hooks/useUploadSettings";
+
+// Icon Components
+const CheckCircleIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+    </svg>
+);
+
+const CheckIcon = ({ className = "w-8 h-8" }) => (
+    <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+    </svg>
+);
+
+const XCircleIcon = ({ className = "h-5 w-5" }) => (
+    <svg className={className} viewBox="0 0 20 20" fill="currentColor">
+        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+    </svg>
+);
+
+const SpinnerIcon = ({ className = "h-5 w-5" }) => (
+    <svg className={className} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+);
+
+const LightningBoltIcon = ({ className = "w-5 h-5" }) => (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+    </svg>
+);
 
 const SubmitPage = () => {
     const { user } = useAuth();
@@ -79,6 +112,11 @@ const SubmitPage = () => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState("");
     const [submitSuccess, setSubmitSuccess] = useState(false);
+    
+    // OCR state
+    const [isOCRProcessing, setIsOCRProcessing] = useState(false);
+    const [ocrError, setOcrError] = useState("");
+    const [autoFilledData, setAutoFilledData] = useState(null);
 
     // Refs for form fields to enable scrolling
     const reportFileRef = useRef(null);
@@ -176,6 +214,132 @@ const SubmitPage = () => {
             ...prev,
             supportingDocuments: files,
         }));
+    };
+    
+    // OCR Extract Handler - Process the already-uploaded PDF file
+    const handleOCRExtract = async () => {
+        if (!formData.reportFile) {
+            setOcrError("Please upload a PDF file first");
+            return;
+        }
+        
+        if (!formData.reportFile.name.toLowerCase().endsWith('.pdf')) {
+            setOcrError("Only PDF files can be processed with OCR");
+            return;
+        }
+        
+        setIsOCRProcessing(true);
+        setOcrError("");
+        setSubmitError("");
+        
+        try {
+            // Process the uploaded PDF file
+            const result = await processProposalOCR(formData.reportFile);
+
+            if (result.success && result.data) {
+                const extractedData = result.data;
+
+                // Helper: map SDG numbers (from backend) to checkbox option labels
+                const sdgNumberToLabel = {
+                    1: "No Poverty",
+                    2: "Zero Hunger",
+                    3: "Good Health and Well-being",
+                    4: "Quality Education",
+                    5: "Gender Equality",
+                    6: "Clean Water and Sanitation",
+                    7: "Affordable and Clean Energy",
+                    8: "Decent Work and Economic Growth",
+                    9: "Industry, Innovation and Infrastructure",
+                    10: "Reduced Inequalities",
+                    11: "Sustainable Cities and Communities",
+                    12: "Responsible Consumption and Production",
+                    13: "Climate Action",
+                    14: "Life Below Water",
+                    15: "Life on Land",
+                    16: "Peace, Justice and Strong Institutions",
+                    17: "Partnerships for the Goals",
+                };
+
+                const mappedSDGs = Array.isArray(extractedData.sdgs)
+                    ? extractedData.sdgs
+                          .map((num) => sdgNumberToLabel[num] || null)
+                          .filter(Boolean)
+                    : null;
+
+                // Helper: map backend research agenda labels to this form's options
+                const researchAgendaMap = {
+                    "Agriculture, Aquatic, and Agro-Forestry":
+                        "Agriculture, Aquatic, and Agro-Forestry",
+                    "Agriculture, Aquatic, and Agro-Forestry Engineering and Technology":
+                        "Agriculture, Aquatic, and Agro-Forestry",
+                    "Food Security": "Agriculture, Aquatic, and Agro-Forestry",
+                    "Climate Change": "Environment and Natural Resources",
+                    "Disaster Risk Reduction": "Environment and Natural Resources",
+                    "Health and Nutrition": "Health and Wellness",
+                };
+
+                // Prefer singular research_agenda key (Python backend) but also support plural
+                const rawResearchAgenda =
+                    extractedData.research_agenda ??
+                    extractedData.research_agendas ??
+                    [];
+
+                const rawAgendaArray = Array.isArray(rawResearchAgenda)
+                    ? rawResearchAgenda
+                    : rawResearchAgenda
+                    ? [rawResearchAgenda]
+                    : [];
+
+                // Map backend agenda labels into valid checkbox options
+                const mappedResearchAgenda = rawAgendaArray
+                    .map((item) => researchAgendaMap[item] || item)
+                    .filter((label) => researchAgendaOptions.includes(label));
+
+                // Map extracted data to form fields
+                setFormData((prev) => ({
+                    ...prev,
+                    reportTitle:
+                        extractedData.research_title || prev.reportTitle,
+                    description:
+                        extractedData.description || prev.description,
+                    objectives:
+                        extractedData.objectives || prev.objectives,
+                    proposedBudget: extractedData.budget
+                        ? formatNumber(String(extractedData.budget))
+                        : prev.proposedBudget,
+                    researchAgenda:
+                        mappedResearchAgenda.length > 0
+                            ? mappedResearchAgenda
+                            : prev.researchAgenda,
+                    // DOST 6Ps are not currently provided by the Python backend
+                    dostSPs: Array.isArray(extractedData.dost_6ps)
+                        ? extractedData.dost_6ps
+                        : prev.dostSPs,
+                    sustainableDevelopmentGoals:
+                        mappedSDGs && mappedSDGs.length > 0
+                            ? mappedSDGs
+                            : prev.sustainableDevelopmentGoals,
+                }));
+
+                setAutoFilledData(extractedData);
+                
+                // Count successfully extracted fields
+                const fieldsExtracted = Object.keys(extractedData).filter(key => 
+                    extractedData[key] && key !== 'confidence_score' && 
+                    (Array.isArray(extractedData[key]) ? extractedData[key].length > 0 : true)
+                ).length;
+                
+                alert(`✓ Successfully extracted ${fieldsExtracted} fields from PDF with ${extractedData.confidence_score}% confidence! Please review and edit as needed before submitting.`);
+            } else {
+                setOcrError(result.message || "Failed to extract data from PDF");
+            }
+            
+        } catch (error) {
+            console.error("OCR extraction error:", error);
+            setOcrError(typeof error === 'string' ? error : error.message || "Failed to process PDF. Please try again or fill the form manually.");
+        } finally {
+            setIsOCRProcessing(false);
+        }
     };
 
     useEffect(() => {
@@ -421,19 +585,7 @@ const SubmitPage = () => {
             <div className="max-w-4xl w-full">
                 <div className="text-center py-12">
                     <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg
-                            className="w-8 h-8 text-green-600"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M5 13l4 4L19 7"
-                            />
-                        </svg>
+                        <CheckIcon className="w-8 h-8 text-green-600" />
                     </div>
                     <h1 className="text-2xl font-bold text-gray-900 mb-2">
                         Proposal Submitted Successfully!
@@ -466,17 +618,7 @@ const SubmitPage = () => {
                 <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex">
                         <div className="flex-shrink-0">
-                            <svg
-                                className="h-5 w-5 text-red-400"
-                                viewBox="0 0 20 20"
-                                fill="currentColor"
-                            >
-                                <path
-                                    fillRule="evenodd"
-                                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                                    clipRule="evenodd"
-                                />
-                            </svg>
+                            <XCircleIcon className="h-5 w-5 text-red-400" />
                         </div>
                         <div className="ml-3">
                             <h3 className="text-sm font-medium text-red-800">
@@ -494,6 +636,28 @@ const SubmitPage = () => {
                 onSubmit={handleSubmit}
                 className="bg-white rounded-lg shadow-md p-8"
             >
+                {/* Success Message */}
+                {autoFilledData && (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <div className="flex items-start">
+                            <CheckCircleIcon className="w-5 h-5 text-green-500 mt-0.5 mr-3 flex-shrink-0" />
+                            <div className="flex-1">
+                                <p className="text-sm font-medium text-green-800">
+                                    Form auto-filled with {autoFilledData.confidence_score}% confidence
+                                </p>
+                                <p className="text-sm text-green-700 mt-1">
+                                    Please review all fields below and make any necessary corrections before submitting.
+                                </p>
+                                {autoFilledData.confidence_score < 70 && (
+                                    <p className="text-sm text-yellow-700 mt-2">
+                                        Low confidence score - please carefully verify all extracted information.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                
                 <div className="mb-8" ref={reportFileRef}>
                     <DragDropUpload
                         onFileSelect={handleFileSelect}
@@ -501,6 +665,39 @@ const SubmitPage = () => {
                         maxSize={`${maxFileSizeMB}MB`}
                         selectedFile={formData.reportFile}
                     />
+                    
+                    {/* OCR Auto-Fill Button - Only show for PDF files */}
+                    {formData.reportFile && formData.reportFile.name.toLowerCase().endsWith('.pdf') && (
+                        <div className="mt-4">
+                            {ocrError && (
+                                <div className="mb-3 bg-red-50 border border-red-200 rounded-md p-3">
+                                    <p className="text-sm text-red-800">{ocrError}</p>
+                                </div>
+                            )}
+                            
+                            <button
+                                type="button"
+                                onClick={handleOCRExtract}
+                                disabled={isOCRProcessing}
+                                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {isOCRProcessing ? (
+                                    <>
+                                        <SpinnerIcon className="animate-spin h-5 w-5 text-white" />
+                                        Processing PDF...
+                                    </>
+                                ) : (
+                                    <>
+                                        <LightningBoltIcon className="w-5 h-5" />
+                                        Extract Data from PDF (Auto-Fill)
+                                    </>
+                                )}
+                            </button>
+                            <p className="text-xs text-gray-500 mt-2 text-center">
+                                Click to automatically extract and fill form fields using OCR technology
+                            </p>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mb-8" ref={reportTitleRef}>
