@@ -1,0 +1,285 @@
+---
+config:
+  layout: elk
+  look: neo
+title: RDE System Database ERD
+---
+erDiagram
+	direction LR
+	
+	USER_ROLES {
+		bigint userRoleID PK
+		varchar userRole "50"
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	USERS {
+		bigint userID PK
+		varchar firstName "50"
+		varchar lastName "50"
+		varchar email "50" UK
+		varchar password
+		varchar phone "50" NULL
+		bigint departmentID FK NULL
+		bigint researchCenterID FK NULL
+		bigint userRolesID FK
+		varchar avatar NULL
+		varchar remember_token NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	DEPARTMENTS {
+		bigint departmentID PK
+		varchar name "100"
+		varchar college_idNo "50" NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	RESEARCH_CENTERS {
+		bigint centerID PK
+		varchar name
+		bigint departmentID FK NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	STATUS {
+		bigint statusID PK
+		varchar statusName "50"
+		text statusDescription NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	PROPOSALS {
+		bigint proposalID PK
+		varchar custom_proposal_id "100" UK NULL
+		varchar researchTitle
+		text description NULL
+		text objectives NULL
+		varchar researchCenter NULL
+		json researchAgenda NULL
+		json dostSPs NULL
+		json sustainableDevelopmentGoals NULL
+		decimal proposedBudget "15,2" NULL
+		json budgetBreakdown NULL
+		varchar revisionFile NULL
+		json matrixOfCompliance NULL
+		timestamp uploadedAt
+		timestamp archivedByRDD NULL
+		timestamp resubmittedAfterRevision NULL
+		bigint statusID FK
+		bigint userID FK
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	FILES {
+		bigint fileID PK
+		varchar fileName
+		varchar filePath
+		varchar fileType "25"
+		bigint fileSize NULL
+		timestamp uploadedAt
+		bigint proposalID FK NULL
+		bigint reportID FK NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	CHECKLIST {
+		bigint checkListID PK
+		varchar section "100"
+		json values
+		bigint proposalID FK
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	REVIEW_DECISIONS {
+		bigint decisionID PK
+		varchar decision "50"
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	REVIEWS {
+		bigint reviewID PK
+		text remarks NULL
+		json matrixOfCompliance NULL
+		timestamp reviewedAt
+		bigint proposalID FK
+		bigint reviewerID FK
+		bigint decisionID FK
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	DECISIONS {
+		bigint decisionID PK
+		bigint proposalID FK
+		bigint decisionMakerID FK
+		varchar decisionType "50"
+		text decisionComments NULL
+		timestamp decisionDate
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	ENDORSEMENTS {
+		bigint endorsementID PK
+		bigint proposalID FK
+		bigint endorserID FK
+		text endorsementComments NULL
+		varchar endorsementStatus "default: pending"
+		timestamp endorsedAt
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	PROPOSAL_PROPONENTS {
+		bigint id PK
+		bigint proposalID FK
+		bigint userID FK
+		bigint projectRoleID FK NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	PROJECT_ROLES {
+		bigint projectRoleID PK
+		varchar roleName "100"
+		boolean isActive "default: true"
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	PROGRESS_REPORTS {
+		bigint reportID PK
+		bigint proposalID FK NULL
+		bigint userID FK
+		bigint researchCenterID FK NULL
+		bigint departmentID FK NULL
+		varchar reportType
+		varchar reportPeriod
+		int progressPercentage "default: 0"
+		decimal budgetUtilized "15,2" NULL
+		text achievements NULL
+		text challenges NULL
+		text nextMilestone NULL
+		text additionalNotes NULL
+		timestamp submittedAt
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	NOTIFICATIONS {
+		bigint id PK
+		bigint userID FK
+		varchar type
+		varchar title
+		text message
+		json data NULL
+		boolean read "default: false"
+		timestamp read_at NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	MESSAGES {
+		bigint id PK
+		bigint senderID FK
+		bigint recipientID FK
+		varchar subject
+		text content
+		varchar type "default: general"
+		boolean read "default: false"
+		timestamp read_at NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	SETTINGS {
+		bigint settingID PK
+		varchar key UK
+		text value NULL
+		varchar type "default: string"
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	TIMELINE_STAGES {
+		bigint stageID PK
+		varchar stageName "100"
+		text stageDescription NULL
+		int orderIndex "default: 0"
+		bigint statusID FK NULL
+		boolean isActive "default: true"
+		varchar icon NULL
+		varchar color "default: gray"
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	ACTIVITY_LOGS {
+		bigint activityID PK
+		bigint userID FK
+		varchar action "100"
+		varchar entity_type "100"
+		bigint entity_id NULL
+		text description
+		varchar ip_address "45" NULL
+		text user_agent NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	ACTIVITIES {
+		bigint activityID PK
+		bigint userID FK NULL
+		varchar action
+		varchar description
+		varchar model_type NULL
+		bigint model_id NULL
+		json old_values NULL
+		json new_values NULL
+		varchar ip_address NULL
+		text user_agent NULL
+		timestamp created_at
+		timestamp updated_at
+	}
+
+	USER_ROLES ||--o{ USERS : "has"
+	DEPARTMENTS ||--o{ USERS : "includes"
+	DEPARTMENTS ||--o{ RESEARCH_CENTERS : "has"
+	DEPARTMENTS ||--o{ PROGRESS_REPORTS : "receives"
+	RESEARCH_CENTERS ||--o{ USERS : "hires"
+	RESEARCH_CENTERS ||--o{ PROGRESS_REPORTS : "receives"
+	STATUS ||--o{ PROPOSALS : "contains"
+	STATUS ||--o{ TIMELINE_STAGES : "includes"
+	USERS ||--o{ PROPOSALS : "submits"
+	USERS ||--o{ REVIEWS : "writes"
+	USERS ||--o{ DECISIONS : "makes"
+	USERS ||--o{ ENDORSEMENTS : "gives"
+	USERS ||--o{ NOTIFICATIONS : "receives"
+	USERS ||--o{ MESSAGES : "sends"
+	USERS ||--o{ MESSAGES : "receives"
+	USERS ||--o{ PROGRESS_REPORTS : "submits"
+	USERS ||--o{ PROPOSAL_PROPONENTS : "participates_in"
+	USERS ||--o{ ACTIVITY_LOGS : "logs"
+	USERS ||--o{ ACTIVITIES : "logs"
+	PROPOSALS ||--o{ FILES : "attaches"
+	PROPOSALS ||--o{ CHECKLIST : "uses"
+	PROPOSALS ||--o{ DECISIONS : "results_in"
+	PROPOSALS ||--o{ ENDORSEMENTS : "receives"
+	PROPOSALS ||--o{ REVIEWS : "receives"
+	PROPOSALS ||--o{ PROPOSAL_PROPONENTS : "involves"
+	PROPOSALS ||--o{ PROGRESS_REPORTS : "tracks"
+	REVIEW_DECISIONS ||--o{ REVIEWS : "determines"
+	PROJECT_ROLES ||--o{ PROPOSAL_PROPONENTS : "assigns"
+	PROGRESS_REPORTS ||--o{ FILES : "documents"
+
+

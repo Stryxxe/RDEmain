@@ -1,0 +1,379 @@
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import axios from 'axios';
+import { useAuth } from './AuthContext';
+
+// Use window.axios which has session-based auth configured, or configure this instance
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+  axiosInstance.defaults.withCredentials = true;
+  axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
+
+const NotificationContext = createContext();
+
+export const useNotifications = () => {
+  const context = useContext(NotificationContext);
+  if (!context) {
+    throw new Error('useNotifications must be used within a NotificationProvider');
+  }
+  return context;
+};
+
+export const NotificationProvider = ({ children }) => {
+  const [notifications, setNotifications] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [dismissedToasts, setDismissedToasts] = useState(new Set());
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState(null);
+  const { user, loading: authLoading } = useAuth();
+
+  // Auto-refresh state
+  const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(true);
+  const refreshTimeoutRef = useRef(null);
+  const isActiveRef = useRef(true);
+  const lastActivityRef = useRef(Date.now());
+
+  // Smart refresh interval calculation for notifications
+  const getSmartRefreshInterval = useCallback(() => {
+    if (!autoRefreshEnabled) return null;
+    
+    const now = Date.now();
+    const timeSinceActivity = now - lastActivityRef.current;
+    const hasUnreadContent = unreadCount > 0;
+    const isTabVisible = !document.hidden;
+    
+    // If tab is hidden, refresh less frequently
+    if (!isTabVisible) return 60000; // 1 minute
+    
+    // If there's unread content, refresh very frequently for real-time updates
+    if (hasUnreadContent) return 5000; // 5 seconds
+    
+    // If user was recently active, refresh frequently
+    if (timeSinceActivity < 60000) return 10000; // 10 seconds
+    
+    // Default refresh interval - more frequent for better UX
+    return 15000; // 15 seconds
+  }, [autoRefreshEnabled, unreadCount]);
+
+  // Update activity timestamp
+  const updateActivity = useCallback(() => {
+    lastActivityRef.current = Date.now();
+  }, []);
+
+  // Fetch notifications from API
+  const fetchNotifications = useCallback(async () => {
+    try {
+      setLoading(true);
+      if (!user) { setNotifications([]); return; }
+      const response = await axiosInstance.get('/notifications', {
+        withCredentials: true
+      });
+      
+      setNotifications(response.data.data || []);
+    } catch (error) {
+      // Set empty array on error to prevent undefined issues
+      setNotifications([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user]);
+
+  // Fetch unread count
+  const fetchUnreadCount = useCallback(async () => {
+    try {
+      if (!user) { setUnreadCount(0); return; }
+      const response = await axiosInstance.get('/notifications/unread-count', {
+        withCredentials: true
+      });
+      setUnreadCount(response.data.count || 0);
+    } catch (error) {
+      setUnreadCount(0);
+    }
+  }, [user]);
+
+  // Refresh all notification data
+  const refreshAllNotifications = useCallback(async () => {
+    if (isRefreshing || !isActiveRef.current) return;
+    
+    try {
+      setIsRefreshing(true);
+      await Promise.all([
+        fetchNotifications(),
+        fetchUnreadCount()
+      ]);
+      setLastRefresh(new Date());
+    } catch (error) {
+      console.error('Error refreshing notifications:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, fetchNotifications, fetchUnreadCount]);
+
+  // Set up auto-refresh
+  const setupAutoRefresh = useCallback(() => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    if (!autoRefreshEnabled) return;
+
+    const interval = getSmartRefreshInterval();
+    if (interval) {
+      refreshTimeoutRef.current = setTimeout(() => {
+        if (isActiveRef.current) {
+          refreshAllNotifications().then(() => {
+            setupAutoRefresh(); // Schedule next refresh
+          });
+        }
+      }, interval);
+    }
+  }, [autoRefreshEnabled, getSmartRefreshInterval, refreshAllNotifications]);
+
+  // Load dismissed notifications from localStorage on mount
+  useEffect(() => {
+    const loadDismissedToasts = () => {
+      try {
+        const stored = localStorage.getItem('dismissedNotifications');
+        if (stored) {
+          const dismissedArray = JSON.parse(stored);
+          setDismissedToasts(new Set(dismissedArray));
+        }
+      } catch (error) {
+        setDismissedToasts(new Set());
+      }
+    };
+
+    loadDismissedToasts();
+  }, []);
+
+
+  // Load notifications on mount
+  useEffect(() => {
+    if (authLoading) return;
+    
+    // Check if we're on the login page
+    const currentPath = window.location.pathname;
+    const isLoginPage = currentPath === '/login' || currentPath === '/';
+    
+    if (user && !isLoginPage) {
+      isActiveRef.current = true;
+      fetchNotifications();
+      fetchUnreadCount();
+    } else {
+      isActiveRef.current = false;
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  }, [user, authLoading, fetchNotifications, fetchUnreadCount]);
+
+  // Set up auto-refresh when user is authenticated
+  useEffect(() => {
+    if (user && !authLoading) {
+      setupAutoRefresh();
+    }
+    
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, [user, authLoading, setupAutoRefresh]);
+
+  // Re-setup auto-refresh when dependencies change
+  useEffect(() => {
+    if (user && !authLoading) {
+      setupAutoRefresh();
+    }
+  }, [user, authLoading, unreadCount, autoRefreshEnabled, setupAutoRefresh]);
+
+  // Track user activity for smart refresh
+  useEffect(() => {
+    const handleActivity = () => {
+      updateActivity();
+    };
+
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        updateActivity();
+        // Refresh immediately when tab becomes visible
+        if (user && !authLoading) {
+          refreshAllNotifications();
+        }
+      }
+    };
+
+    // Add event listeners for activity tracking
+    document.addEventListener('mousedown', handleActivity);
+    document.addEventListener('keydown', handleActivity);
+    document.addEventListener('scroll', handleActivity);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener('mousedown', handleActivity);
+      document.removeEventListener('keydown', handleActivity);
+      document.removeEventListener('scroll', handleActivity);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [user, authLoading, updateActivity, refreshAllNotifications]);
+
+  // React to user changes (login/logout)
+  useEffect(() => {
+    if (!authLoading) {
+      // Check if we're on the login page
+      const currentPath = window.location.pathname;
+      const isLoginPage = currentPath === '/login' || currentPath === '/';
+      
+      if (user && !isLoginPage) {
+        fetchNotifications();
+        fetchUnreadCount();
+      } else {
+        setNotifications([]);
+        setUnreadCount(0);
+        // Clear dismissed notifications when user logs out
+        clearDismissedToasts();
+      }
+    }
+  }, [user, authLoading, fetchNotifications, fetchUnreadCount]);
+
+  const markAsRead = async (id) => {
+    try {
+      if (!user) return;
+      await axiosInstance.put(`/notifications/${id}/read`, {}, {
+        withCredentials: true
+      });
+      
+      // Update local state immediately for better UX
+      setNotifications(prev =>
+        prev.map(notification =>
+          notification.id === id
+            ? { ...notification, read: true, read_at: new Date().toISOString() }
+            : notification
+        )
+      );
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      
+      // Refresh from API after a short delay to ensure consistency
+      setTimeout(() => {
+        fetchNotifications();
+        fetchUnreadCount();
+      }, 300);
+    } catch (error) {
+      // Error handling for marking notification as read
+    }
+  };
+
+  const markAllAsRead = async () => {
+    try {
+      if (!user) return;
+      await axiosInstance.put('/notifications/mark-all-read', {}, {
+        withCredentials: true
+      });
+      setNotifications(prev =>
+        prev.map(notification => ({ ...notification, read: true, read_at: new Date().toISOString() }))
+      );
+      setUnreadCount(0);
+    } catch (error) {
+      // Error handling for marking all notifications as read
+    }
+  };
+
+  const removeNotification = async (id) => {
+    try {
+      if (!user) return;
+      await axiosInstance.delete(`/notifications/${id}`, {
+        withCredentials: true
+      });
+      setNotifications(prev => prev.filter(notification => notification.id !== id));
+      // Update unread count if the notification was unread
+      const notification = notifications.find(n => n.id === id);
+      if (notification && !notification.read) {
+        setUnreadCount(prev => Math.max(0, prev - 1));
+      }
+    } catch (error) {
+      // Error handling for deleting notification
+    }
+  };
+
+  const dismissToast = (id) => {
+    // Add to dismissed set and save to localStorage
+    setDismissedToasts(prev => {
+      const newDismissed = new Set([...prev, id]);
+      
+      // Save to localStorage
+      try {
+        const dismissedArray = Array.from(newDismissed);
+        localStorage.setItem('dismissedNotifications', JSON.stringify(dismissedArray));
+      } catch (error) {
+        // Error handling for saving dismissed notifications
+      }
+      
+      return newDismissed;
+    });
+  };
+
+  const refreshNotifications = () => {
+    fetchNotifications();
+    fetchUnreadCount();
+  };
+
+  // Clear dismissed notifications (useful for logout)
+  const clearDismissedToasts = () => {
+    setDismissedToasts(new Set());
+    try {
+      localStorage.removeItem('dismissedNotifications');
+    } catch (error) {
+      // Error handling for clearing dismissed notifications
+    }
+  };
+
+  // Get notifications that should be shown as toasts (unread and not dismissed)
+  const getToastNotifications = () => {
+    const toastNotifications = notifications.filter(notification => 
+      !notification.read && !dismissedToasts.has(notification.id)
+    );
+    return toastNotifications;
+  };
+
+  // Clean up dismissed notifications that no longer exist in the notifications list
+  useEffect(() => {
+    if (notifications.length > 0 && dismissedToasts.size > 0) {
+      const notificationIds = new Set(notifications.map(n => n.id));
+      const validDismissed = Array.from(dismissedToasts).filter(id => notificationIds.has(id));
+      
+      if (validDismissed.length !== dismissedToasts.size) {
+        setDismissedToasts(new Set(validDismissed));
+        try {
+          localStorage.setItem('dismissedNotifications', JSON.stringify(validDismissed));
+        } catch (error) {
+          // Error handling for cleaning up dismissed notifications
+        }
+      }
+    }
+  }, [notifications, dismissedToasts]);
+
+  const value = {
+    notifications,
+    loading,
+    unreadCount,
+    isRefreshing,
+    lastRefresh,
+    autoRefreshEnabled,
+    removeNotification,
+    markAsRead,
+    markAllAsRead,
+    refreshNotifications,
+    refreshAllNotifications,
+    dismissToast,
+    getToastNotifications,
+    clearDismissedToasts,
+    setAutoRefreshEnabled,
+    updateActivity,
+  };
+
+  return (
+    <NotificationContext.Provider value={value}>
+      {children}
+    </NotificationContext.Provider>
+  );
+};

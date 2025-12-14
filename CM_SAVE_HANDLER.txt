@@ -1,0 +1,63 @@
+// Add this import at the top of CMProposalDetails.jsx
+import { updateProposal } from '../../../services/proposalService';
+
+// Replace the onSave handler (around line 411) with:
+
+const handleSaveProposal = async (formData) => {
+  try {
+    // Show loading state
+    setIsEndorsing(true);
+    
+    // Prepare data for API
+    const updateData = {
+      researchAgenda: formData.researchAgenda || [],
+      dostSPs: formData.dostSPs || [],
+      sustainableDevelopmentGoals: formData.sustainableDevelopmentGoals || [],
+      proposedBudget: formData.proposedBudget || fullProposal?.proposedBudget || 0,
+    };
+    
+    // Add file if present
+    if (formData.updatedForm) {
+      updateData.updatedForm = formData.updatedForm;
+    }
+    
+    console.log('Saving proposal with data:', updateData);
+    
+    // Call API
+    const response = await updateProposal(fullProposal.proposalID || fullProposal.id, updateData);
+    
+    if (response.success) {
+      // Update local state with new data
+      setFullProposal(response.data);
+      
+      // Show success message
+      alert('Proposal updated successfully!');
+      
+      // Close edit view
+      setShowEditProposal(false);
+      
+      // Refresh data
+      handleRefresh();
+    } else {
+      throw new Error(response.message || 'Failed to update proposal');
+    }
+  } catch (error) {
+    console.error('Error saving proposal:', error);
+    const errorMessage = error.response?.data?.message || error.message || 'Failed to save proposal';
+    alert(`Error: ${errorMessage}`);
+  } finally {
+    setIsEndorsing(false);
+  }
+};
+
+// Then update the CMEditProposal component call to use this handler:
+
+if (showEditProposal) {
+  return (
+    <CMEditProposal 
+      proposal={fullProposal || proposal}
+      onBack={() => setShowEditProposal(false)}
+      onSave={handleSaveProposal}
+    />
+  );
+}

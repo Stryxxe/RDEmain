@@ -1,0 +1,31 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Department extends Model
+{
+    use HasFactory;
+
+    protected $primaryKey = 'departmentID';
+    
+    public $timestamps = false;
+
+    protected $fillable = [
+        'name',
+        'departmentName',
+        'college_idNo',
+    ];
+
+    public function users()
+    {
+        return $this->hasMany(User::class, 'departmentID', 'departmentID');
+    }
+
+    public function researchCenters()
+    {
+        return $this->hasMany(ResearchCenter::class, 'departmentID', 'departmentID');
+    }
+}
