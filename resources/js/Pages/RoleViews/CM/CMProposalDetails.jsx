@@ -161,16 +161,10 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     const getResearchPaperPath = () => {
         if (fullProposal?.files && fullProposal.files.length > 0) {
             // Look specifically for research paper/concept paper file
-            // Priority: concept_paper type > report type > filename contains 'concept' or 'research' or 'paper'
+            // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
             const researchPaper = fullProposal.files.find((f) => {
-                const fileName = f.fileName?.toLowerCase() || "";
-                return (
-                    f.fileType === "concept_paper" ||
-                    f.fileType === "report" ||
-                    fileName.includes("concept") ||
-                    fileName.includes("research") ||
-                    fileName.includes("paper")
-                );
+                const fileType = f.fileType?.toLowerCase() || "";
+                return fileType === "concept_paper" || fileType === "report";
             });
 
             if (researchPaper && researchPaper.filePath) {
@@ -190,18 +184,14 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
     const researchPaperPath = getResearchPaperPath();
 
     // Helper function to check if a file is a research proposal file
+    // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
+    // Supporting documents with names like "research_support.pdf" should NOT be classified as research proposals
     const isResearchProposalFile = (file) => {
         if (!file) return false;
-        const fileName = file.fileName?.toLowerCase() || "";
         const fileType = file.fileType?.toLowerCase() || "";
-        return (
-            fileType === "concept_paper" ||
-            fileType === "report" ||
-            fileName.includes("concept") ||
-            fileName.includes("research") ||
-            fileName.includes("paper") ||
-            fileName.includes("proposal")
-        );
+        // Only match specific file types that are research proposals
+        // Do NOT use filename matching as it causes supporting documents to be misclassified
+        return fileType === "concept_paper" || fileType === "report";
     };
 
     // Get attached documents dynamically from uploaded files
@@ -1804,23 +1794,11 @@ const CMProposalDetails = ({ proposal, onBack, onEndorsed }) => {
                                     return false;
                                 }
 
-                                // Exclude research proposal files - check both fileType and fileName
-                                // First check fileType
+                                // Exclude research proposal files - only check fileType
+                                // IMPORTANT: Do NOT use filename matching to avoid false positives
                                 if (
                                     d.fileType === "concept_paper" ||
                                     d.fileType === "report"
-                                ) {
-                                    return false;
-                                }
-
-                                // Then check fileName patterns in the document
-                                const fileName =
-                                    d.fileName?.toLowerCase() || "";
-                                if (
-                                    fileName.includes("concept") ||
-                                    fileName.includes("research") ||
-                                    fileName.includes("paper") ||
-                                    fileName.includes("proposal")
                                 ) {
                                     return false;
                                 }

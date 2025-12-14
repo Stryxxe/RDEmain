@@ -138,15 +138,13 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
   const researchPaperPath = getResearchPaperPath();
 
   // Helper function to check if a file is a research proposal file
+  // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
+  // Supporting documents with names like "research_support.pdf" should NOT be classified as research proposals
   const isResearchProposalFile = (file) => {
-    const fileName = file.fileName?.toLowerCase() || "";
-    return (
-      file.fileType === "concept_paper" ||
-      file.fileType === "report" ||
-      fileName.includes("concept") ||
-      fileName.includes("research") ||
-      fileName.includes("paper")
-    );
+    if (!file) return false;
+    const fileType = file.fileType?.toLowerCase() || "";
+    // Only match specific file types that are research proposals
+    return fileType === "concept_paper" || fileType === "report";
   };
 
   const getAttachedDocuments = () => {

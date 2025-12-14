@@ -679,14 +679,13 @@ const ProposalDetail = () => {
                 proposal.files.length > 0 &&
                 (() => {
                     // Helper function to check if a file is a research proposal file
+                    // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
                     const isResearchProposalFile = (file) => {
-                        const fileName = file.fileName?.toLowerCase() || "";
+                        if (!file) return false;
+                        const fileType = file.fileType?.toLowerCase() || "";
                         return (
-                            file.fileType === "concept_paper" ||
-                            file.fileType === "report" ||
-                            fileName.includes("concept") ||
-                            fileName.includes("research") ||
-                            fileName.includes("paper")
+                            fileType === "concept_paper" ||
+                            fileType === "report"
                         );
                     };
 

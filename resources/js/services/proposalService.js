@@ -72,6 +72,12 @@ export const updateProposal = async (proposalId, data) => {
                     } else if (data[key] instanceof File) {
                         // Append file directly
                         payload.append(key, data[key]);
+                    } else if (
+                        typeof data[key] === "object" &&
+                        data[key] !== null
+                    ) {
+                        // For plain objects (like budgetBreakdown), JSON stringify
+                        payload.append(key, JSON.stringify(data[key]));
                     } else {
                         // Append other values - ensure statusID is sent as integer
                         if (key === "statusID") {
@@ -90,7 +96,7 @@ export const updateProposal = async (proposalId, data) => {
             headers["Content-Type"] = "application/json";
         }
 
-        const response = await axiosInstance.put(
+        const response = await axiosInstance.post(
             `/proposals/${proposalId}`,
             payload,
             {

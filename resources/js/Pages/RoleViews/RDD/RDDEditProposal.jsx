@@ -372,15 +372,11 @@ const RDDEditProposal = ({ proposal, onBack, onSave }) => {
                 {/* Supporting Documents Section */}
                 {proposal?.files && proposal.files.length > 0 && (() => {
                   // Helper function to check if a file is a research proposal file
+                  // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
                   const isResearchProposalFile = (file) => {
-                    const fileName = file.fileName?.toLowerCase() || "";
-                    return (
-                      file.fileType === "concept_paper" ||
-                      file.fileType === "report" ||
-                      fileName.includes("concept") ||
-                      fileName.includes("research") ||
-                      fileName.includes("paper")
-                    );
+                    if (!file) return false;
+                    const fileType = file.fileType?.toLowerCase() || "";
+                    return fileType === "concept_paper" || fileType === "report";
                   };
 
                   const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
@@ -483,15 +479,11 @@ const RDDEditProposal = ({ proposal, onBack, onSave }) => {
 
                 {/* Other Supporting Documents Section */}
                 {proposal?.files && proposal.files.length > 0 && (() => {
+                  // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
                   const isResearchProposalFile = (file) => {
-                    const fileName = file.fileName?.toLowerCase() || "";
-                    return (
-                      file.fileType === "concept_paper" ||
-                      file.fileType === "report" ||
-                      fileName.includes("concept") ||
-                      fileName.includes("research") ||
-                      fileName.includes("paper")
-                    );
+                    if (!file) return false;
+                    const fileType = file.fileType?.toLowerCase() || "";
+                    return fileType === "concept_paper" || fileType === "report";
                   };
 
                   const otherFiles = proposal.files.filter(f => {

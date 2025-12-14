@@ -85,8 +85,8 @@ const CMForRevision = () => {
                     headers: { Accept: "application/json" },
                     withCredentials: true,
                     params: {
-                        _t: Date.now() // Cache-busting timestamp
-                    }
+                        _t: Date.now(), // Cache-busting timestamp
+                    },
                 }
             );
 
@@ -130,9 +130,9 @@ const CMForRevision = () => {
                 {
                     headers: { Accept: "application/json" },
                     withCredentials: true,
-                    params: { 
+                    params: {
                         force_refresh: true,
-                        _t: Date.now() // Additional cache-busting
+                        _t: Date.now(), // Additional cache-busting
                     },
                 }
             );
@@ -222,6 +222,26 @@ const CMForRevision = () => {
     };
 
     const filteredProposals = proposals.filter((proposal) => {
+        // CRITICAL: Exclude ANY proposal where the CM has endorsed
+        // Once CM endorses a proposal, it should not appear in ForRevision page
+        const endorsements = proposal.endorsements || [];
+        if (Array.isArray(endorsements) && user?.userID) {
+            const currentUserID = String(user.userID);
+            const cmEndorsements = endorsements.filter((endorsement) => {
+                const endorserID = endorsement?.endorserID
+                    ? String(endorsement.endorserID)
+                    : null;
+                const status = endorsement?.endorsementStatus;
+                return endorserID === currentUserID && status === "approved";
+            });
+
+            // If CM has endorsed even once, exclude from ForRevision page
+            if (cmEndorsements.length >= 1) {
+                return false;
+            }
+        }
+
+        // Apply search filter
         const term = searchTerm.toLowerCase();
         const title = (proposal.researchTitle || "").toLowerCase();
         const author = (proposal.user?.fullName || "").toLowerCase();

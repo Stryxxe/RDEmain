@@ -1182,16 +1182,11 @@ const TrackerDetail = ({ id: propId }) => {
             {/* Research Proposal Section */}
             {proposal.files && proposal.files.length > 0 && (() => {
                 // Helper function to check if a file is a research proposal file
+                // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
                 const isResearchProposalFile = (file) => {
-                    const fileName = file.fileName?.toLowerCase() || "";
-                    return (
-                        file.fileType === "concept_paper" ||
-                        file.fileType === "report" ||
-                        fileName.includes("concept") ||
-                        fileName.includes("research") ||
-                        fileName.includes("paper") ||
-                        fileName.includes("proposal")
-                    );
+                    if (!file) return false;
+                    const fileType = file.fileType?.toLowerCase() || "";
+                    return fileType === "concept_paper" || fileType === "report";
                 };
 
                 const researchProposalFiles = proposal.files.filter(f => isResearchProposalFile(f));
@@ -1242,16 +1237,11 @@ const TrackerDetail = ({ id: propId }) => {
             {/* Supporting Documents - SETI, GAD, MOC */}
             {proposal.files && proposal.files.length > 0 && (() => {
                 // Helper function to check if a file is a research proposal file
+                // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
                 const isResearchProposalFile = (file) => {
-                    const fileName = file.fileName?.toLowerCase() || "";
-                    return (
-                        file.fileType === "concept_paper" ||
-                        file.fileType === "report" ||
-                        fileName.includes("concept") ||
-                        fileName.includes("research") ||
-                        fileName.includes("paper") ||
-                        fileName.includes("proposal")
-                    );
+                    if (!file) return false;
+                    const fileType = file.fileType?.toLowerCase() || "";
+                    return fileType === "concept_paper" || fileType === "report";
                 };
 
                 const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');

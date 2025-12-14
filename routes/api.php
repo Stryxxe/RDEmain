@@ -663,7 +663,13 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     Route::get('/proposals/rdd-for-revision', [ProposalController::class, 'getRddForRevisionProposals']);
     Route::get('/proposals/cm-for-revision', [ProposalController::class, 'getCmForRevisionProposals']);
     Route::get('/proposals/{id}/revision-comments', [ProposalController::class, 'getRevisionComments']);
-    Route::apiResource('proposals', ProposalController::class);
+    
+    // Individual proposal routes (not using apiResource)
+    Route::get('/proposals', [ProposalController::class, 'index']);
+    Route::post('/proposals', [ProposalController::class, 'store']);
+    Route::get('/proposals/{id}', [ProposalController::class, 'show']);
+    Route::post('/proposals/{id}', [ProposalController::class, 'update']); // Changed from PUT to POST
+    Route::delete('/proposals/{id}', [ProposalController::class, 'destroy']);
     
     // Endorsement routes
     Route::post('/endorsements', [EndorsementController::class, 'store']);

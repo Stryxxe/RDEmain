@@ -178,35 +178,31 @@ const CMReviewProposal = () => {
     };
 
     // Filter proposals based on search and sortBy
-    // Note: Proposals in Endorsement view are already filtered by backend to show
-    // proposals that have been initially endorsed by CM but not yet forwarded to RDD
+    // Note: Proposals in Review view should exclude any that have been endorsed by CM
     const filteredProposals = proposals.filter((proposal) => {
-        // Apply "Pending" filter if selected
-        if (sortBy === "Pending") {
-            // Only show proposals with statusID === 1 (Under Review)
-            if (proposal.statusID !== 1) {
+        // CRITICAL: Always exclude proposals where the current CM has endorsed
+        // Endorsed proposals should NOT appear in the Review page regardless of sortBy filter
+        const endorsements = proposal.endorsements || [];
+        if (Array.isArray(endorsements) && user?.userID) {
+            const currentUserID = String(user.userID);
+            const cmEndorsements = endorsements.filter((endorsement) => {
+                const endorserID = endorsement?.endorserID
+                    ? String(endorsement.endorserID)
+                    : null;
+                const status = endorsement?.endorsementStatus;
+                return endorserID === currentUserID && status === "approved";
+            });
+            
+            // If CM has endorsed even once, exclude from review page
+            if (cmEndorsements.length >= 1) {
                 return false;
             }
-            
-            // CRITICAL: Exclude proposals where the current CM has endorsed (even once)
-            // Pending should ONLY show proposals that are NOT yet endorsed by CM
-            const endorsements = proposal.endorsements || [];
-            if (Array.isArray(endorsements) && user?.userID) {
-                const currentUserID = String(user.userID);
-                const cmEndorsements = endorsements.filter((endorsement) => {
-                    const endorserID = endorsement?.endorserID
-                        ? String(endorsement.endorserID)
-                        : null;
-                    const status = endorsement?.endorsementStatus;
-                    return (
-                        endorserID === currentUserID && status === "approved"
-                    );
-                });
-                
-                // If CM has endorsed even once, exclude from pending
-                if (cmEndorsements.length >= 1) {
-                    return false;
-                }
+        }
+        
+        // Apply "Pending" filter if selected (status check only)
+        if (sortBy === "Pending") {
+            if (proposal.statusID !== 1) {
+                return false;
             }
         }
         

@@ -29,6 +29,24 @@ const RDDForRevision = () => {
     const [showModal, setShowModal] = useState(false);
     const [loadingDetails, setLoadingDetails] = useState(false);
 
+    // Helper function to check if a file is a research proposal file
+    // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
+    // Supporting documents with names like "research_support.pdf" should NOT be classified as research proposals
+    const isResearchProposalFile = (file) => {
+        if (!file) return false;
+        const fileType = file.fileType?.toLowerCase() || "";
+        // Only match specific file types that are research proposals
+        return fileType === "concept_paper" || fileType === "report";
+    };
+
+    // Handle document click for viewing
+    const handleDocumentClick = (document) => {
+        if (document.filePath) {
+            const fileUrl = `/storage/${document.filePath}`;
+            window.open(fileUrl, "_blank", "noopener");
+        }
+    };
+
     useEffect(() => {
         fetchProposals();
 
@@ -313,9 +331,15 @@ const RDDForRevision = () => {
                                     </tr>
                                 ) : (
                                     filteredProposals.map((proposal, index) => {
-                                        // Determine status: "In Progress" if resubmittedAfterRevision is null, "Updated" if not null
+                                        // Determine status: "In Progress" if resubmittedAfterRevision is null or empty, "Updated" if not null
+                                        // When RDD marks for revision, resubmittedAfterRevision should be null
+                                        // When proponent resubmits, resubmittedAfterRevision is set
                                         const status =
-                                            proposal.resubmittedAfterRevision
+                                            proposal.resubmittedAfterRevision &&
+                                            proposal.resubmittedAfterRevision !==
+                                                null &&
+                                            proposal.resubmittedAfterRevision !==
+                                                ""
                                                 ? "Updated"
                                                 : "In Progress";
 
@@ -495,12 +519,12 @@ const RDDForRevision = () => {
                                 </div>
                             ) : (
                                 <div className="space-y-6 animate-fadeIn">
-                                    {/* Basic Information */}
+                                    {/* Basic Information - Title and Author Only */}
                                     <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
                                         <h3 className="text-xl font-bold text-gray-900 mb-4">
                                             {proposalDetails.researchTitle}
                                         </h3>
-                                        <div className="space-y-2 text-sm text-gray-700">
+                                        <div className="text-sm text-gray-700">
                                             <p>
                                                 <span className="font-semibold">
                                                     Author:
@@ -508,36 +532,225 @@ const RDDForRevision = () => {
                                                 {proposalDetails.user
                                                     ?.fullName || "Unknown"}
                                             </p>
-                                            <p>
-                                                <span className="font-semibold">
-                                                    Description:
-                                                </span>{" "}
-                                                {proposalDetails.description ||
-                                                    "N/A"}
-                                            </p>
-                                            <p>
-                                                <span className="font-semibold">
-                                                    Objectives:
-                                                </span>{" "}
-                                                {proposalDetails.objectives ||
-                                                    "N/A"}
-                                            </p>
                                         </div>
                                     </div>
 
-                                    {/* Revision Comments */}
-                                    {proposalDetails.revisionComments && (
-                                        <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6">
-                                            <h3 className="text-lg font-bold text-gray-900 mb-3">
-                                                Revision Comments
-                                            </h3>
-                                            <p className="text-sm text-gray-800 whitespace-pre-wrap">
-                                                {
-                                                    proposalDetails.revisionComments
-                                                }
-                                            </p>
+                                    {/* Description and Objectives - Separate Container */}
+                                    {(proposalDetails.description ||
+                                        proposalDetails.objectives) && (
+                                        <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+                                            <div className="space-y-4">
+                                                {proposalDetails.description && (
+                                                    <div>
+                                                        <h4 className="text-lg font-bold text-gray-900 mb-2">
+                                                            Description
+                                                        </h4>
+                                                        <p className="text-sm text-gray-700 leading-relaxed">
+                                                            {
+                                                                proposalDetails.description
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {proposalDetails.objectives && (
+                                                    <div>
+                                                        <h4 className="text-lg font-bold text-gray-900 mb-2">
+                                                            Objectives
+                                                        </h4>
+                                                        <p className="text-sm text-gray-700 leading-relaxed">
+                                                            {
+                                                                proposalDetails.objectives
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
+
+                                    {/* Checklist Section - RDE Agenda, DOST 6Ps, SDG Goals, Proposed Budget */}
+                                    <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+                                        <h3 className="text-xl font-bold text-gray-900 mb-6">
+                                            Checklist
+                                        </h3>
+                                        <div className="space-y-6">
+                                            {/* RDE Agenda */}
+                                            <div className="border-l-4 border-blue-500 pl-6 py-2">
+                                                <div className="flex items-center mb-3">
+                                                    <svg
+                                                        className="w-5 h-5 text-blue-600 mr-2"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+                                                        />
+                                                    </svg>
+                                                    <h4 className="text-lg font-bold text-gray-900">
+                                                        RDE Agenda
+                                                    </h4>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {proposalDetails?.researchAgenda &&
+                                                    Array.isArray(
+                                                        proposalDetails.researchAgenda
+                                                    ) &&
+                                                    proposalDetails
+                                                        .researchAgenda.length >
+                                                        0 ? (
+                                                        proposalDetails.researchAgenda.map(
+                                                            (agenda, index) => (
+                                                                <span
+                                                                    key={index}
+                                                                    className="inline-flex items-center px-3 py-1.5 bg-blue-100 text-blue-800 rounded-md text-sm font-medium border border-blue-200"
+                                                                >
+                                                                    {agenda}
+                                                                </span>
+                                                            )
+                                                        )
+                                                    ) : (
+                                                        <p className="text-sm text-gray-500">
+                                                            No RDE Agenda
+                                                            selected
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* DOST Strategic Programs */}
+                                            <div className="border-l-4 border-green-500 pl-6 py-2">
+                                                <div className="flex items-center mb-3">
+                                                    <svg
+                                                        className="w-5 h-5 text-green-600 mr-2"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
+                                                        />
+                                                    </svg>
+                                                    <h4 className="text-lg font-bold text-gray-900">
+                                                        DOST Strategic Programs
+                                                    </h4>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {proposalDetails?.dostSPs &&
+                                                    Array.isArray(
+                                                        proposalDetails.dostSPs
+                                                    ) &&
+                                                    proposalDetails.dostSPs
+                                                        .length > 0 ? (
+                                                        proposalDetails.dostSPs.map(
+                                                            (dost, index) => (
+                                                                <span
+                                                                    key={index}
+                                                                    className="inline-flex items-center px-3 py-1.5 bg-green-100 text-green-800 rounded-md text-sm font-medium border border-green-200"
+                                                                >
+                                                                    {dost}
+                                                                </span>
+                                                            )
+                                                        )
+                                                    ) : (
+                                                        <p className="text-sm text-gray-500">
+                                                            No DOST SPs selected
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Sustainable Development Goals */}
+                                            <div className="border-l-4 border-purple-500 pl-6 py-2">
+                                                <div className="flex items-center mb-3">
+                                                    <svg
+                                                        className="w-5 h-5 text-purple-600 mr-2"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                        />
+                                                    </svg>
+                                                    <h4 className="text-lg font-bold text-gray-900">
+                                                        Sustainable Development
+                                                        Goals
+                                                    </h4>
+                                                </div>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {proposalDetails?.sustainableDevelopmentGoals &&
+                                                    Array.isArray(
+                                                        proposalDetails.sustainableDevelopmentGoals
+                                                    ) &&
+                                                    proposalDetails
+                                                        .sustainableDevelopmentGoals
+                                                        .length > 0 ? (
+                                                        proposalDetails.sustainableDevelopmentGoals.map(
+                                                            (sdg, index) => (
+                                                                <span
+                                                                    key={index}
+                                                                    className="inline-flex items-center px-3 py-1.5 bg-purple-100 text-purple-800 rounded-md text-sm font-medium border border-purple-200"
+                                                                >
+                                                                    {sdg}
+                                                                </span>
+                                                            )
+                                                        )
+                                                    ) : (
+                                                        <p className="text-sm text-gray-500">
+                                                            No SDG Goals
+                                                            selected
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Proposed Budget */}
+                                            <div className="border-l-4 border-amber-500 pl-6 py-2">
+                                                <div className="flex items-center mb-3">
+                                                    <svg
+                                                        className="w-5 h-5 text-amber-600 mr-2"
+                                                        fill="none"
+                                                        stroke="currentColor"
+                                                        viewBox="0 0 24 24"
+                                                    >
+                                                        <path
+                                                            strokeLinecap="round"
+                                                            strokeLinejoin="round"
+                                                            strokeWidth={2}
+                                                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                                                        />
+                                                    </svg>
+                                                    <h4 className="text-lg font-bold text-gray-900">
+                                                        Proposed Budget
+                                                    </h4>
+                                                </div>
+                                                <div>
+                                                    {proposalDetails?.proposedBudget ? (
+                                                        <p className="text-2xl font-bold text-amber-700">
+                                                            ₱
+                                                            {Number(
+                                                                proposalDetails.proposedBudget
+                                                            ).toLocaleString()}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-sm text-gray-500">
+                                                            No budget specified
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     {/* Revision Images/Attachments */}
                                     {(() => {
@@ -642,6 +855,780 @@ const RDDForRevision = () => {
                                         }
                                         return null;
                                     })()}
+
+                                    {/* Research Proposal Section */}
+                                    {(() => {
+                                        const researchProposalFiles =
+                                            proposalDetails?.files?.filter(
+                                                (f) => {
+                                                    if (!f.filePath)
+                                                        return false;
+                                                    return isResearchProposalFile(
+                                                        f
+                                                    );
+                                                }
+                                            ) || [];
+
+                                        if (
+                                            researchProposalFiles.length === 0
+                                        ) {
+                                            return null;
+                                        }
+
+                                        return (
+                                            <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <div className="flex items-center">
+                                                        <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center mr-4">
+                                                            <svg
+                                                                className="w-5 h-5 text-red-600"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth={
+                                                                        2
+                                                                    }
+                                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                />
+                                                            </svg>
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xl font-bold text-gray-900">
+                                                                Research
+                                                                Proposal
+                                                            </h3>
+                                                            <p className="text-sm text-gray-600">
+                                                                Main research
+                                                                document
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="bg-red-100 text-red-800 px-3 py-1 rounded-full text-sm font-medium">
+                                                        {
+                                                            researchProposalFiles.length
+                                                        }{" "}
+                                                        file
+                                                        {researchProposalFiles.length !==
+                                                        1
+                                                            ? "s"
+                                                            : ""}
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {researchProposalFiles.map(
+                                                        (file, index) => {
+                                                            const fileUrl = `/storage/${file.filePath}`;
+                                                            return (
+                                                                <div
+                                                                    key={
+                                                                        file.fileID ||
+                                                                        index
+                                                                    }
+                                                                    className="p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors duration-200 border border-gray-200"
+                                                                >
+                                                                    <div className="flex items-start gap-4">
+                                                                        <div className="flex-1 min-w-0">
+                                                                            <h4 className="text-sm font-medium text-gray-900 mb-1 truncate">
+                                                                                {
+                                                                                    file.fileName
+                                                                                }
+                                                                            </h4>
+                                                                            {file.fileSize && (
+                                                                                <p className="text-xs text-gray-500 mb-3">
+                                                                                    {(
+                                                                                        file.fileSize /
+                                                                                        1024
+                                                                                    ).toFixed(
+                                                                                        0
+                                                                                    )}{" "}
+                                                                                    KB
+                                                                                </p>
+                                                                            )}
+                                                                            <div className="flex items-center gap-2">
+                                                                                <button
+                                                                                    onClick={() =>
+                                                                                        handleDocumentClick(
+                                                                                            {
+                                                                                                ...file,
+                                                                                                pdfPath:
+                                                                                                    fileUrl,
+                                                                                            }
+                                                                                        )
+                                                                                    }
+                                                                                    className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200"
+                                                                                    title="View file"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="w-4 h-4"
+                                                                                        fill="none"
+                                                                                        stroke="currentColor"
+                                                                                        viewBox="0 0 24 24"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                                        />
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                            d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    View
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const link =
+                                                                                            document.createElement(
+                                                                                                "a"
+                                                                                            );
+                                                                                        link.href =
+                                                                                            fileUrl;
+                                                                                        link.download =
+                                                                                            file.fileName;
+                                                                                        link.target =
+                                                                                            "_blank";
+                                                                                        document.body.appendChild(
+                                                                                            link
+                                                                                        );
+                                                                                        link.click();
+                                                                                        document.body.removeChild(
+                                                                                            link
+                                                                                        );
+                                                                                    }}
+                                                                                    className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200"
+                                                                                    title="Download file"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="w-4 h-4"
+                                                                                        fill="none"
+                                                                                        stroke="currentColor"
+                                                                                        viewBox="0 0 24 24"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Download
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Supporting Documents (SETI, GAD, MOC) */}
+                                    {(() => {
+                                        const attachedDocuments =
+                                            proposalDetails?.files?.map(
+                                                (f) => ({
+                                                    ...f,
+                                                    pdfPath: `/storage/${f.filePath}`,
+                                                })
+                                            ) || [];
+                                        const supportingDocs =
+                                            attachedDocuments.filter((d) =>
+                                                [
+                                                    "seti_scorecard",
+                                                    "gad_certificate",
+                                                    "matrix_compliance",
+                                                ].includes(d.fileType)
+                                            );
+
+                                        if (supportingDocs.length === 0) {
+                                            return null;
+                                        }
+
+                                        return (
+                                            <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+                                                <div className="flex items-center mb-6">
+                                                    <div className="w-10 h-10 bg-gradient-to-br from-gray-600 to-gray-700 rounded-xl flex items-center justify-center mr-4 shadow-lg">
+                                                        <svg
+                                                            className="w-5 h-5 text-white"
+                                                            fill="none"
+                                                            stroke="currentColor"
+                                                            viewBox="0 0 24 24"
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                strokeWidth={2}
+                                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                            />
+                                                        </svg>
+                                                    </div>
+                                                    <h3 className="text-xl font-bold text-gray-900">
+                                                        Supporting Documents
+                                                    </h3>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                                    {/* SETI */}
+                                                    {supportingDocs.filter(
+                                                        (d) =>
+                                                            d.fileType ===
+                                                            "seti_scorecard"
+                                                    ).length > 0 && (
+                                                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <h4 className="text-base font-bold text-blue-900">
+                                                                    SETI
+                                                                </h4>
+                                                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                                                    {
+                                                                        supportingDocs.filter(
+                                                                            (
+                                                                                d
+                                                                            ) =>
+                                                                                d.fileType ===
+                                                                                "seti_scorecard"
+                                                                        ).length
+                                                                    }{" "}
+                                                                    file
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600 mb-4">
+                                                                Science and
+                                                                Engineering
+                                                                Technology
+                                                                Initiative
+                                                            </p>
+                                                            {supportingDocs
+                                                                .filter(
+                                                                    (d) =>
+                                                                        d.fileType ===
+                                                                        "seti_scorecard"
+                                                                )
+                                                                .map(
+                                                                    (
+                                                                        doc,
+                                                                        idx
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                idx
+                                                                            }
+                                                                            className="p-4 bg-gray-50 rounded-lg mb-3"
+                                                                        >
+                                                                            <p className="text-sm font-semibold text-gray-900 truncate">
+                                                                                {
+                                                                                    doc.fileName
+                                                                                }
+                                                                            </p>
+                                                                            {doc.fileSize && (
+                                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                                    {(
+                                                                                        doc.fileSize /
+                                                                                        1024
+                                                                                    ).toFixed(
+                                                                                        0
+                                                                                    )}{" "}
+                                                                                    KB
+                                                                                </p>
+                                                                            )}
+                                                                            <div className="flex gap-2 mt-3">
+                                                                                <button
+                                                                                    onClick={() =>
+                                                                                        handleDocumentClick(
+                                                                                            doc
+                                                                                        )
+                                                                                    }
+                                                                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                                                                                >
+                                                                                    <Eye className="w-4 h-4 mr-1" />
+                                                                                    View
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const link =
+                                                                                            document.createElement(
+                                                                                                "a"
+                                                                                            );
+                                                                                        link.href =
+                                                                                            doc.pdfPath;
+                                                                                        link.download =
+                                                                                            doc.fileName;
+                                                                                        link.target =
+                                                                                            "_blank";
+                                                                                        document.body.appendChild(
+                                                                                            link
+                                                                                        );
+                                                                                        link.click();
+                                                                                        document.body.removeChild(
+                                                                                            link
+                                                                                        );
+                                                                                    }}
+                                                                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="w-4 h-4 mr-1"
+                                                                                        fill="none"
+                                                                                        stroke="currentColor"
+                                                                                        viewBox="0 0 24 24"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Download
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* GAD */}
+                                                    {supportingDocs.filter(
+                                                        (d) =>
+                                                            d.fileType ===
+                                                            "gad_certificate"
+                                                    ).length > 0 && (
+                                                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <h4 className="text-base font-bold text-green-900">
+                                                                    GAD
+                                                                </h4>
+                                                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                                                    {
+                                                                        supportingDocs.filter(
+                                                                            (
+                                                                                d
+                                                                            ) =>
+                                                                                d.fileType ===
+                                                                                "gad_certificate"
+                                                                        ).length
+                                                                    }{" "}
+                                                                    file
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600 mb-4">
+                                                                Gender and
+                                                                Development
+                                                            </p>
+                                                            {supportingDocs
+                                                                .filter(
+                                                                    (d) =>
+                                                                        d.fileType ===
+                                                                        "gad_certificate"
+                                                                )
+                                                                .map(
+                                                                    (
+                                                                        doc,
+                                                                        idx
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                idx
+                                                                            }
+                                                                            className="p-4 bg-gray-50 rounded-lg mb-3"
+                                                                        >
+                                                                            <p className="text-sm font-semibold text-gray-900 truncate">
+                                                                                {
+                                                                                    doc.fileName
+                                                                                }
+                                                                            </p>
+                                                                            {doc.fileSize && (
+                                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                                    {(
+                                                                                        doc.fileSize /
+                                                                                        1024
+                                                                                    ).toFixed(
+                                                                                        0
+                                                                                    )}{" "}
+                                                                                    KB
+                                                                                </p>
+                                                                            )}
+                                                                            <div className="flex gap-2 mt-3">
+                                                                                <button
+                                                                                    onClick={() =>
+                                                                                        handleDocumentClick(
+                                                                                            doc
+                                                                                        )
+                                                                                    }
+                                                                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                                                                                >
+                                                                                    <Eye className="w-4 h-4 mr-1" />
+                                                                                    View
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const link =
+                                                                                            document.createElement(
+                                                                                                "a"
+                                                                                            );
+                                                                                        link.href =
+                                                                                            doc.pdfPath;
+                                                                                        link.download =
+                                                                                            doc.fileName;
+                                                                                        link.target =
+                                                                                            "_blank";
+                                                                                        document.body.appendChild(
+                                                                                            link
+                                                                                        );
+                                                                                        link.click();
+                                                                                        document.body.removeChild(
+                                                                                            link
+                                                                                        );
+                                                                                    }}
+                                                                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="w-4 h-4 mr-1"
+                                                                                        fill="none"
+                                                                                        stroke="currentColor"
+                                                                                        viewBox="0 0 24 24"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Download
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* MOC */}
+                                                    {supportingDocs.filter(
+                                                        (d) =>
+                                                            d.fileType ===
+                                                            "matrix_compliance"
+                                                    ).length > 0 && (
+                                                        <div className="p-4 bg-white rounded-xl border border-gray-200 shadow-sm">
+                                                            <div className="flex items-center justify-between mb-2">
+                                                                <h4 className="text-base font-bold text-amber-900">
+                                                                    MOC
+                                                                </h4>
+                                                                <span className="inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold bg-red-100 text-red-700">
+                                                                    {
+                                                                        supportingDocs.filter(
+                                                                            (
+                                                                                d
+                                                                            ) =>
+                                                                                d.fileType ===
+                                                                                "matrix_compliance"
+                                                                        ).length
+                                                                    }{" "}
+                                                                    file
+                                                                </span>
+                                                            </div>
+                                                            <p className="text-sm text-gray-600 mb-4">
+                                                                Matrix of
+                                                                Compliance
+                                                            </p>
+                                                            {supportingDocs
+                                                                .filter(
+                                                                    (d) =>
+                                                                        d.fileType ===
+                                                                        "matrix_compliance"
+                                                                )
+                                                                .map(
+                                                                    (
+                                                                        doc,
+                                                                        idx
+                                                                    ) => (
+                                                                        <div
+                                                                            key={
+                                                                                idx
+                                                                            }
+                                                                            className="p-4 bg-gray-50 rounded-lg mb-3"
+                                                                        >
+                                                                            <p className="text-sm font-semibold text-gray-900 truncate">
+                                                                                {
+                                                                                    doc.fileName
+                                                                                }
+                                                                            </p>
+                                                                            {doc.fileSize && (
+                                                                                <p className="text-xs text-gray-500 mt-1">
+                                                                                    {(
+                                                                                        doc.fileSize /
+                                                                                        1024
+                                                                                    ).toFixed(
+                                                                                        0
+                                                                                    )}{" "}
+                                                                                    KB
+                                                                                </p>
+                                                                            )}
+                                                                            <div className="flex gap-2 mt-3">
+                                                                                <button
+                                                                                    onClick={() =>
+                                                                                        handleDocumentClick(
+                                                                                            doc
+                                                                                        )
+                                                                                    }
+                                                                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                                                                                >
+                                                                                    <Eye className="w-4 h-4 mr-1" />
+                                                                                    View
+                                                                                </button>
+                                                                                <button
+                                                                                    onClick={() => {
+                                                                                        const link =
+                                                                                            document.createElement(
+                                                                                                "a"
+                                                                                            );
+                                                                                        link.href =
+                                                                                            doc.pdfPath;
+                                                                                        link.download =
+                                                                                            doc.fileName;
+                                                                                        link.target =
+                                                                                            "_blank";
+                                                                                        document.body.appendChild(
+                                                                                            link
+                                                                                        );
+                                                                                        link.click();
+                                                                                        document.body.removeChild(
+                                                                                            link
+                                                                                        );
+                                                                                    }}
+                                                                                    className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                                                                                >
+                                                                                    <svg
+                                                                                        className="w-4 h-4 mr-1"
+                                                                                        fill="none"
+                                                                                        stroke="currentColor"
+                                                                                        viewBox="0 0 24 24"
+                                                                                    >
+                                                                                        <path
+                                                                                            strokeLinecap="round"
+                                                                                            strokeLinejoin="round"
+                                                                                            strokeWidth={
+                                                                                                2
+                                                                                            }
+                                                                                            d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                                                                        />
+                                                                                    </svg>
+                                                                                    Download
+                                                                                </button>
+                                                                            </div>
+                                                                        </div>
+                                                                    )
+                                                                )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Other Supporting Documents */}
+                                    {(() => {
+                                        const attachedDocuments =
+                                            proposalDetails?.files?.map(
+                                                (f) => ({
+                                                    ...f,
+                                                    pdfPath: `/storage/${f.filePath}`,
+                                                })
+                                            ) || [];
+                                        const otherSupportingDocs =
+                                            attachedDocuments.filter((d) => {
+                                                // Exclude SETI, GAD, MOC files
+                                                if (
+                                                    [
+                                                        "seti_scorecard",
+                                                        "gad_certificate",
+                                                        "matrix_compliance",
+                                                    ].includes(d.fileType)
+                                                ) {
+                                                    return false;
+                                                }
+                                                // Exclude research proposal files
+                                                if (isResearchProposalFile(d)) {
+                                                    return false;
+                                                }
+                                                // Exclude revision images
+                                                if (
+                                                    d.fileType?.toLowerCase() ===
+                                                    "revision_image"
+                                                ) {
+                                                    return false;
+                                                }
+                                                // Include all other files
+                                                return true;
+                                            });
+
+                                        if (otherSupportingDocs.length === 0) {
+                                            return null;
+                                        }
+
+                                        return (
+                                            <div className="bg-white rounded-xl border-2 border-gray-200 p-6 shadow-lg">
+                                                <div className="flex items-center justify-between mb-6">
+                                                    <div className="flex items-center">
+                                                        <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center mr-4">
+                                                            <svg
+                                                                className="w-5 h-5 text-orange-600"
+                                                                fill="none"
+                                                                stroke="currentColor"
+                                                                viewBox="0 0 24 24"
+                                                            >
+                                                                <path
+                                                                    strokeLinecap="round"
+                                                                    strokeLinejoin="round"
+                                                                    strokeWidth={
+                                                                        2
+                                                                    }
+                                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                />
+                                                            </svg>
+                                                        </div>
+                                                        <div>
+                                                            <h3 className="text-xl font-bold text-gray-900">
+                                                                Other Supporting
+                                                                Documents
+                                                            </h3>
+                                                            <p className="text-sm text-gray-600">
+                                                                Additional files
+                                                                and attachments
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
+                                                        {
+                                                            otherSupportingDocs.length
+                                                        }{" "}
+                                                        file
+                                                        {otherSupportingDocs.length !==
+                                                        1
+                                                            ? "s"
+                                                            : ""}
+                                                    </span>
+                                                </div>
+
+                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                    {otherSupportingDocs.map(
+                                                        (document, index) => (
+                                                            <div
+                                                                key={index}
+                                                                className="p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow"
+                                                            >
+                                                                <p className="text-sm font-semibold text-gray-900 mb-1">
+                                                                    {
+                                                                        document.fileName
+                                                                    }
+                                                                </p>
+                                                                {document.fileSize && (
+                                                                    <p className="text-xs text-gray-500 mb-3">
+                                                                        {(
+                                                                            document.fileSize /
+                                                                            1024
+                                                                        ).toFixed(
+                                                                            0
+                                                                        )}{" "}
+                                                                        KB
+                                                                    </p>
+                                                                )}
+                                                                <div className="flex gap-2">
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            handleDocumentClick(
+                                                                                document
+                                                                            )
+                                                                        }
+                                                                        className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-xs font-medium hover:bg-blue-200 transition-colors"
+                                                                    >
+                                                                        <Eye className="w-4 h-4 mr-1" />
+                                                                        View
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            const link =
+                                                                                document.createElement(
+                                                                                    "a"
+                                                                                );
+                                                                            link.href =
+                                                                                document.pdfPath;
+                                                                            link.download =
+                                                                                document.fileName;
+                                                                            link.target =
+                                                                                "_blank";
+                                                                            document.body.appendChild(
+                                                                                link
+                                                                            );
+                                                                            link.click();
+                                                                            document.body.removeChild(
+                                                                                link
+                                                                            );
+                                                                        }}
+                                                                        className="flex-1 flex items-center justify-center px-3 py-2 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors"
+                                                                    >
+                                                                        <svg
+                                                                            className="w-4 h-4 mr-1"
+                                                                            fill="none"
+                                                                            stroke="currentColor"
+                                                                            viewBox="0 0 24 24"
+                                                                        >
+                                                                            <path
+                                                                                strokeLinecap="round"
+                                                                                strokeLinejoin="round"
+                                                                                strokeWidth={
+                                                                                    2
+                                                                                }
+                                                                                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                                                                            />
+                                                                        </svg>
+                                                                        Download
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })()}
+
+                                    {/* Revision Comments - Moved to after supporting documents */}
+                                    {proposalDetails.revisionComments && (
+                                        <div className="bg-orange-50 border-2 border-orange-200 rounded-xl p-6">
+                                            <h3 className="text-lg font-bold text-gray-900 mb-3">
+                                                Revision Comments
+                                            </h3>
+                                            <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                                                {
+                                                    proposalDetails.revisionComments
+                                                }
+                                            </p>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -655,15 +1642,19 @@ const RDDForRevision = () => {
                                 >
                                     Close
                                 </button>
-                                {/* Only show Accept button when status is "Updated" (resubmittedAfterRevision is not null) */}
-                                {proposalDetails.resubmittedAfterRevision && (
-                                    <button
-                                        onClick={handleAccept}
-                                        className="px-8 py-3 text-sm font-bold text-white bg-gradient-to-r from-green-600 via-green-600 to-green-700 rounded-xl hover:from-green-700 hover:via-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 hover:scale-105 active:scale-95"
-                                    >
-                                        ✓ Accept
-                                    </button>
-                                )}
+                                {/* Only show Accept button when status is "Updated" (resubmittedAfterRevision is not null and not empty) */}
+                                {proposalDetails.resubmittedAfterRevision &&
+                                    proposalDetails.resubmittedAfterRevision !==
+                                        null &&
+                                    proposalDetails.resubmittedAfterRevision !==
+                                        "" && (
+                                        <button
+                                            onClick={handleAccept}
+                                            className="px-8 py-3 text-sm font-bold text-white bg-gradient-to-r from-green-600 via-green-600 to-green-700 rounded-xl hover:from-green-700 hover:via-green-700 hover:to-green-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all shadow-lg hover:shadow-xl transform hover:-translate-y-1 hover:scale-105 active:scale-95"
+                                        >
+                                            ✓ Accept
+                                        </button>
+                                    )}
                             </div>
                         )}
                     </div>

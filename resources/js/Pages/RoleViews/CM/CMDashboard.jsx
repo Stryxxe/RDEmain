@@ -272,92 +272,33 @@ const CMDashboard = () => {
     };
 
     const filteredProposals = proposals.filter((proposal) => {
-        // First, apply the "Pending" filter if selected
-        // Only show proposals that are NOT yet endorsed by CM (priority)
-        // Proposals that are endorsed/forwarded to RDD should not be shown
-        if (sortBy === "Pending") {
-            // Only show proposals that are still pending (statusID === 1)
-            if (proposal.statusID !== 1) {
+        // CRITICAL: Always exclude proposals where the current CM has endorsed
+        // Endorsed proposals should NOT appear in the Dashboard regardless of sortBy filter
+        const endorsements = proposal.endorsements || [];
+        if (Array.isArray(endorsements) && user?.userID) {
+            const currentUserID = String(user.userID);
+            const cmEndorsements = endorsements.filter((endorsement) => {
+                const endorserID = endorsement?.endorserID
+                    ? String(endorsement.endorserID)
+                    : null;
+                const status = endorsement?.endorsementStatus;
+                return endorserID === currentUserID && status === "approved";
+            });
+
+            // If CM has endorsed even once, exclude from dashboard
+            if (cmEndorsements.length >= 1) {
                 return false;
-            }
-
-            // CRITICAL: Exclude proposals where the current CM has endorsed (even once)
-            // Pending should ONLY show proposals that are NOT yet endorsed by CM
-            // If CM has endorsed, the proposal is in the endorsement process and should not appear in pending
-            // Check if endorsements exist and are an array
-            const endorsements = proposal.endorsements || [];
-
-            // Debug: Log endorsements for proposals that might be excluded
-            if (
-                proposal.researchTitle === "tetsjda" ||
-                proposal.researchTitle === "test"
-            ) {
-                console.log(
-                    "[CM Dashboard Debug] Checking endorsements for proposal:",
-                    {
-                        proposalID: proposal.proposalID,
-                        title: proposal.researchTitle,
-                        statusID: proposal.statusID,
-                        endorsements: endorsements,
-                        endorsementsType: typeof endorsements,
-                        isArray: Array.isArray(endorsements),
-                        userID: user?.userID,
-                    }
-                );
-            }
-
-            if (Array.isArray(endorsements) && user?.userID) {
-                // Use type-safe comparison (handle both string and number IDs)
-                const currentUserID = String(user.userID);
-                const cmEndorsements = endorsements.filter((endorsement) => {
-                    const endorserID = endorsement?.endorserID
-                        ? String(endorsement.endorserID)
-                        : null;
-                    const status = endorsement?.endorsementStatus;
-                    return (
-                        endorserID === currentUserID && status === "approved"
-                    );
-                });
-
-                // CRITICAL: Exclude proposals if CM has endorsed even once
-                // Pending should ONLY show proposals that are NOT yet endorsed by CM
-                // If CM has endorsed (even once), the proposal is in the endorsement process
-                // and should not appear in pending
-                if (cmEndorsements.length >= 1) {
-                    console.log(
-                        "[CM Dashboard Debug] ✅ Excluding proposal from pending - CM has endorsed (not pending):",
-                        {
-                            proposalID: proposal.proposalID,
-                            title: proposal.researchTitle,
-                            endorsementCount: cmEndorsements.length,
-                            cmEndorsements: cmEndorsements,
-                            currentUserID: currentUserID,
-                        }
-                    );
-                    return false;
-                }
-            } else if (user?.userID) {
-                // If endorsements are not loaded or not in expected format, log for debugging
-                if (
-                    proposal.researchTitle === "tetsjda" ||
-                    proposal.researchTitle === "test"
-                ) {
-                    console.warn(
-                        "[CM Dashboard Debug] ⚠️ Endorsements not available or not in expected format:",
-                        {
-                            proposalID: proposal.proposalID,
-                            title: proposal.researchTitle,
-                            endorsements: endorsements,
-                            hasEndorsements: !!proposal.endorsements,
-                            endorsementsType: typeof proposal.endorsements,
-                            isArray: Array.isArray(proposal.endorsements),
-                        }
-                    );
-                }
             }
         }
 
-        // Then apply search term filter
+        // Apply "Pending" filter if selected (status check only)
+        if (sortBy === "Pending") {
+            if (proposal.statusID !== 1) {
+                return false;
+            }
+        }
+
+        // Apply search term filter
         return (
             proposal.researchTitle
                 .toLowerCase()

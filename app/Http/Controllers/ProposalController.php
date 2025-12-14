@@ -663,6 +663,18 @@ class ProposalController extends Controller
         // Get dynamic max file size from settings
         $maxFileSizeKB = SettingsHelper::getMaxFileSizeKB();
         
+        // Pre-process request: Convert JSON strings to arrays for FormData requests
+        // When files are uploaded, FormData sends arrays as JSON strings
+        $jsonFields = ['researchAgenda', 'dostSPs', 'sustainableDevelopmentGoals', 'budgetBreakdown'];
+        foreach ($jsonFields as $field) {
+            if ($request->has($field) && is_string($request->input($field))) {
+                $decoded = json_decode($request->input($field), true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $request->merge([$field => $decoded]);
+                }
+            }
+        }
+        
         try {
             $validated = $request->validate([
                 'researchTitle' => 'sometimes|string|max:255',
@@ -743,7 +755,8 @@ class ProposalController extends Controller
             // Main proposal file (updatedForm)
             if ($request->hasFile('updatedForm')) {
                 $file = $request->file('updatedForm');
-                $fileName = 'updated_form_' . time() . '.' . $file->getClientOriginalExtension();
+                // Keep original filename with timestamp prefix to avoid collisions
+                $fileName = time() . '_' . $file->getClientOriginalName();
                 
                 // CRITICAL: Get old files BEFORE deleting database records, then delete physical files
                 $oldFiles = File::where('proposalID', $proposal->proposalID)
@@ -775,12 +788,13 @@ class ProposalController extends Controller
                     ->whereIn('fileType', ['report', 'concept_paper', 'updated_form'])
                     ->delete();
                 
-                // Store new file
+                // Store new file (with timestamp prefix on disk for uniqueness)
                 $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
 
+                // Store original filename in database for display purposes
                 File::create([
                     'proposalID' => $proposal->proposalID,
-                    'fileName' => $fileName,
+                    'fileName' => $file->getClientOriginalName(), // Original filename for display
                     'filePath' => $filePath,
                     'fileType' => 'report',
                     'fileSize' => $file->getSize(),
@@ -827,7 +841,7 @@ class ProposalController extends Controller
 
                 File::create([
                     'proposalID' => $proposal->proposalID,
-                    'fileName' => $fileName,
+                    'fileName' => $file->getClientOriginalName(), // Original filename for display
                     'filePath' => $filePath,
                     'fileType' => 'seti_scorecard',
                     'fileSize' => $file->getSize(),
@@ -874,7 +888,7 @@ class ProposalController extends Controller
 
                 File::create([
                     'proposalID' => $proposal->proposalID,
-                    'fileName' => $fileName,
+                    'fileName' => $file->getClientOriginalName(), // Original filename for display
                     'filePath' => $filePath,
                     'fileType' => 'gad_certificate',
                     'fileSize' => $file->getSize(),
@@ -894,7 +908,7 @@ class ProposalController extends Controller
 
                 File::create([
                     'proposalID' => $proposal->proposalID,
-                    'fileName' => $fileName,
+                    'fileName' => $file->getClientOriginalName(), // Original filename for display
                     'filePath' => $filePath,
                     'fileType' => 'matrix_compliance',
                     'fileSize' => $file->getSize(),
@@ -918,7 +932,7 @@ class ProposalController extends Controller
 
                         File::create([
                             'proposalID' => $proposal->proposalID,
-                            'fileName' => $fileName,
+                            'fileName' => $file->getClientOriginalName(), // Original filename for display
                             'filePath' => $filePath,
                             'fileType' => 'supporting_document',
                             'fileSize' => $file->getSize(),
@@ -957,7 +971,7 @@ class ProposalController extends Controller
 
                                 File::create([
                                     'proposalID' => $proposal->proposalID,
-                                    'fileName' => $fileName,
+                                    'fileName' => $file->getClientOriginalName(), // Original filename for display
                                     'filePath' => $filePath,
                                     'fileType' => 'revision_image',
                                     'fileSize' => $file->getSize(),
@@ -979,7 +993,7 @@ class ProposalController extends Controller
 
                                 File::create([
                                     'proposalID' => $proposal->proposalID,
-                                    'fileName' => $fileName,
+                                    'fileName' => $revisionImageFiles->getClientOriginalName(), // Original filename for display
                                     'filePath' => $filePath,
                                     'fileType' => 'revision_image',
                                     'fileSize' => $revisionImageFiles->getSize(),
@@ -1079,14 +1093,20 @@ class ProposalController extends Controller
             
             // IMPORTANT: When CM or RDD marks proposal for revision, ensure statusID is 4
             // Override any statusID sent from frontend to ensure it's always 4 when marked for revision
+            // Also ensure resubmittedAfterRevision is null (so status shows as "In Progress" not "Updated")
             if ($wasRevisionStatusChange) {
                 $updateData['statusID'] = 4;
+                // Ensure resubmittedAfterRevision is null when first marked for revision
+                // It will be set when proponent resubmits
+                // Explicitly set to null to clear any previous resubmission timestamp
+                $updateData['resubmittedAfterRevision'] = null;
                 Log::info('Proposal marked for revision', [
                     'proposal_id' => $proposal->proposalID,
                     'user_id' => $user->userID,
                     'user_role' => $user->role?->userRole,
                     'current_status_id' => $currentStatusID,
                     'new_status_id' => 4,
+                    'resubmitted_after_revision' => 'set to null',
                     'revision_comments' => $request->has('revisionComments') ? 'provided' : 'not provided'
                 ]);
             }
@@ -1103,6 +1123,15 @@ class ProposalController extends Controller
             }
 
                 // Update the proposal
+                // If marking for revision, explicitly set resubmittedAfterRevision to null
+                if ($wasRevisionStatusChange) {
+                    // Use DB::statement to explicitly set to NULL in database
+                    \DB::table('proposals')
+                        ->where('proposalID', $proposal->proposalID)
+                        ->update(['resubmittedAfterRevision' => null]);
+                    // Also set in updateData to ensure it's in the update
+                    $updateData['resubmittedAfterRevision'] = null;
+                }
                 $proposal->update($updateData);
                 
                 // Check for file uploads - handle array file uploads properly
@@ -1157,16 +1186,37 @@ class ProposalController extends Controller
                 // Force refresh from database to get actual saved value
                 $proposal->refresh();
                 $actualStatusID = (int) $proposal->statusID;
+                $actualResubmittedAfterRevision = $proposal->resubmittedAfterRevision;
                 
                 Log::info('Proposal status after marking for revision', [
                     'proposal_id' => $proposal->proposalID,
                     'status_id' => $actualStatusID,
                     'expected_status' => 4, // Status should be 4 (For Revision)
                     'status_correct' => $actualStatusID === 4,
+                    'resubmitted_after_revision' => $actualResubmittedAfterRevision,
+                    'expected_resubmitted_after_revision' => null,
+                    'resubmitted_after_revision_correct' => $actualResubmittedAfterRevision === null,
                     'user_role' => $user->role?->userRole,
                     'revision_comments' => $proposal->revisionComments ? 'set' : 'not set',
                     'update_data_statusid' => $updateData['statusID'] ?? 'not set'
                 ]);
+                
+                // If resubmittedAfterRevision wasn't cleared, force clear it
+                if ($actualResubmittedAfterRevision !== null) {
+                    Log::warning('resubmittedAfterRevision was not cleared, forcing update', [
+                        'proposal_id' => $proposal->proposalID,
+                        'current_value' => $actualResubmittedAfterRevision,
+                        'expected_value' => null
+                    ]);
+                    \DB::table('proposals')
+                        ->where('proposalID', $proposal->proposalID)
+                        ->update(['resubmittedAfterRevision' => null]);
+                    $proposal->refresh();
+                    Log::info('resubmittedAfterRevision force-cleared to null', [
+                        'proposal_id' => $proposal->proposalID,
+                        'new_value' => $proposal->resubmittedAfterRevision
+                    ]);
+                }
                 
                 // If status wasn't updated correctly, force update it
                 if ($actualStatusID !== 4) {
@@ -1681,10 +1731,12 @@ class ProposalController extends Controller
         if ($userRole === 'RDD') {
             // Get CM and RDD user IDs (already defined above)
             // Card 1: Total proposals endorsed by CM but not archived
-            // EXCLUDE proposals sent for revision (statusID = 4) - these should only appear in For Revision page
+            // IMPORTANT: Do NOT exclude statusID = 4 from Card 1
+            // When RDD marks for revision, the proposal is still "received" (endorsed by CM)
+            // Card 1 should remain unchanged - only Card 2 should decrement
             $card1Query = Proposal::query()
                 ->whereNull('archivedByRDD')
-                ->where('statusID', '!=', 4) // Exclude for revision proposals
+                // Do NOT exclude statusID = 4 - Card 1 should count all received proposals
                 ->whereHas('endorsements', function ($q) use ($cmUserIds) {
                     $q->whereIn('endorserID', $cmUserIds)
                       ->where('endorsementStatus', 'approved');
@@ -1798,8 +1850,15 @@ class ProposalController extends Controller
                 ->count();
             
             // endorsed_proposals = count of proposals that have been endorsed by the current CM user
-            // (regardless of whether forwarded to RDD or not)
-            $endorsedQuery = clone $baseQuery;
+            // (regardless of whether forwarded to RDD or not, and regardless of statusID)
+            // IMPORTANT: Do NOT exclude statusID 4 (For Revision) - endorsed proposals should still count even if marked for revision
+            $endorsedQuery = Proposal::query();
+            if ($user->researchCenterID) {
+                $endorsedQuery->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+                // Do NOT exclude statusID 4 - endorsed proposals should count even when marked for revision
+            } else {
+                $endorsedQuery->whereRaw('1=0');
+            }
             $stats['endorsed_proposals'] = $endorsedQuery->whereHas('endorsements', function ($q) use ($user) {
                 $q->where('endorserID', $user->userID)
                   ->where('endorsementStatus', 'approved');
