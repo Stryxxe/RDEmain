@@ -32,6 +32,7 @@ export const roleConfigs = {
       { path: '', component: 'RDDDashboard', label: 'R&D Initiative Status' },
       { path: 'statistics', component: 'RDDStatistics', label: 'Statistics' },
       { path: 'review-proposal', component: 'RDDEndorsement', label: 'Endorsement' },
+      { path: 'for-revision', component: 'RDDForRevision', label: 'For Revision' },
       { path: 'resources', component: 'RDDResources', label: 'Resources' },
       { path: 'account', component: 'RDDAccount', label: 'Account' },
       { path: 'proposal/:id', component: 'RDDProposalDetail', label: 'Proposal Detail' },

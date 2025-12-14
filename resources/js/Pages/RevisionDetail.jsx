@@ -179,6 +179,7 @@ const RevisionDetail = ({ id }) => {
     const [error, setError] = useState("");
     const [revisionComments, setRevisionComments] = useState("");
     const [revisionImages, setRevisionImages] = useState([]);
+    const [revisionRequestedBy, setRevisionRequestedBy] = useState("CM"); // "CM" or "RDD"
     const [existingFiles, setExistingFiles] = useState({
         proposal: null,
         seti: null,
@@ -320,6 +321,8 @@ const RevisionDetail = ({ id }) => {
                                     proposalId === currentProposalId &&
                                     (notif.data?.event ===
                                         "proposal.revision_required" ||
+                                        notif.data?.event ===
+                                        "proposal.revision_required.rdd" ||
                                         notif.type === "revision")
                                 );
                             }
@@ -330,6 +333,11 @@ const RevisionDetail = ({ id }) => {
                                 revisionNotification.data.revision_comments
                             );
                         }
+
+                        // Determine who requested the revision
+                        const requestedBy = revisionNotification?.data?.requested_by || 
+                                          (revisionNotification?.data?.event?.includes('rdd') ? 'RDD' : 'CM');
+                        setRevisionRequestedBy(requestedBy);
 
                         // Get revision images from proposal files
                         const revisionImageFiles = Array.isArray(p.files)
@@ -824,11 +832,11 @@ const RevisionDetail = ({ id }) => {
                         />
                     </div>
 
-                    {/* CM Revision Comments Section */}
+                    {/* Revision Comments Section */}
                     {(revisionComments || revisionImages.length > 0) && (
-                        <div className="mb-8 bg-gradient-to-br from-orange-50 to-red-50 border-2 border-orange-200 rounded-xl p-6 shadow-sm">
+                        <div className={`mb-8 bg-gradient-to-br ${revisionRequestedBy === 'RDD' ? 'from-red-50 to-orange-50 border-2 border-red-200' : 'from-orange-50 to-red-50 border-2 border-orange-200'} rounded-xl p-6 shadow-sm`}>
                             <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 bg-orange-500 rounded-lg flex items-center justify-center shadow-md">
+                                <div className={`w-10 h-10 ${revisionRequestedBy === 'RDD' ? 'bg-red-500' : 'bg-orange-500'} rounded-lg flex items-center justify-center shadow-md`}>
                                     <svg
                                         className="w-5 h-5 text-white"
                                         fill="none"
@@ -845,7 +853,7 @@ const RevisionDetail = ({ id }) => {
                                 </div>
                                 <div>
                                     <h3 className="text-lg font-bold text-gray-900">
-                                        Revision Comments from Center Manager
+                                        Revision Comments from {revisionRequestedBy === 'RDD' ? 'R&D Division' : 'Center Manager'}
                                     </h3>
                                     <p className="text-sm text-gray-600">
                                         Please address the following comments

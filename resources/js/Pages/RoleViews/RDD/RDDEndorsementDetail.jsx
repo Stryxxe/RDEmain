@@ -378,7 +378,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
         await window.customAlert('', 'Proposal sent for revision successfully!', 3000);
         
         setTimeout(() => {
-          router.visit('/rdd/review-proposal', { replace: true });
+          router.visit('/rdd/for-revision', { replace: true });
         }, 3500);
       } else {
         await window.customAlert('Failed to send proposal for revision: ' + (response?.message || 'Unknown error'));

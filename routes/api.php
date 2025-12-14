@@ -660,6 +660,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     Route::get('/proposals/rdd-analytics', [ProposalController::class, 'getRddAnalytics']);
     Route::get('/proposals/cm-endorsed', [ProposalController::class, 'getCmEndorsedProposals']);
     Route::get('/proposals/rdd-endorsed', [ProposalController::class, 'getRddEndorsedProposals']);
+    Route::get('/proposals/rdd-for-revision', [ProposalController::class, 'getRddForRevisionProposals']);
     Route::get('/proposals/cm-for-revision', [ProposalController::class, 'getCmForRevisionProposals']);
     Route::get('/proposals/{id}/revision-comments', [ProposalController::class, 'getRevisionComments']);
     Route::apiResource('proposals', ProposalController::class);
