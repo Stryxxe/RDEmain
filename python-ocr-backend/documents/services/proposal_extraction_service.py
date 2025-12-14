@@ -77,6 +77,7 @@ class ProposalExtractionService:
         extracted['research_center'] = self._extract_research_center(text)
         extracted['research_agenda'] = self._extract_research_agenda(text)
         extracted['sdgs'] = self._extract_sdgs(text)
+        extracted['dost_6ps'] = self._extract_dost_6ps(text)
         extracted['budget'] = self._extract_budget(text)
         extracted['proponents'] = self._extract_proponents(text)
         extracted['timeline'] = self._extract_timeline(text)
@@ -85,16 +86,20 @@ class ProposalExtractionService:
         extracted['confidence_score'] = self._calculate_confidence(extracted)
         
         filled_count = len([v for v in extracted.values() if v and v != [] and v != 0])
-        logger.info(f"Extracted {filled_count}/9 fields, confidence: {extracted['confidence_score']}%")
+        logger.info(f"Extracted {filled_count}/10 fields, confidence: {extracted['confidence_score']}%")
         
         return extracted
     
     def _preprocess_text(self, text):
         """Clean and normalize OCR text"""
-        # Remove excessive whitespace
-        text = re.sub(r'\s+', ' ', text)
-        # Normalize line breaks
-        text = re.sub(r'\n\s*\n+', '\n', text)
+        # Normalize line endings
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+        # Collapse spaces and tabs but preserve newlines
+        text = re.sub(r'[ \t]+', ' ', text)
+        # Remove trailing spaces on lines
+        text = re.sub(r'\n[ \t]+', '\n', text)
+        # Normalize multiple blank lines
+        text = re.sub(r'\n{3,}', '\n\n', text)
         # Fix common OCR errors
         text = text.replace(''', "'").replace(''', "'")
         text = text.replace('"', '"').replace('"', '"')
@@ -105,7 +110,8 @@ class ProposalExtractionService:
         patterns = [
             r'(?:TITLE|RESEARCH\s+TITLE|PROJECT\s+TITLE)\s*[:]\s*(.+?)(?=\n[A-Z]|\n\s*$)',
             r'(?:TITLE|RESEARCH\s+TITLE)\s*\n\s*(.+?)(?=\n[A-Z]|\n\s*$)',
-            r'^(.{10,200})\n',  # First substantial line as fallback
+            # Fallback: first non-empty line after an initial heading like "RESEARCH PROPOSAL"
+            r'^RESEARCH\s+PROPOSAL\s*\n\s*(.+?)\n',
         ]
         
         for pattern in patterns:
@@ -122,6 +128,8 @@ class ProposalExtractionService:
     def _extract_description(self, text):
         """Extract description/background/rationale"""
         patterns = [
+            # Between I. BACKGROUND ... and II. OBJECTIVES
+            r'I\.\s+BACKGROUND(?:\s+AND\s+RATIONALE)?\s*(.+?)(?=\nII\.)',
             r'(?:BACKGROUND|DESCRIPTION|RATIONALE|INTRODUCTION)\s*[:]\s*(.+?)(?=\n[A-Z]{3,}|OBJECTIVE|GOAL)',
             r'(?:BACKGROUND|DESCRIPTION)\s*\n\s*(.+?)(?=\n[A-Z]{3,}|OBJECTIVE)',
         ]
@@ -140,6 +148,8 @@ class ProposalExtractionService:
     def _extract_objectives(self, text):
         """Extract objectives/goals"""
         patterns = [
+            # Between II. OBJECTIVES and the next roman numeral heading (e.g., III.)
+            r'II\.\s+OBJECTIVES?.*?\n(.+?)(?=\n[IVXLCDM]+\.|$)',
             r'(?:OBJECTIVE|OBJECTIVES|GOALS?)\s*[:]\s*(.+?)(?=\n[A-Z]{3,}|METHODOLOGY|TIMELINE|BUDGET)',
             r'(?:OBJECTIVE|OBJECTIVES)\s*\n\s*(.+?)(?=\n[A-Z]{3,}|METHODOLOGY)',
         ]
@@ -199,6 +209,49 @@ class ProposalExtractionService:
             logger.warning("No research agendas found")
         
         return found
+
+    def _extract_dost_6ps(self, text):
+        """Extract DOST 6Ps (Product, People, Places, Policies, Programs, Publications).
+
+        Looks for the "DOST STRATEGIC PRIORITIES" / "DOST 6Ps" section and
+        maps any mentioned keywords into the standard 6Ps labels.
+        """
+        # Restrict search to the EXPECTED OUTPUTS / GAINS section if present
+        section_pattern = r'(?:VIII\.?\s+EXPECTED\s+OUTPUTS[\w\s&]*?)(.+?)(?:IX\.|$)'
+        section_match = re.search(section_pattern, text, re.IGNORECASE | re.DOTALL)
+        search_text = section_match.group(1) if section_match else text
+
+        keywords_map = {
+            'product': 'Product',
+            'products': 'Product',
+            'people': 'People',
+            'people services': 'People Services',
+            'services': 'People Services',
+            'places': "Places and Partnership",
+            'partnership': "Places and Partnership",
+            'policies': 'Policies',
+            'policy': 'Policies',
+            'programs': 'Programs',
+            'programmes': 'Programs',
+            'publications': 'Publications',
+            'publication': 'Publications',
+            'innovation': 'Product',  # often grouped under product/innovation
+        }
+
+        found = set()
+        lower_text = search_text.lower()
+
+        for key, label in keywords_map.items():
+            if key in lower_text:
+                found.add(label)
+
+        result = sorted(list(found))
+        if result:
+            logger.debug(f"Found DOST 6Ps: {result}")
+        else:
+            logger.warning("No DOST 6Ps found")
+
+        return result
     
     def _extract_sdgs(self, text):
         """Extract Sustainable Development Goal numbers (1-17)"""

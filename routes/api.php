@@ -19,6 +19,7 @@ use App\Http\Controllers\Api\OptimizedMessageController;
 use App\Http\Controllers\Api\SimpleOptimizedMessageController;
 use App\Http\Controllers\Api\AdminUserController;
 use App\Http\Controllers\SettingController;
+use App\Http\Controllers\OCRController;
 use App\Http\Middleware\RequestDeduplication;
 
 use App\Models\Department;
@@ -1442,3 +1443,14 @@ use App\Http\Controllers\ActivityController;
 
 Route::middleware('auth:web')->get('/activities/recent', [ActivityController::class, 'getRecentActivities']);
 Route::middleware('auth:web')->get('/activities/dashboard', [ActivityController::class, 'getDashboardActivities']);
+
+// OCR Processing API (Proponent only - for auto-filling research proposals)
+Route::prefix('ocr')->group(function () {
+    // Test endpoints - no auth required for testing
+    Route::post('/test', [OCRController::class, 'testOCR']);
+    Route::get('/status', [OCRController::class, 'getStatus']);
+    
+    // Production endpoint - requires authentication
+    Route::middleware('auth:web')->post('/process-proposal', [OCRController::class, 'processProposal']);
+});
+

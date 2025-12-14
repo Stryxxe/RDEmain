@@ -1175,7 +1175,7 @@ class ProposalParserService
 **Duration**: 1-2 weeks  
 **Priority**: High
 
-**Note**: All OCR processing happens in Laravel/PHP. No external API calls.
+**Note**: OCR processing is performed by the Python microservice; Laravel orchestrates calls to it and adds parsing/validation.
 
 #### 3.1 Create OCR Controller
 
@@ -1310,305 +1310,53 @@ Route::middleware('auth:sanctum')->group(function () {
 
 ---
 
-### **PHASE 4: Frontend Integration**
+### **PHASE 4: Frontend Integration (Actual Implementation)**
 **Duration**: 2 weeks  
 **Priority**: High
 
-#### 4.1 Create OCR Service (Frontend)
+#### 4.1 Frontend OCR Service
 
 **File**: `resources/js/services/ocrService.js`
-```javascript
-import axios from 'axios';
 
-const createAxiosInstance = () => {
-    return axios.create({
-        baseURL: '/api',
-        headers: {
-            'Content-Type': 'multipart/form-data',
-            'Accept': 'application/json',
-        },
-        withCredentials: true,
-    });
-};
+- Implements `processProposalOCR(file, onProgress?)` which:
+  - Posts `proposal_file` to `/api/ocr/process-proposal`.
+  - Optionally reports upload progress back to the caller.
+- Optionally exposes `testOCR(file)` for calling the `/api/ocr/test` endpoint during development.
 
-export const processProposalOCR = async (file, onProgress) => {
-    const formData = new FormData();
-    formData.append('proposal_file', file);
+This service is used by the existing Submit Proposal page rather than a separate upload widget.
 
-    try {
-        const response = await createAxiosInstance().post('/ocr/process-proposal', formData, {
-            onUploadProgress: (progressEvent) => {
-                const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
-                if (onProgress) {
-                    onProgress(percentCompleted);
-                }
-            },
-        });
+#### 4.2 Wire OCR Into Existing Submit Proposal Page (No Separate Form)
 
-        return response.data;
-    } catch (error) {
-        throw error.response?.data || error;
-    }
-};
+**File**: `resources/js/Pages/Proponent/SubmitPage.jsx` (actual implementation)
 
-export const testOCR = async (file) => {
-    const formData = new FormData();
-    formData.append('test_file', file);
+- Reuses the existing proposal file upload (`reportFile`) instead of introducing a new `ProposalAutoFill` component.
+- Adds a red button under the file upload area:
+  - Label: “Extract Data from PDF (Auto-Fill)”.
+  - Disabled while OCR is running or when no valid PDF is attached.
+- `handleOCRExtract` implementation (simplified description):
+  - Validates that `reportFile` exists and is a PDF.
+  - Calls `processProposalOCR(formData.reportFile)`.
+  - On success, maps the returned fields into the existing form state, for example:
+    - `research_title → researchTitle`
+    - `description → description`
+    - `objectives → objectives`
+    - `research_center → researchCenter`
+    - `research_agenda → researchAgenda`
+    - `dost_6ps → dostSPs`
+    - `sdgs → sustainableDevelopmentGoals`
+    - `budget → proposedBudget`.
+  - Stores the raw extracted data in `autoFilledData` state for display.
 
-    try {
-        const response = await createAxiosInstance().post('/ocr/test', formData);
-        return response.data;
-    } catch (error) {
-        throw error.response?.data || error;
-    }
-};
-```
+#### 4.3 User Experience & Feedback
 
-#### 4.2 Create Auto-Fill Component
-
-**File**: `resources/js/Components/ProposalAutoFill.jsx`
-```javascript
-import React, { useState } from 'react';
-import { processProposalOCR } from '../services/ocrService';
-
-export default function ProposalAutoFill({ onDataExtracted, onError }) {
-    const [uploading, setUploading] = useState(false);
-    const [progress, setProgress] = useState(0);
-    const [extracting, setExtracting] = useState(false);
-
-    const handleFileUpload = async (event) => {
-        const file = event.target.files[0];
-        
-        if (!file) return;
-
-        // Validate file type
-        if (file.type !== 'application/pdf') {
-            onError('Please upload a PDF file');
-            return;
-        }
-
-        // Validate file size (10MB max)
-        if (file.size > 10 * 1024 * 1024) {
-            onError('File size must be less than 10MB');
-            return;
-        }
-
-        try {
-            setUploading(true);
-            setProgress(0);
-
-            // Upload and process
-            const result = await processProposalOCR(file, (percent) => {
-                setProgress(percent);
-            });
-
-            if (result.success) {
-                setExtracting(true);
-                
-                // Simulate processing delay
-                setTimeout(() => {
-                    onDataExtracted(result.data.extracted_fields);
-                    setExtracting(false);
-                    setUploading(false);
-                }, 1000);
-            } else {
-                throw new Error(result.message || 'Processing failed');
-            }
-
-        } catch (error) {
-            console.error('OCR Error:', error);
-            onError(error.message || 'Failed to process proposal');
-            setUploading(false);
-            setExtracting(false);
-        }
-    };
-
-    return (
-        <div className="bg-blue-50 border-2 border-dashed border-blue-300 rounded-lg p-6">
-            <div className="text-center">
-                <svg
-                    className="mx-auto h-12 w-12 text-blue-400"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-                    />
-                </svg>
-                
-                <h3 className="mt-2 text-sm font-medium text-gray-900">
-                    Auto-Fill from PDF
-                </h3>
-                
-                <p className="mt-1 text-sm text-gray-500">
-                    Upload your research proposal PDF to automatically extract information
-                </p>
-
-                <div className="mt-4">
-                    <label
-                        htmlFor="proposal-upload"
-                        className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 cursor-pointer ${
-                            uploading ? 'opacity-50 cursor-not-allowed' : ''
-                        }`}
-                    >
-                        {uploading ? (
-                            <>
-                                <svg
-                                    className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
-                                    xmlns="http://www.w3.org/2000/svg"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                >
-                                    <circle
-                                        className="opacity-25"
-                                        cx="12"
-                                        cy="12"
-                                        r="10"
-                                        stroke="currentColor"
-                                        strokeWidth="4"
-                                    ></circle>
-                                    <path
-                                        className="opacity-75"
-                                        fill="currentColor"
-                                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                    ></path>
-                                </svg>
-                                {extracting ? 'Extracting...' : `Uploading... ${progress}%`}
-                            </>
-                        ) : (
-                            <>
-                                <svg
-                                    className="-ml-1 mr-2 h-5 w-5"
-                                    fill="none"
-                                    viewBox="0 0 24 24"
-                                    stroke="currentColor"
-                                >
-                                    <path
-                                        strokeLinecap="round"
-                                        strokeLinejoin="round"
-                                        strokeWidth={2}
-                                        d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
-                                    />
-                                </svg>
-                                Upload PDF
-                            </>
-                        )}
-                    </label>
-                    
-                    <input
-                        id="proposal-upload"
-                        type="file"
-                        accept=".pdf"
-                        onChange={handleFileUpload}
-                        disabled={uploading}
-                        className="hidden"
-                    />
-                </div>
-
-                {uploading && (
-                    <div className="mt-4">
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                            <div
-                                className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                                style={{ width: `${progress}%` }}
-                            ></div>
-                        </div>
-                    </div>
-                )}
-
-                <p className="mt-2 text-xs text-gray-500">
-                    PDF up to 10MB • Auto-fills: Title, Description, Objectives, Budget & more
-                </p>
-            </div>
-        </div>
-    );
-}
-```
-
-#### 4.3 Integrate into Proponent Proposal Form
-
-**File**: `resources/js/Pages/Proponent/SubmitProposal.jsx` (modified)
-
-**Important**: This feature is ONLY for the Proponent role. CM, RDD, and OP don't fill out forms - they only review and endorse.
-
-```javascript
-import ProposalAutoFill from '../../Components/ProposalAutoFill';
-
-// Add to component
-const [autoFilledData, setAutoFilledData] = useState(null);
-const [showAutoFill, setShowAutoFill] = useState(true);
-
-const handleAutoFillData = (extractedData) => {
-    // Map extracted data to form fields
-    setFormData(prev => ({
-        ...prev,
-        researchTitle: extractedData.research_title || prev.researchTitle,
-        description: extractedData.description || prev.description,
-        objectives: extractedData.objectives || prev.objectives,
-        researchCenter: extractedData.research_center || prev.researchCenter,
-        researchAgenda: extractedData.research_agenda || prev.researchAgenda,
-        dostSPs: extractedData.dost_sps || prev.dostSPs,
-        sustainableDevelopmentGoals: extractedData.sdgs || prev.sustainableDevelopmentGoals,
-        proposedBudget: extractedData.budget || prev.proposedBudget,
-    }));
-
-    setAutoFilledData(extractedData);
-    setShowAutoFill(false);
-    
-    // Show success notification
-    alert(`Successfully extracted data with ${extractedData.confidence_score}% confidence! Please review and edit as needed before submitting.`);
-};
-
-// Add to JSX (at the top of the form, before manual input fields)
-{showAutoFill && (
-    <div className="mb-6">
-        <ProposalAutoFill
-            onDataExtracted={handleAutoFillData}
-            onError={(error) => alert(error)}
-        />
-        
-        <div className="mt-3 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-                💡 Tip: Upload your proposal PDF to auto-fill the form, or fill manually below
-            </p>
-            <button
-                type="button"
-                onClick={() => setShowAutoFill(false)}
-                className="text-sm text-gray-500 hover:text-gray-700"
-            >
-                Skip auto-fill
-            </button>
-        </div>
-    </div>
-)}
-
-{autoFilledData && (
-    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-        <div className="flex items-start">
-            <svg className="w-5 h-5 text-green-500 mt-0.5 mr-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-            <div className="flex-1">
-                <p className="text-sm font-medium text-green-800">
-                    Form auto-filled with {autoFilledData.confidence_score}% confidence
-                </p>
-                <p className="text-sm text-green-700 mt-1">
-                    Please review all fields and make any necessary corrections before submitting.
-                </p>
-            </div>
-        </div>
-    </div>
-)}
-```
+- The Submit Proposal form shows a green success banner when `autoFilledData` is present, including the aggregated confidence score.
+- Users can freely edit all fields after auto-fill; OCR is treated as a starting point, not a lock.
+- This feature is only visible for the Proponent role; reviewers (CM, RDD, OP) continue to see the standard read/review views.
 
 #### 4.4 Deliverables
-- ✅ Frontend OCR service created
-- ✅ Auto-fill component implemented
-- ✅ Form integration completed
+- ✅ Frontend OCR service created (`ocrService.js`).
+- ✅ Existing Submit Proposal page updated with an OCR auto-fill button and banner.
+- ✅ No separate `ProposalAutoFill.jsx`; the main form upload is reused for OCR.
 
 ---
 
