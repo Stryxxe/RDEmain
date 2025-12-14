@@ -198,12 +198,14 @@ class EndorsementController extends Controller
                         $proposal->update(['statusID' => 1]);
                     }
                     
-                    // CRITICAL: Clear all proposal caches IMMEDIATELY to ensure proposal disappears from all CM views
-                    // This must happen BEFORE any other operations to ensure immediate removal
-                    $this->clearProposalCache($request->proposalID);
-                    
-                    // Force refresh the proposal to ensure status is updated
+                    // CRITICAL: Force refresh the proposal to ensure status is updated BEFORE clearing cache
                     $proposal->refresh();
+                    
+                    // CRITICAL: Clear all proposal caches IMMEDIATELY to ensure proposal disappears from all CM views
+                    // This must happen AFTER status update to ensure immediate removal
+                    // Also clear the CM For Revision list cache specifically
+                    $this->clearProposalCache($request->proposalID);
+                    Cache::forget("cm_for_revision_proposals_user_{$user->userID}");
                     
                     Log::info('CM final endorsement - proposal forwarded to RDD - IMMEDIATE REMOVAL FROM CM VIEWS', [
                         'proposal_id' => $request->proposalID,
@@ -211,7 +213,8 @@ class EndorsementController extends Controller
                         'endorsement_count' => $endorsementCount,
                         'new_status_id' => $underReviewStatus ? $underReviewStatus->statusID : 1,
                         'action' => 'Proposal will be excluded from all CM views (Dashboard, Endorsement, For Revision)',
-                        'filter_logic' => 'CM endorsement count >= 2 will exclude from all CM queries'
+                        'filter_logic' => 'CM endorsement count >= 2 will exclude from all CM queries',
+                        'cache_cleared' => true
                     ]);
                 }
             }

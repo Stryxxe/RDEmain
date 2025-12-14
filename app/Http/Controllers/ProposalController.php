@@ -1130,6 +1130,7 @@ class ProposalController extends Controller
                 ]);
                 
                 // Clear proposal cache AFTER transaction commit to ensure fresh data
+                // CRITICAL: Clear cache for all users, especially CM users who need to see updated files
                 $this->clearProposalCache($proposal->proposalID);
             
             // Clear ALL relationships to force fresh load
@@ -1137,9 +1138,24 @@ class ProposalController extends Controller
             $proposal->unsetRelation('status');
             $proposal->unsetRelation('user');
             $proposal->unsetRelation('proponents');
+            $proposal->unsetRelation('endorsements');
             
             // Reload proposal to get updated status and verify the update
             $proposal->refresh();
+            
+            // CRITICAL: Force reload files relationship with a fresh query to ensure CM sees updated files
+            // This is especially important when proponent resubmits files after revision
+            $freshFiles = \App\Models\File::where('proposalID', $proposal->proposalID)
+                ->orderBy('created_at', 'desc')
+                ->get();
+            $proposal->setRelation('files', $freshFiles);
+            
+            Log::info('Files reloaded after proposal update', [
+                'proposal_id' => $proposal->proposalID,
+                'files_count' => $freshFiles->count(),
+                'file_types' => $freshFiles->pluck('fileType')->toArray(),
+                'is_resubmission' => $isResubmitAfterRevision
+            ]);
             
             // Verify status was updated correctly
             if ($isResubmitAfterRevision) {
@@ -2662,6 +2678,8 @@ class ProposalController extends Controller
             // Include proposals with:
             // 1. statusID = 4 (For Revision) - original proposals sent for revision
             // 2. statusID = 1 AND resubmittedAfterRevision IS NOT NULL - resubmitted proposals (status changed to 1 but still need to be in For Revision)
+            // CRITICAL: Use a subquery to check endorsement count to ensure we get the latest count even if endorsement was just created
+            // This fixes the issue where proposals remain in "For Revision" after being endorsed to RDD
             $query = Proposal::with([
                 'status:statusID,statusName,statusDescription',
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
@@ -2676,8 +2694,8 @@ class ProposalController extends Controller
                 // Original proposals sent for revision (statusID = 4)
                 $q->where(function($status4Q) use ($user) {
                     $status4Q->where('statusID', 4)
-                             // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
-                             // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
+                             // CRITICAL: Use a fresh subquery to check endorsement count
+                             // This ensures we get the latest count even if endorsement was just created in the same transaction
                              ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
                                  [$user->userID, 'approved']);
                 })
@@ -2685,25 +2703,31 @@ class ProposalController extends Controller
                 ->orWhere(function($subQ) use ($user) {
                     $subQ->where('statusID', 1)
                          ->whereNotNull('resubmittedAfterRevision')
-                         // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
-                         // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
+                         // CRITICAL: Use a fresh subquery to check endorsement count
+                         // This ensures we get the latest count even if endorsement was just created in the same transaction
                          ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
                              [$user->userID, 'approved']);
                 });
             });
 
-            $allProposals = $query->get();
+            // CRITICAL: Use fresh() to ensure we get the latest data from database, bypassing any query cache
+            // This is important when endorsements are created just before this query runs
+            $allProposals = $query->get()->fresh(['endorsements']);
 
             // CRITICAL: Double-check filter - Remove proposals where CM has endorsed twice or more
+            // Use a fresh query to get the latest endorsement count for each proposal
             // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
             $filteredProposals = $allProposals->filter(function($proposal) use ($user) {
-                $cmEndorsements = $proposal->endorsements->filter(function($endorsement) use ($user) {
-                    return $endorsement->endorserID === $user->userID 
-                        && $endorsement->endorsementStatus === 'approved';
-                });
+                // Use a fresh query to get the latest endorsement count
+                // This ensures we catch endorsements that were just created
+                $endorsementCount = \App\Models\Endorsement::where('proposalID', $proposal->proposalID)
+                    ->where('endorserID', $user->userID)
+                    ->where('endorsementStatus', 'approved')
+                    ->count();
+                
                 // Exclude if CM has endorsed twice or more (count >= 2)
                 // This removal is IMMEDIATE - based on CM's action, not RDD's
-                return $cmEndorsements->count() < 2;
+                return $endorsementCount < 2;
             });
 
             // Log for debugging
