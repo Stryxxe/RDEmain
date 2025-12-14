@@ -3,613 +3,841 @@ const API_ORIGIN = import.meta.env.VITE_API_ORIGIN || window.location.origin;
 const API_BASE_URL = `${API_ORIGIN}/api`;
 
 class ApiService {
-  constructor() { 
-    this.baseURL = API_BASE_URL;
-  }
-
-  // Get CSRF token from Inertia's meta tag
-  // Inertia automatically provides the CSRF token in the meta tag
-  getCsrfToken() {
-    const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    return metaToken || null;
-  }
-
-  // Helper method to get headers with CSRF token from Inertia
-  // Using session-based auth, so no bearer tokens needed
-  getHeaders(includeCsrf = true) {
-    const headers = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    };
-    
-    // Add CSRF token from Inertia's meta tag for all requests
-    if (includeCsrf) {
-      const csrfToken = this.getCsrfToken();
-      if (csrfToken) {
-        headers['X-CSRF-TOKEN'] = csrfToken;
-      }
+    constructor() {
+        this.baseURL = API_BASE_URL;
     }
-    
-    return headers;
-  }
-  // Helper method to handle responses
-  async handleResponse(response) {
-    // Handle 401 Unauthorized - but let the global axios interceptor handle redirects
-    // to prevent redirect loops
-    if (response.status === 401) {
-      // Clear any stored auth data
-      localStorage.removeItem('dismissedNotifications');
-      
-      // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
-      // This prevents duplicate redirects and loops
-      throw new Error('Unauthenticated. Please log in again.');
+
+    // Get CSRF token from Inertia's meta tag
+    // Inertia automatically provides the CSRF token in the meta tag
+    getCsrfToken() {
+        const metaToken = document
+            .querySelector('meta[name="csrf-token"]')
+            ?.getAttribute("content");
+        return metaToken || null;
     }
-    
-    const data = await response.json();
-    
-    if (!response.ok) {
-      throw new Error(data.message || `HTTP ${response.status}: ${response.statusText}`);
-    }
-    
-    return data;
-  }
 
-  // Get current user
-  async getCurrentUser() {
-    try {
-      const response = await fetch(`${this.baseURL}/user`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: this.getHeaders(false) // GET requests don't need CSRF
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Update user profile
-  async updateUser(userData) {
-    try {
-      const response = await fetch(`${this.baseURL}/user`, {
-        method: 'PUT',
-        credentials: 'include',
-        headers: this.getHeaders(true), // PUT requests need CSRF
-        body: JSON.stringify(userData)
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Create proposal
-  async createProposal(proposalData) {
-    try {
-      const formData = new FormData();
-      
-      // Add basic fields
-      formData.append('researchTitle', proposalData.reportTitle);
-      formData.append('description', proposalData.description);
-      formData.append('objectives', proposalData.objectives);
-      // Get researchCenter from user's department or use provided value
-      const researchCenter = proposalData.researchCenter || proposalData.user?.department?.name || 'Not specified';
-      formData.append('researchCenter', researchCenter);
-      formData.append('proposedBudget', proposalData.proposedBudget);
-      
-      // Add arrays as JSON strings
-      formData.append('researchAgenda', JSON.stringify(proposalData.researchAgenda));
-      formData.append('dostSPs', JSON.stringify(proposalData.dostSPs));
-      formData.append('sustainableDevelopmentGoals', JSON.stringify(proposalData.sustainableDevelopmentGoals));
-
-      // Add selected proponents with their roles as JSON
-      if (Array.isArray(proposalData.proponents) && proposalData.proponents.length > 0) {
-        const proponentsData = proposalData.proponents.map(p => ({
-          userID: p.userID || p.id,
-          projectRoleID: p.projectRoleID || null
-        })).filter(p => p.userID);
-        formData.append('proponents', JSON.stringify(proponentsData));
-      }
-
-      // Add submitter's selected project role if any
-      if (proposalData.submitterProjectRoleID) {
-        formData.append('submitterProjectRoleID', proposalData.submitterProjectRoleID);
-      }
-      
-      // Add files - only append if file exists, is a valid File object, and has valid size
-      // Note: File size validation is also enforced on the server side with dynamic limits from admin settings
-      const isValidFile = (file, maxSizeMB = 20) => {
-        if (!file) return false;
-        if (!(file instanceof File)) {
-          console.warn('Invalid file object:', typeof file, file);
-          return false;
-        }
-        if (file.size === 0) {
-          console.warn('File is empty:', file.name);
-          return false;
-        }
-        const maxBytes = maxSizeMB * 1024 * 1024;
-        if (file.size > maxBytes) {
-          console.warn(`File exceeds ${maxSizeMB}MB limit:`, file.name, (file.size / 1024 / 1024).toFixed(2) + 'MB');
-          return false;
-        }
-        return true;
-      };
-      
-      if (isValidFile(proposalData.reportFile)) {
-        formData.append('reportFile', proposalData.reportFile);
-      } else if (!proposalData.reportFile) {
-        console.warn('reportFile is missing or invalid');
-      }
-      
-      // Map new field names to backend expected names
-      console.log('DEBUG: Checking SETI file:', proposalData.setiFile, 'Type:', typeof proposalData.setiFile, 'Is File:', proposalData.setiFile instanceof File);
-      if (isValidFile(proposalData.setiFile || proposalData.setiScorecard)) {
-        formData.append('setiScorecard', proposalData.setiFile || proposalData.setiScorecard);
-        console.log('DEBUG: Appended setiScorecard');
-      }
-      
-      console.log('DEBUG: Checking GAD file:', proposalData.gadFile, 'Type:', typeof proposalData.gadFile, 'Is File:', proposalData.gadFile instanceof File);
-      if (isValidFile(proposalData.gadFile || proposalData.gadCertificate)) {
-        formData.append('gadCertificate', proposalData.gadFile || proposalData.gadCertificate);
-        console.log('DEBUG: Appended gadCertificate');
-      }
-      
-      console.log('DEBUG: Checking MOC file:', proposalData.matrixFile, 'Type:', typeof proposalData.matrixFile, 'Is File:', proposalData.matrixFile instanceof File);
-      if (isValidFile(proposalData.matrixFile || proposalData.matrixOfCompliance)) {
-        formData.append('matrixOfCompliance', proposalData.matrixFile || proposalData.matrixOfCompliance);
-        console.log('DEBUG: Appended matrixOfCompliance');
-      } else if ((proposalData.matrixFile || proposalData.matrixOfCompliance) !== null && (proposalData.matrixFile || proposalData.matrixOfCompliance) !== undefined) {
-        const matrix = proposalData.matrixFile || proposalData.matrixOfCompliance;
-        console.warn('matrixOfCompliance file is invalid and will not be sent:', {
-          type: typeof matrix,
-          isFile: matrix instanceof File,
-          size: matrix?.size,
-          name: matrix?.name
-        });
-      }
-
-      if (Array.isArray(proposalData.supportingDocuments)) {
-        proposalData.supportingDocuments.forEach((file) => {
-          if (isValidFile(file)) {
-            formData.append('supportingDocuments[]', file);
-          }
-        });
-      }
-      
-      // Debug: Log what files are being sent (only in development)
-      if (!import.meta.env.PROD) {
-        const logFileInfo = (file, name) => {
-          if (!file) return null;
-          if (!(file instanceof File)) {
-            console.warn(`${name} is not a File object:`, typeof file, file);
-            return { error: 'Not a File object', type: typeof file };
-          }
-          return { 
-            name: file.name, 
-            size: file.size, 
-            sizeMB: (file.size / 1024 / 1024).toFixed(2),
-            type: file.type 
-          };
-        };
-        
-        console.log('Files being sent:', {
-          reportFile: logFileInfo(proposalData.reportFile, 'reportFile'),
-          setiScorecard: logFileInfo(proposalData.setiScorecard, 'setiScorecard'),
-          gadCertificate: logFileInfo(proposalData.gadCertificate, 'gadCertificate'),
-          matrixOfCompliance: logFileInfo(proposalData.matrixOfCompliance, 'matrixOfCompliance'),
-          supportingDocuments: Array.isArray(proposalData.supportingDocuments)
-            ? proposalData.supportingDocuments.map((file, index) => logFileInfo(file, `supportingDocuments[${index}]`))
-            : null
-        });
-      }
-
-      // Use window.axios if available (properly configured with session cookies)
-      // Otherwise fall back to fetch
-      if (window.axios) {
-        try {
-          // Don't set Content-Type for FormData - axios will set it automatically with boundary
-          const response = await window.axios.post('/proposals', formData, {
-            headers: {
-              'Accept': 'application/json'
-            },
-            withCredentials: true
-          });
-          
-          return response.data;
-        } catch (axiosError) {
-          // Handle axios errors
-          if (axiosError.response) {
-            const errorData = axiosError.response.data;
-            console.error('Proposal submission failed:', errorData);
-            
-            // Handle 401 specifically - but let the global axios interceptor handle redirects
-            // to prevent redirect loops
-            if (axiosError.response.status === 401) {
-              // Clear any stored auth data
-              localStorage.removeItem('dismissedNotifications');
-              
-              // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
-              // This prevents duplicate redirects and loops
-              throw new Error('Unauthenticated. Please log in again.');
-            }
-            
-            // Include validation errors in the error message for 422
-            if (axiosError.response.status === 422 && errorData.errors) {
-              const errorMessages = Object.entries(errorData.errors)
-                .map(([field, messages]) => `${field}: ${Array.isArray(messages) ? messages.join(', ') : messages}`)
-                .join('; ');
-              throw new Error(`Validation failed: ${errorMessages}`);
-            }
-            
-            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
-          }
-          throw axiosError;
-        }
-      } else {
-        // Fallback to fetch if axios is not available
-        const csrfToken = this.getCsrfToken();
+    // Helper method to get headers with CSRF token from Inertia
+    // Using session-based auth, so no bearer tokens needed
+    getHeaders(includeCsrf = true) {
         const headers = {
-          'Accept': 'application/json',
-          ...(csrfToken && { 'X-CSRF-TOKEN': csrfToken })
+            "Content-Type": "application/json",
+            Accept: "application/json",
         };
-        
-        const response = await fetch(`${this.baseURL}/proposals`, {
-          method: 'POST',
-          credentials: 'include',
-          headers: headers,
-          body: formData
-        });
-        
-        if (!response.ok) {
-          const errorData = await response.json();
-          console.error('Proposal submission failed:', errorData);
-          
-          // Handle 401 specifically - but let the global axios interceptor handle redirects
-          // to prevent redirect loops
-          if (response.status === 401) {
-            localStorage.removeItem('dismissedNotifications');
+
+        // Add CSRF token from Inertia's meta tag for all requests
+        if (includeCsrf) {
+            const csrfToken = this.getCsrfToken();
+            if (csrfToken) {
+                headers["X-CSRF-TOKEN"] = csrfToken;
+            }
+        }
+
+        return headers;
+    }
+    // Helper method to handle responses
+    async handleResponse(response) {
+        // Handle 401 Unauthorized - but let the global axios interceptor handle redirects
+        // to prevent redirect loops
+        if (response.status === 401) {
+            // Clear any stored auth data
+            localStorage.removeItem("dismissedNotifications");
+
             // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
             // This prevents duplicate redirects and loops
-            throw new Error('Unauthenticated. Please log in again.');
-          }
-          
-          throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+            throw new Error("Unauthenticated. Please log in again.");
         }
-        
-        return await this.handleResponse(response);
-      }
-    } catch (error) {
-      console.error('Proposal submission error:', error);
-      throw error;
-    }
-  }
 
-  // Get all proposals
-  async getProposals() {
-    try {
-      // Use window.axios if available (properly configured with session cookies)
-      if (window.axios) {
-        try {
-          const response = await window.axios.get('/proposals', {
-            headers: {
-              'Accept': 'application/json'
-            },
-            withCredentials: true
-          });
-          
-          return response.data;
-        } catch (axiosError) {
-          // Handle axios errors
-          if (axiosError.response) {
-            const errorData = axiosError.response.data;
-            
-            // Handle 401 specifically
-            if (axiosError.response.status === 401) {
-              localStorage.removeItem('dismissedNotifications');
-              if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
-              }
-              throw new Error('Unauthenticated. Please log in again.');
-            }
-            
-            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
-          }
-          throw axiosError;
-        }
-      } else {
-        // Fallback to fetch if axios is not available
-        const response = await fetch(`${this.baseURL}/proposals`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: this.getHeaders(false) // GET requests don't need CSRF
-        });
-        
-        return await this.handleResponse(response);
-      }
-    } catch (error) {
-      throw error;
-    }
-  }
+        const data = await response.json();
 
-  // Get single proposal
-  async getProposal(id) {
-    try {
-      // Use window.axios if available (properly configured with session cookies)
-      if (window.axios) {
-        try {
-          const response = await window.axios.get(`/proposals/${id}`, {
-            headers: {
-              'Accept': 'application/json'
-            },
-            withCredentials: true
-          });
-          
-          return response.data;
-        } catch (axiosError) {
-          // Handle axios errors
-          if (axiosError.response) {
-            const errorData = axiosError.response.data;
-            
-            // Handle 401 specifically
-            if (axiosError.response.status === 401) {
-              localStorage.removeItem('dismissedNotifications');
-              if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
-              }
-              throw new Error('Unauthenticated. Please log in again.');
-            }
-            
-            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
-          }
-          throw axiosError;
+        if (!response.ok) {
+            throw new Error(
+                data.message ||
+                    `HTTP ${response.status}: ${response.statusText}`
+            );
         }
-      } else {
-        // Fallback to fetch if axios is not available
-        const response = await fetch(`${this.baseURL}/proposals/${id}`, {
-          method: 'GET',
-          credentials: 'include',
-          headers: this.getHeaders(false) // GET requests don't need CSRF
-        });
-        
-        const data = await this.handleResponse(response);
+
         return data;
-      }
-    } catch (error) {
-      throw error;
     }
-  }
 
-  // Update proposal
-  async updateProposal(id, proposalData) {
-    try {
-      const response = await fetch(`${this.baseURL}/proposals/${id}`, {
-        method: 'PUT',
-        headers: this.getHeaders(true), // PUT requests need CSRF
-        body: JSON.stringify(proposalData),
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Delete proposal
-  async deleteProposal(id) {
-    try {
-      const response = await fetch(`${this.baseURL}/proposals/${id}`, {
-        method: 'DELETE',
-        headers: this.getHeaders(true), // DELETE requests need CSRF
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Get notifications
-  async getNotifications() {
-    try {
-      const response = await fetch(`${this.baseURL}/notifications`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: this.getHeaders(false) // GET requests don't need CSRF
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Get messages
-  async getMessages() {
-    try {
-      const response = await fetch(`${this.baseURL}/messages`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: this.getHeaders(false) // GET requests don't need CSRF
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Send message
-  async sendMessage(messageData) {
-    try {
-      const response = await fetch(`${this.baseURL}/messages`, {
-        method: 'POST',
-        headers: this.getHeaders(true), // POST requests need CSRF
-        body: JSON.stringify(messageData),
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
-
-  // Generic HTTP methods for compatibility with components
-  async get(url) {
-    try {
-      // Use window.axios if available (properly configured with session cookies and CSRF)
-      if (window.axios) {
+    // Get current user
+    async getCurrentUser() {
         try {
-          const response = await window.axios.get(url, {
-            headers: {
-              'Accept': 'application/json'
-            },
-            withCredentials: true
-          });
-          
-          return response.data;
-        } catch (axiosError) {
-          // Handle axios errors
-          if (axiosError.response) {
-            const errorData = axiosError.response.data;
-            
-            // Handle 401 specifically - but let the global axios interceptor handle redirects
-            // to prevent redirect loops
-            if (axiosError.response.status === 401) {
-              localStorage.removeItem('dismissedNotifications');
-              // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
-              // This prevents duplicate redirects and loops
-              throw new Error('Unauthenticated. Please log in again.');
-            }
-            
-            throw new Error(errorData.message || `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`);
-          }
-          throw axiosError;
+            const response = await fetch(`${this.baseURL}/user`, {
+                method: "GET",
+                credentials: "include",
+                headers: this.getHeaders(false), // GET requests don't need CSRF
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
         }
-      } else {
-        // Fallback to fetch if axios is not available
-        const response = await fetch(`${this.baseURL}${url}`, {
-          method: 'GET',
-          headers: this.getHeaders(false), // GET requests don't need CSRF
-          credentials: 'include'
-        });
-        
-        return await this.handleResponse(response);
-      }
-    } catch (error) {
-      throw error;
     }
-  }
 
-  async post(url, data = null) {
-    try {
-      const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
-      const headers = this.getHeaders(true);
+    // Update user profile
+    async updateUser(userData) {
+        try {
+            const response = await fetch(`${this.baseURL}/user`, {
+                method: "PUT",
+                credentials: "include",
+                headers: this.getHeaders(true), // PUT requests need CSRF
+                body: JSON.stringify(userData),
+            });
 
-      // Let the browser set the multipart boundary for FormData
-      if (isFormData) {
-        delete headers['Content-Type'];
-      }
-
-      const response = await fetch(`${this.baseURL}${url}`, {
-        method: 'POST',
-        headers,
-        body: isFormData ? data : data ? JSON.stringify(data) : null,
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
     }
-  }
 
-  async put(url, data = null) {
-    try {
-      const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
-      const headers = this.getHeaders(true);
+    // Create proposal
+    async createProposal(proposalData) {
+        try {
+            const formData = new FormData();
 
-      if (isFormData) {
-        delete headers['Content-Type'];
-      }
+            // Add basic fields
+            formData.append("researchTitle", proposalData.reportTitle);
+            formData.append("description", proposalData.description);
+            formData.append("objectives", proposalData.objectives);
+            // Get researchCenter from user's department or use provided value
+            const researchCenter =
+                proposalData.researchCenter ||
+                proposalData.user?.department?.name ||
+                "Not specified";
+            formData.append("researchCenter", researchCenter);
+            formData.append("proposedBudget", proposalData.proposedBudget);
 
-      const response = await fetch(`${this.baseURL}${url}`, {
-        method: 'PUT',
-        headers,
-        body: isFormData ? data : data ? JSON.stringify(data) : null,
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
+            // Add arrays as JSON strings
+            formData.append(
+                "researchAgenda",
+                JSON.stringify(proposalData.researchAgenda)
+            );
+            formData.append("dostSPs", JSON.stringify(proposalData.dostSPs));
+            formData.append(
+                "sustainableDevelopmentGoals",
+                JSON.stringify(proposalData.sustainableDevelopmentGoals)
+            );
+
+            // Add selected proponents with their roles as JSON
+            if (
+                Array.isArray(proposalData.proponents) &&
+                proposalData.proponents.length > 0
+            ) {
+                const proponentsData = proposalData.proponents
+                    .map((p) => ({
+                        userID: p.userID || p.id,
+                        projectRoleID: p.projectRoleID || null,
+                    }))
+                    .filter((p) => p.userID);
+                formData.append("proponents", JSON.stringify(proponentsData));
+            }
+
+            // Add submitter's selected project role if any
+            if (proposalData.submitterProjectRoleID) {
+                formData.append(
+                    "submitterProjectRoleID",
+                    proposalData.submitterProjectRoleID
+                );
+            }
+
+            // Add files - only append if file exists, is a valid File object, and has valid size
+            // Note: File size validation is also enforced on the server side with dynamic limits from admin settings
+            const isValidFile = (file, maxSizeMB = 20) => {
+                if (!file) return false;
+                if (!(file instanceof File)) {
+                    console.warn("Invalid file object:", typeof file, file);
+                    return false;
+                }
+                if (file.size === 0) {
+                    console.warn("File is empty:", file.name);
+                    return false;
+                }
+                const maxBytes = maxSizeMB * 1024 * 1024;
+                if (file.size > maxBytes) {
+                    console.warn(
+                        `File exceeds ${maxSizeMB}MB limit:`,
+                        file.name,
+                        (file.size / 1024 / 1024).toFixed(2) + "MB"
+                    );
+                    return false;
+                }
+                return true;
+            };
+
+            if (isValidFile(proposalData.reportFile)) {
+                formData.append("reportFile", proposalData.reportFile);
+            } else if (!proposalData.reportFile) {
+                console.warn("reportFile is missing or invalid");
+            }
+
+            // Map new field names to backend expected names
+            console.log(
+                "DEBUG: Checking SETI file:",
+                proposalData.setiFile,
+                "Type:",
+                typeof proposalData.setiFile,
+                "Is File:",
+                proposalData.setiFile instanceof File
+            );
+            if (
+                isValidFile(proposalData.setiFile || proposalData.setiScorecard)
+            ) {
+                formData.append(
+                    "setiScorecard",
+                    proposalData.setiFile || proposalData.setiScorecard
+                );
+                console.log("DEBUG: Appended setiScorecard");
+            }
+
+            console.log(
+                "DEBUG: Checking GAD file:",
+                proposalData.gadFile,
+                "Type:",
+                typeof proposalData.gadFile,
+                "Is File:",
+                proposalData.gadFile instanceof File
+            );
+            if (
+                isValidFile(proposalData.gadFile || proposalData.gadCertificate)
+            ) {
+                formData.append(
+                    "gadCertificate",
+                    proposalData.gadFile || proposalData.gadCertificate
+                );
+                console.log("DEBUG: Appended gadCertificate");
+            }
+
+            console.log(
+                "DEBUG: Checking MOC file:",
+                proposalData.matrixFile,
+                "Type:",
+                typeof proposalData.matrixFile,
+                "Is File:",
+                proposalData.matrixFile instanceof File
+            );
+            if (
+                isValidFile(
+                    proposalData.matrixFile || proposalData.matrixOfCompliance
+                )
+            ) {
+                formData.append(
+                    "matrixOfCompliance",
+                    proposalData.matrixFile || proposalData.matrixOfCompliance
+                );
+                console.log("DEBUG: Appended matrixOfCompliance");
+            } else if (
+                (proposalData.matrixFile || proposalData.matrixOfCompliance) !==
+                    null &&
+                (proposalData.matrixFile || proposalData.matrixOfCompliance) !==
+                    undefined
+            ) {
+                const matrix =
+                    proposalData.matrixFile || proposalData.matrixOfCompliance;
+                console.warn(
+                    "matrixOfCompliance file is invalid and will not be sent:",
+                    {
+                        type: typeof matrix,
+                        isFile: matrix instanceof File,
+                        size: matrix?.size,
+                        name: matrix?.name,
+                    }
+                );
+            }
+
+            // Handle supporting documents - filter out invalid entries and only append valid files
+            if (
+                Array.isArray(proposalData.supportingDocuments) &&
+                proposalData.supportingDocuments.length > 0
+            ) {
+                const validSupportingDocs =
+                    proposalData.supportingDocuments.filter((file) => {
+                        // Filter out null, undefined, and non-File objects
+                        if (!file || !(file instanceof File)) {
+                            console.warn(
+                                "Filtering out invalid supporting document:",
+                                file
+                            );
+                            return false;
+                        }
+
+                        // Check file size
+                        const isValid = isValidFile(file);
+                        if (!isValid) {
+                            console.warn(
+                                "Filtering out invalid supporting document (failed size validation):",
+                                file.name,
+                                "Size:",
+                                file.size
+                            );
+                            return false;
+                        }
+
+                        // Log file info for debugging
+                        if (!import.meta.env.PROD) {
+                            console.log("Supporting document file info:", {
+                                name: file.name,
+                                size: file.size,
+                                type: file.type,
+                                lastModified: file.lastModified,
+                            });
+                        }
+
+                        return true;
+                    });
+
+                // Only append valid files if there are any
+                if (validSupportingDocs.length > 0) {
+                    validSupportingDocs.forEach((file, index) => {
+                        // Ensure we're appending as an array
+                        formData.append(
+                            "supportingDocuments[]",
+                            file,
+                            file.name
+                        );
+                        if (!import.meta.env.PROD) {
+                            console.log(
+                                `Appended supporting document [${index}]:`,
+                                file.name,
+                                "Type:",
+                                file.type
+                            );
+                        }
+                    });
+                } else {
+                    console.warn("No valid supporting documents to append");
+                }
+
+                // Log warning if some files were filtered out
+                if (
+                    proposalData.supportingDocuments.length >
+                    validSupportingDocs.length
+                ) {
+                    console.warn(
+                        `Filtered out ${
+                            proposalData.supportingDocuments.length -
+                            validSupportingDocs.length
+                        } invalid supporting document(s) out of ${
+                            proposalData.supportingDocuments.length
+                        } total`
+                    );
+                }
+            }
+
+            // Debug: Log what files are being sent (only in development)
+            if (!import.meta.env.PROD) {
+                const logFileInfo = (file, name) => {
+                    if (!file) return null;
+                    if (!(file instanceof File)) {
+                        console.warn(
+                            `${name} is not a File object:`,
+                            typeof file,
+                            file
+                        );
+                        return {
+                            error: "Not a File object",
+                            type: typeof file,
+                        };
+                    }
+                    return {
+                        name: file.name,
+                        size: file.size,
+                        sizeMB: (file.size / 1024 / 1024).toFixed(2),
+                        type: file.type,
+                    };
+                };
+
+                console.log("Files being sent:", {
+                    reportFile: logFileInfo(
+                        proposalData.reportFile,
+                        "reportFile"
+                    ),
+                    setiScorecard: logFileInfo(
+                        proposalData.setiScorecard,
+                        "setiScorecard"
+                    ),
+                    gadCertificate: logFileInfo(
+                        proposalData.gadCertificate,
+                        "gadCertificate"
+                    ),
+                    matrixOfCompliance: logFileInfo(
+                        proposalData.matrixOfCompliance,
+                        "matrixOfCompliance"
+                    ),
+                    supportingDocuments: Array.isArray(
+                        proposalData.supportingDocuments
+                    )
+                        ? proposalData.supportingDocuments.map((file, index) =>
+                              logFileInfo(file, `supportingDocuments[${index}]`)
+                          )
+                        : null,
+                });
+            }
+
+            // Use window.axios if available (properly configured with session cookies)
+            // Otherwise fall back to fetch
+            if (window.axios) {
+                try {
+                    // Don't set Content-Type for FormData - axios will set it automatically with boundary
+                    const response = await window.axios.post(
+                        "/proposals",
+                        formData,
+                        {
+                            headers: {
+                                Accept: "application/json",
+                            },
+                            withCredentials: true,
+                        }
+                    );
+
+                    return response.data;
+                } catch (axiosError) {
+                    // Handle axios errors
+                    if (axiosError.response) {
+                        const errorData = axiosError.response.data;
+                        console.error("Proposal submission failed:", errorData);
+
+                        // Handle 401 specifically - but let the global axios interceptor handle redirects
+                        // to prevent redirect loops
+                        if (axiosError.response.status === 401) {
+                            // Clear any stored auth data
+                            localStorage.removeItem("dismissedNotifications");
+
+                            // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+                            // This prevents duplicate redirects and loops
+                            throw new Error(
+                                "Unauthenticated. Please log in again."
+                            );
+                        }
+
+                        // Include validation errors in the error message for 422
+                        if (
+                            axiosError.response.status === 422 &&
+                            errorData.errors
+                        ) {
+                            const errorMessages = Object.entries(
+                                errorData.errors
+                            )
+                                .map(
+                                    ([field, messages]) =>
+                                        `${field}: ${
+                                            Array.isArray(messages)
+                                                ? messages.join(", ")
+                                                : messages
+                                        }`
+                                )
+                                .join("; ");
+                            throw new Error(
+                                `Validation failed: ${errorMessages}`
+                            );
+                        }
+
+                        throw new Error(
+                            errorData.message ||
+                                `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`
+                        );
+                    }
+                    throw axiosError;
+                }
+            } else {
+                // Fallback to fetch if axios is not available
+                const csrfToken = this.getCsrfToken();
+                const headers = {
+                    Accept: "application/json",
+                    ...(csrfToken && { "X-CSRF-TOKEN": csrfToken }),
+                };
+
+                const response = await fetch(`${this.baseURL}/proposals`, {
+                    method: "POST",
+                    credentials: "include",
+                    headers: headers,
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.error("Proposal submission failed:", errorData);
+
+                    // Handle 401 specifically - but let the global axios interceptor handle redirects
+                    // to prevent redirect loops
+                    if (response.status === 401) {
+                        localStorage.removeItem("dismissedNotifications");
+                        // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+                        // This prevents duplicate redirects and loops
+                        throw new Error(
+                            "Unauthenticated. Please log in again."
+                        );
+                    }
+
+                    throw new Error(
+                        errorData.message ||
+                            `HTTP ${response.status}: ${response.statusText}`
+                    );
+                }
+
+                return await this.handleResponse(response);
+            }
+        } catch (error) {
+            console.error("Proposal submission error:", error);
+            throw error;
+        }
     }
-  }
 
-  // Create endorsement
-  async createEndorsement(endorsementData) {
-    try {
-      const response = await fetch(`${this.baseURL}/endorsements`, {
-        method: 'POST',
-        headers: this.getHeaders(true), // POST requests need CSRF
-        credentials: 'include',
-        body: JSON.stringify(endorsementData)
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
+    // Get all proposals
+    async getProposals() {
+        try {
+            // Use window.axios if available (properly configured with session cookies)
+            if (window.axios) {
+                try {
+                    const response = await window.axios.get("/proposals", {
+                        headers: {
+                            Accept: "application/json",
+                        },
+                        withCredentials: true,
+                    });
 
-  // Get endorsements
-  async getEndorsements() {
-    try {
-      const response = await fetch(`${this.baseURL}/endorsements`, {
-        method: 'GET',
-        headers: this.getHeaders(false), // GET requests don't need CSRF
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
+                    return response.data;
+                } catch (axiosError) {
+                    // Handle axios errors
+                    if (axiosError.response) {
+                        const errorData = axiosError.response.data;
 
-  // Get endorsements by proposal
-  async getEndorsementsByProposal(proposalId) {
-    try {
-      const response = await fetch(`${this.baseURL}/endorsements/proposal/${proposalId}`, {
-        method: 'GET',
-        headers: this.getHeaders(false), // GET requests don't need CSRF
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
-    }
-  }
+                        // Handle 401 specifically
+                        if (axiosError.response.status === 401) {
+                            localStorage.removeItem("dismissedNotifications");
+                            if (window.location.pathname !== "/login") {
+                                window.location.href = "/login";
+                            }
+                            throw new Error(
+                                "Unauthenticated. Please log in again."
+                            );
+                        }
 
-  async delete(url) {
-    try {
-      const response = await fetch(`${this.baseURL}${url}`, {
-        method: 'DELETE',
-        headers: this.getHeaders(true), // DELETE requests need CSRF
-        credentials: 'include'
-      });
-      
-      return await this.handleResponse(response);
-    } catch (error) {
-      throw error;
+                        throw new Error(
+                            errorData.message ||
+                                `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`
+                        );
+                    }
+                    throw axiosError;
+                }
+            } else {
+                // Fallback to fetch if axios is not available
+                const response = await fetch(`${this.baseURL}/proposals`, {
+                    method: "GET",
+                    credentials: "include",
+                    headers: this.getHeaders(false), // GET requests don't need CSRF
+                });
+
+                return await this.handleResponse(response);
+            }
+        } catch (error) {
+            throw error;
+        }
     }
-  }
+
+    // Get single proposal
+    async getProposal(id, forceRefresh = false) {
+        try {
+            // Use window.axios if available (properly configured with session cookies)
+            if (window.axios) {
+                try {
+                    const params = {};
+                    if (forceRefresh) {
+                        params.force_refresh = true;
+                        params._t = Date.now(); // Cache-busting timestamp
+                    }
+                    
+                    const response = await window.axios.get(
+                        `/proposals/${id}`,
+                        {
+                            headers: {
+                                Accept: "application/json",
+                            },
+                            withCredentials: true,
+                            params: params
+                        }
+                    );
+
+                    return response.data;
+                } catch (axiosError) {
+                    // Handle axios errors
+                    if (axiosError.response) {
+                        const errorData = axiosError.response.data;
+
+                        // Handle 401 specifically
+                        if (axiosError.response.status === 401) {
+                            localStorage.removeItem("dismissedNotifications");
+                            if (window.location.pathname !== "/login") {
+                                window.location.href = "/login";
+                            }
+                            throw new Error(
+                                "Unauthenticated. Please log in again."
+                            );
+                        }
+
+                        throw new Error(
+                            errorData.message ||
+                                `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`
+                        );
+                    }
+                    throw axiosError;
+                }
+            } else {
+                // Fallback to fetch if axios is not available
+                const response = await fetch(
+                    `${this.baseURL}/proposals/${id}`,
+                    {
+                        method: "GET",
+                        credentials: "include",
+                        headers: this.getHeaders(false), // GET requests don't need CSRF
+                    }
+                );
+
+                const data = await this.handleResponse(response);
+                return data;
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Update proposal
+    async updateProposal(id, proposalData) {
+        try {
+            const response = await fetch(`${this.baseURL}/proposals/${id}`, {
+                method: "PUT",
+                headers: this.getHeaders(true), // PUT requests need CSRF
+                body: JSON.stringify(proposalData),
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Delete proposal
+    async deleteProposal(id) {
+        try {
+            const response = await fetch(`${this.baseURL}/proposals/${id}`, {
+                method: "DELETE",
+                headers: this.getHeaders(true), // DELETE requests need CSRF
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Get notifications
+    async getNotifications() {
+        try {
+            const response = await fetch(`${this.baseURL}/notifications`, {
+                method: "GET",
+                credentials: "include",
+                headers: this.getHeaders(false), // GET requests don't need CSRF
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Get messages
+    async getMessages() {
+        try {
+            const response = await fetch(`${this.baseURL}/messages`, {
+                method: "GET",
+                credentials: "include",
+                headers: this.getHeaders(false), // GET requests don't need CSRF
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Send message
+    async sendMessage(messageData) {
+        try {
+            const response = await fetch(`${this.baseURL}/messages`, {
+                method: "POST",
+                headers: this.getHeaders(true), // POST requests need CSRF
+                body: JSON.stringify(messageData),
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Generic HTTP methods for compatibility with components
+    async get(url) {
+        try {
+            // Use window.axios if available (properly configured with session cookies and CSRF)
+            if (window.axios) {
+                try {
+                    const response = await window.axios.get(url, {
+                        headers: {
+                            Accept: "application/json",
+                        },
+                        withCredentials: true,
+                    });
+
+                    return response.data;
+                } catch (axiosError) {
+                    // Handle axios errors
+                    if (axiosError.response) {
+                        const errorData = axiosError.response.data;
+
+                        // Handle 401 specifically - but let the global axios interceptor handle redirects
+                        // to prevent redirect loops
+                        if (axiosError.response.status === 401) {
+                            localStorage.removeItem("dismissedNotifications");
+                            // Don't redirect here - the global axios interceptor in bootstrap.js will handle it
+                            // This prevents duplicate redirects and loops
+                            throw new Error(
+                                "Unauthenticated. Please log in again."
+                            );
+                        }
+
+                        throw new Error(
+                            errorData.message ||
+                                `HTTP ${axiosError.response.status}: ${axiosError.response.statusText}`
+                        );
+                    }
+                    throw axiosError;
+                }
+            } else {
+                // Fallback to fetch if axios is not available
+                const response = await fetch(`${this.baseURL}${url}`, {
+                    method: "GET",
+                    headers: this.getHeaders(false), // GET requests don't need CSRF
+                    credentials: "include",
+                });
+
+                return await this.handleResponse(response);
+            }
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async post(url, data = null) {
+        try {
+            const isFormData =
+                typeof FormData !== "undefined" && data instanceof FormData;
+            const headers = this.getHeaders(true);
+
+            // Let the browser set the multipart boundary for FormData
+            if (isFormData) {
+                delete headers["Content-Type"];
+            }
+
+            const response = await fetch(`${this.baseURL}${url}`, {
+                method: "POST",
+                headers,
+                body: isFormData ? data : data ? JSON.stringify(data) : null,
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async put(url, data = null) {
+        try {
+            const isFormData =
+                typeof FormData !== "undefined" && data instanceof FormData;
+            const headers = this.getHeaders(true);
+
+            if (isFormData) {
+                delete headers["Content-Type"];
+            }
+
+            const response = await fetch(`${this.baseURL}${url}`, {
+                method: "PUT",
+                headers,
+                body: isFormData ? data : data ? JSON.stringify(data) : null,
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Create endorsement
+    async createEndorsement(endorsementData) {
+        try {
+            const response = await fetch(`${this.baseURL}/endorsements`, {
+                method: "POST",
+                headers: this.getHeaders(true), // POST requests need CSRF
+                credentials: "include",
+                body: JSON.stringify(endorsementData),
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Get endorsements
+    async getEndorsements() {
+        try {
+            const response = await fetch(`${this.baseURL}/endorsements`, {
+                method: "GET",
+                headers: this.getHeaders(false), // GET requests don't need CSRF
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // Get endorsements by proposal
+    async getEndorsementsByProposal(proposalId) {
+        try {
+            const response = await fetch(
+                `${this.baseURL}/endorsements/proposal/${proposalId}`,
+                {
+                    method: "GET",
+                    headers: this.getHeaders(false), // GET requests don't need CSRF
+                    credentials: "include",
+                }
+            );
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    async delete(url) {
+        try {
+            const response = await fetch(`${this.baseURL}${url}`, {
+                method: "DELETE",
+                headers: this.getHeaders(true), // DELETE requests need CSRF
+                credentials: "include",
+            });
+
+            return await this.handleResponse(response);
+        } catch (error) {
+            throw error;
+        }
+    }
 }
 
 // Create and export a singleton instance

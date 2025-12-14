@@ -32,9 +32,7 @@ export const roleConfigs = {
       { path: '', component: 'RDDDashboard', label: 'R&D Initiative Status' },
       { path: 'statistics', component: 'RDDStatistics', label: 'Statistics' },
       { path: 'review-proposal', component: 'RDDEndorsement', label: 'Endorsement' },
-      { path: 'progress-report', component: 'RDDProgressReport', label: 'Progress Reports' },
-      { path: 'progress-report/:id', component: 'RDDProgressReportDetail', label: 'Progress Report Detail' },
-      { path: 'submit-report', component: 'RDDSubmitReport', label: 'Submit Report' },
+      { path: 'for-revision', component: 'RDDForRevision', label: 'For Revision' },
       { path: 'resources', component: 'RDDResources', label: 'Resources' },
       { path: 'account', component: 'RDDAccount', label: 'Account' },
       { path: 'proposal/:id', component: 'RDDProposalDetail', label: 'Proposal Detail' },
@@ -59,8 +57,9 @@ export const roleConfigs = {
       { path: '', component: 'CMDashboard', label: 'Dashboard' },
       { path: 'proposal/:id', component: 'CMProposalDetail', label: 'Proposal Detail' },
       { path: 'review-proposal', component: 'CMReviewProposal', label: 'Endorsement' },
-      { path: 'progress-report', component: 'CMProgressReport', label: 'Progress Reports' },
-      { path: 'submit-report', component: 'CMSubmitReport', label: 'Submit Report' },
+      { path: 'for-revision', component: 'CMForRevision', label: 'For Revision' },
+      { path: 'progress-report', component: 'CMProgressReport', label: 'Progress Reports', hidden: true }, // Hidden - not needed yet
+      { path: 'submit-report', component: 'CMSubmitReport', label: 'Submit Report', hidden: true }, // Hidden - not needed yet
       { path: 'resources', component: 'CMResources', label: 'Resources' },
       { path: 'account', component: 'CMAccount', label: 'Account' },
       { path: 'notifications', component: 'CMNotifications', label: 'Notifications', hidden: true },
@@ -87,10 +86,10 @@ export const roleConfigs = {
       { path: '', component: 'SubmitPage', label: 'Submit Proposal' },
       { path: 'tracker', component: 'Tracker', label: 'Tracker' },
       { path: 'tracker/:id', component: 'TrackerDetail', label: 'Tracker Detail' },
-      { path: 'progress-report', component: 'ProponentProgressReport', label: 'Progress Reports' },
-      { path: 'progress-report/:id', component: 'ProponentProgressReportDetail', label: 'Progress Report Detail' },
+      { path: 'progress-report', component: 'ProponentProgressReport', label: 'Progress Reports', hidden: true }, // Hidden - not needed yet
+      { path: 'progress-report/:id', component: 'ProponentProgressReportDetail', label: 'Progress Report Detail', hidden: true }, // Hidden - not needed yet
       { path: 'revision', component: 'ForRevision', label: 'For Revision' },
-      { path: 'submit-report', component: 'ProponentSubmitReport', label: 'Submit Report' },
+      { path: 'submit-report', component: 'ProponentSubmitReport', label: 'Submit Report', hidden: true }, // Hidden - not needed yet
       { path: 'resources', component: 'ResourcesPage', label: 'Resources' },
       { path: 'account', component: 'AccountPage', label: 'Account' },
       { path: 'notification', component: 'NotificationsPage', label: 'Notifications', hidden: true },

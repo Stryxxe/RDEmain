@@ -1,4 +1,5 @@
-import { Send, FileText, FolderOpen, Clock, RefreshCcw, Upload } from 'lucide-react';
+import { Send, FileText, FolderOpen, Clock, RefreshCcw } from 'lucide-react';
+// Upload icon not used - Submit Report hidden
 import { Link, usePage } from '@inertiajs/react';
 
 const Sidebar = () => {
@@ -68,7 +69,8 @@ const Sidebar = () => {
               <span className="text-base">For Revision</span>
             </Link>
           </li>
-          <li>
+          {/* Submit Report - Hidden - not needed yet */}
+          {/* <li>
             <Link 
               href="/proponent/submit-report" 
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors cursor-pointer ${
@@ -80,7 +82,7 @@ const Sidebar = () => {
               <Upload size={20} />
               <span className="text-base">Submit Report</span>
             </Link>
-          </li>
+          </li> */}
           <li>
             <Link 
               href="/proponent/resources" 

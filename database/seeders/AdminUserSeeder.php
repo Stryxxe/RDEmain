@@ -31,12 +31,12 @@ class AdminUserSeeder extends Seeder
             return;
         }
 
-        // Admin user data
+        // Admin user data - using boybawang141@gmail.com as the main admin account
         $adminData = [
             'firstName' => 'Admin',
             'lastName' => 'User',
-            'email' => 'admin@usep.edu.ph',
-            'password' => Hash::make('admin123'), // Default password - change after first login
+            'email' => 'boybawang141@gmail.com',
+            'password' => Hash::make('password'), // Default password
             'departmentID' => $itDepartment->departmentID,
             'userRolesID' => $adminRole->userRoleID,
             'status' => 'active', // Admin users should always be active

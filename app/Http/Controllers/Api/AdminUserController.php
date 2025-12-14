@@ -314,6 +314,22 @@ class AdminUserController extends Controller
             ['status' => 'active']
         );
 
+        // Send activation email notification
+        try {
+            \Mail::to($user->email)->send(new \App\Mail\AccountActivated($user));
+            \Log::info('Account activation email sent', [
+                'user_id' => $user->userID,
+                'email' => $user->email
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Failed to send account activation email', [
+                'user_id' => $user->userID,
+                'email' => $user->email,
+                'error' => $e->getMessage()
+            ]);
+            // Don't fail the activation if email fails, just log it
+        }
+
         $user->load(['role', 'department', 'researchCenter']);
         $responseUser = $this->formatUserResponse($user, [
             'status' => 'active',
@@ -321,8 +337,105 @@ class AdminUserController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => 'User activated successfully.',
+            'message' => 'User activated successfully. Activation email has been sent.',
             'user' => $responseUser,
+        ]);
+    }
+
+    public function bulkActivate(Request $request)
+    {
+        $validated = $request->validate([
+            'user_ids' => ['required', 'array'],
+            'user_ids.*' => ['required', 'integer', 'exists:users,userID'],
+        ]);
+
+        $userIds = $validated['user_ids'];
+        $activated = [];
+        $failed = [];
+        $emailsSent = 0;
+        $emailsFailed = 0;
+
+        foreach ($userIds as $userId) {
+            try {
+                $user = User::with('role')->find($userId);
+                
+                if (!$user) {
+                    $failed[] = $userId;
+                    continue;
+                }
+
+                // Prevent activating admin users
+                if ($user->role && $user->role->userRole === 'Admin') {
+                    $failed[] = $userId;
+                    continue;
+                }
+
+                // Skip if already active
+                if ($user->status === 'active') {
+                    continue;
+                }
+
+                $oldStatus = $user->status ?? 'pending';
+                
+                if (Schema::hasColumn((new User())->getTable(), 'status')) {
+                    $user->status = 'active';
+                    $user->save();
+                }
+
+                // Log activity
+                ActivityService::logUserUpdate(
+                    $user->userID,
+                    ['status' => $oldStatus],
+                    ['status' => 'active']
+                );
+
+                // Send activation email notification
+                try {
+                    \Mail::to($user->email)->send(new \App\Mail\AccountActivated($user));
+                    $emailsSent++;
+                    \Log::info('Account activation email sent', [
+                        'user_id' => $user->userID,
+                        'email' => $user->email
+                    ]);
+                } catch (\Exception $e) {
+                    $emailsFailed++;
+                    \Log::error('Failed to send account activation email', [
+                        'user_id' => $user->userID,
+                        'email' => $user->email,
+                        'error' => $e->getMessage()
+                    ]);
+                    // Don't fail the activation if email fails, just log it
+                }
+
+                $activated[] = $userId;
+            } catch (\Exception $e) {
+                \Log::error('Failed to activate user', [
+                    'user_id' => $userId,
+                    'error' => $e->getMessage()
+                ]);
+                $failed[] = $userId;
+            }
+        }
+
+        $message = sprintf(
+            '%d user(s) activated successfully. %d activation email(s) sent.',
+            count($activated),
+            $emailsSent
+        );
+
+        if (count($failed) > 0) {
+            $message .= sprintf(' %d user(s) could not be activated.', count($failed));
+        }
+
+        return response()->json([
+            'success' => count($activated) > 0,
+            'message' => $message,
+            'activated_count' => count($activated),
+            'failed_count' => count($failed),
+            'emails_sent' => $emailsSent,
+            'emails_failed' => $emailsFailed,
+            'activated_ids' => $activated,
+            'failed_ids' => $failed,
         ]);
     }
 
@@ -433,7 +546,7 @@ class AdminUserController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to fetch departments',
+                'message' => 'Failed to fetch academic units',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -472,8 +585,8 @@ class AdminUserController extends Controller
             \Log::error('Failed to create department: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to create department',
-                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred while creating the department'
+                'message' => 'Failed to create Academic Unit',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred while creating the Academic Unit'
             ], 500);
         }
     }
@@ -513,7 +626,7 @@ class AdminUserController extends Controller
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update department',
+                'message' => 'Failed to update Academic Unit',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -528,14 +641,14 @@ class AdminUserController extends Controller
             if ($department->users()->count() > 0) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cannot delete department with assigned users'
+                    'message' => 'Cannot delete Academic Unit with assigned users'
                 ], 422);
             }
 
             if ($department->researchCenters()->count() > 0) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Cannot delete department with assigned research centers'
+                    'message' => 'Cannot delete Academic Unit with assigned research centers'
                 ], 422);
             }
 
@@ -551,12 +664,12 @@ class AdminUserController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => 'Department deleted successfully'
+                'message' => 'Academic Unit deleted successfully'
             ]);
         } catch (\Exception $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete department',
+                'message' => 'Failed to delete Academic Unit',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -588,9 +701,9 @@ class AdminUserController extends Controller
                 \Log::warning('Failed to log department deletion activity: ' . $e->getMessage());
             }
 
-            $message = "Department '{$departmentName}' force deleted successfully.";
+            $message = "Academic Unit '{$departmentName}' force deleted successfully.";
             if ($usersCount > 0 || $researchCentersCount > 0) {
-                $message .= " Removed department assignments from {$usersCount} user(s) and {$researchCentersCount} research center(s).";
+                $message .= " Removed Academic Unit assignments from {$usersCount} user(s) and {$researchCentersCount} research center(s).";
             }
 
             return response()->json([
@@ -603,7 +716,7 @@ class AdminUserController extends Controller
             \Log::error('Failed to force delete department: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to force delete department',
+                'message' => 'Failed to force delete Academic Unit',
                 'error' => $e->getMessage()
             ], 500);
         }
@@ -627,12 +740,12 @@ class AdminUserController extends Controller
                     
                     // Check if department has users or research centers
                     if ($department->users()->count() > 0) {
-                        $errors[] = "Cannot delete department '{$department->name}' - it has assigned users";
+                        $errors[] = "Cannot delete Academic Unit '{$department->name}' - it has assigned users";
                         continue;
                     }
 
                     if ($department->researchCenters()->count() > 0) {
-                        $errors[] = "Cannot delete department '{$department->name}' - it has assigned research centers";
+                        $errors[] = "Cannot delete Academic Unit '{$department->name}' - it has assigned research centers";
                         continue;
                     }
 
@@ -647,21 +760,21 @@ class AdminUserController extends Controller
                         \Log::warning('Failed to log department deletion activity: ' . $e->getMessage());
                     }
                 } catch (\Exception $e) {
-                    $errors[] = "Failed to delete department ID {$id}: " . $e->getMessage();
+                    $errors[] = "Failed to delete Academic Unit ID {$id}: " . $e->getMessage();
                 }
             }
 
             if ($deletedCount > 0) {
                 return response()->json([
                     'success' => true,
-                    'message' => "Successfully deleted {$deletedCount} department(s)",
+                    'message' => "Successfully deleted {$deletedCount} Academic Unit(s)",
                     'deletedCount' => $deletedCount,
                     'errors' => $errors
                 ]);
             } else {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No departments were deleted',
+                    'message' => 'No Academic Units were deleted',
                     'errors' => $errors
                 ], 422);
             }
@@ -669,7 +782,7 @@ class AdminUserController extends Controller
             \Log::error('Failed to bulk delete departments: ' . $e->getMessage());
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to delete departments: ' . $e->getMessage()
+                'message' => 'Failed to delete Academic Units: ' . $e->getMessage()
             ], 500);
         }
     }

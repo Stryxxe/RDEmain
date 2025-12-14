@@ -100,7 +100,8 @@ const TrackerDetail = ({ id: propId }) => {
         try {
             setLoading(true);
             setError("");
-            const response = await apiService.getProposal(id);
+            // Force refresh to get latest data including files
+            const response = await apiService.getProposal(id, true);
 
             if (response.success) {
                 setProposal(response.data);
@@ -649,14 +650,64 @@ const TrackerDetail = ({ id: propId }) => {
                                     "Untitled Proposal"}
                             </h1>
                             <p className="text-lg text-gray-600 mb-4">
-                                Submitted on{" "}
-                                {new Date(
-                                    proposal.created_at
-                                ).toLocaleDateString("en-US", {
-                                    year: "numeric",
-                                    month: "long",
-                                    day: "numeric",
-                                })}
+                                {proposal.resubmittedAfterRevision ? (
+                                    <>
+                                        Resubmitted on{" "}
+                                        {new Date(
+                                            proposal.resubmittedAfterRevision
+                                        ).toLocaleDateString("en-US", {
+                                            year: "numeric",
+                                            month: "2-digit",
+                                            day: "2-digit",
+                                        })}{" "}
+                                        at{" "}
+                                        {new Date(
+                                            proposal.resubmittedAfterRevision
+                                        ).toLocaleTimeString("en-US", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            hour12: true,
+                                        })}
+                                        <span className="ml-2 text-sm text-blue-600 font-medium">
+                                            (Originally submitted on{" "}
+                                            {new Date(
+                                                proposal.created_at
+                                            ).toLocaleDateString("en-US", {
+                                                year: "numeric",
+                                                month: "2-digit",
+                                                day: "2-digit",
+                                            })}{" "}
+                                            at{" "}
+                                            {new Date(
+                                                proposal.created_at
+                                            ).toLocaleTimeString("en-US", {
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                hour12: true,
+                                            })}
+                                            )
+                                        </span>
+                                    </>
+                                ) : (
+                                    <>
+                                        Submitted on{" "}
+                                        {new Date(
+                                            proposal.created_at
+                                        ).toLocaleDateString("en-US", {
+                                            year: "numeric",
+                                            month: "2-digit",
+                                            day: "2-digit",
+                                        })}{" "}
+                                        at{" "}
+                                        {new Date(
+                                            proposal.created_at
+                                        ).toLocaleTimeString("en-US", {
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                            hour12: true,
+                                        })}
+                                    </>
+                                )}
                             </p>
                         </div>
                         {(() => {

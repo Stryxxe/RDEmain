@@ -133,8 +133,8 @@ Route::get('/upload-settings', function () {
     } catch (\Exception $e) {
         // Return default values if settings table doesn't exist or query fails
         return response()->json([
-            'maxFileSizeMB' => 20,
-            'maxFileSizeKB' => 20480,
+            'maxFileSizeMB' => 50,
+            'maxFileSizeKB' => 51200,
             'allowedFileTypes' => ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'png', 'jpg', 'jpeg'],
         ]);
     }
@@ -525,7 +525,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
                 'allowDepartmentCreation' => true,
                 'requireDepartmentAssignment' => true,
                 'fileStorage' => [
-                    'maxFileSize' => 20,
+                    'maxFileSize' => 50,
                     'allowedTypes' => ['pdf','docx','xlsx','csv','png','jpg'],
                 ],
             ];
@@ -537,7 +537,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         if (isset($json['fileStorage']['maxFileSize'])) {
             $json['maxFileSize'] = $json['fileStorage']['maxFileSize'];
         } else {
-            $json['maxFileSize'] = 20;
+            $json['maxFileSize'] = 50;
         }
         
         return response()->json($json);
@@ -553,7 +553,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
                 'backupFrequency' => 'required|in:hourly,daily,weekly,monthly',
                 'allowDepartmentCreation' => 'required',
                 'requireDepartmentAssignment' => 'required',
-                'maxFileSize' => 'required|integer|min:1|max:20',
+                'maxFileSize' => 'required|integer|min:1|max:50',
             ]);
             
             // Ensure boolean conversion
@@ -660,6 +660,9 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     Route::get('/proposals/rdd-analytics', [ProposalController::class, 'getRddAnalytics']);
     Route::get('/proposals/cm-endorsed', [ProposalController::class, 'getCmEndorsedProposals']);
     Route::get('/proposals/rdd-endorsed', [ProposalController::class, 'getRddEndorsedProposals']);
+    Route::get('/proposals/rdd-for-revision', [ProposalController::class, 'getRddForRevisionProposals']);
+    Route::get('/proposals/cm-for-revision', [ProposalController::class, 'getCmForRevisionProposals']);
+    Route::get('/proposals/{id}/revision-comments', [ProposalController::class, 'getRevisionComments']);
     Route::apiResource('proposals', ProposalController::class);
     
     // Endorsement routes
@@ -1016,6 +1019,7 @@ Route::middleware(['auth:web'])->group(function () {
     Route::put('/admin/users/{user:userID}', [AdminUserController::class, 'update']);
     Route::post('/admin/users/{user:userID}/reset-password', [AdminUserController::class, 'resetPassword']);
     Route::post('/admin/users/{user:userID}/activate', [AdminUserController::class, 'activate']);
+    Route::post('/admin/users/bulk-activate', [AdminUserController::class, 'bulkActivate']);
     Route::delete('/admin/users/{userId}', [AdminUserController::class, 'destroy']);
     
     // Department management
@@ -1072,28 +1076,61 @@ Route::middleware(['auth:web'])->group(function () {
             'all_input' => $request->all(),
         ]);
         
+        // Get PHP upload limits for reference
+        $phpUploadMax = ini_get('upload_max_filesize');
+        $phpPostMax = ini_get('post_max_size');
+        
+        // Convert PHP ini values to bytes for comparison
+        $convertToBytes = function($value) {
+            $value = trim($value);
+            $last = strtolower($value[strlen($value)-1]);
+            $value = (int) $value;
+            switch($last) {
+                case 'g': $value *= 1024;
+                case 'm': $value *= 1024;
+                case 'k': $value *= 1024;
+            }
+            return $value;
+        };
+        
+        $phpUploadMaxBytes = $convertToBytes($phpUploadMax);
+        $phpPostMaxBytes = $convertToBytes($phpPostMax);
+        
+        // Use the smaller of: PHP limit or 50MB for validation
+        // This allows uploads within PHP limits even if PHP is set lower than 50MB
+        $maxAllowedKB = min($phpUploadMaxBytes, 50 * 1024 * 1024) / 1024;
+        
         try {
             $validated = $request->validate([
-                'file' => 'required|file|max:20480', // 20MB
+                'file' => 'required|file|max:' . (int)$maxAllowedKB, // Use actual PHP limit or 50MB, whichever is smaller
                 'name' => 'nullable|string|max:255',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('Proponent template validation failed', ['errors' => $e->errors()]);
             $errorMessage = 'Validation failed';
-            if (isset($e->errors()['file']) && str_contains(json_encode($e->errors()['file']), 'failed to upload')) {
-                $errorMessage = 'File upload failed. Please ensure your file is under 20MB. Current PHP upload_max_filesize: ' . ini_get('upload_max_filesize');
+            $errorDetails = $e->errors();
+            
+            // Check if file upload failed due to PHP limits
+            if (!$request->hasFile('file') || !$request->file('file')->isValid()) {
+                $errorMessage = 'File upload failed. The file may be too large or corrupted. Current PHP upload_max_filesize: ' . $phpUploadMax . ', post_max_size: ' . $phpPostMax;
+            } elseif (isset($errorDetails['file'])) {
+                $fileError = json_encode($errorDetails['file']);
+                if (str_contains($fileError, 'failed to upload') || str_contains($fileError, 'too large')) {
+                    $errorMessage = 'File upload failed. Please ensure your file is under 50MB. Current PHP upload_max_filesize: ' . $phpUploadMax . ', post_max_size: ' . $phpPostMax;
+                }
             }
+            
             return response()->json([
                 'success' => false,
                 'message' => $errorMessage,
-                'errors' => $e->errors()
+                'errors' => $errorDetails
             ], 422);
         }
         
         try {
             $file = $request->file('file');
             if (!$file || !$file->isValid()) {
-                throw new \Exception('Invalid file upload');
+                throw new \Exception('Invalid file upload. PHP upload_max_filesize: ' . $phpUploadMax . ', post_max_size: ' . $phpPostMax);
             }
             
             $templateName = $request->name ?: pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);
@@ -1228,28 +1265,61 @@ Route::middleware(['auth:web'])->group(function () {
             'all_input' => $request->all(),
         ]);
         
+        // Get PHP upload limits for reference
+        $phpUploadMax = ini_get('upload_max_filesize');
+        $phpPostMax = ini_get('post_max_size');
+        
+        // Convert PHP ini values to bytes for comparison
+        $convertToBytes = function($value) {
+            $value = trim($value);
+            $last = strtolower($value[strlen($value)-1]);
+            $value = (int) $value;
+            switch($last) {
+                case 'g': $value *= 1024;
+                case 'm': $value *= 1024;
+                case 'k': $value *= 1024;
+            }
+            return $value;
+        };
+        
+        $phpUploadMaxBytes = $convertToBytes($phpUploadMax);
+        $phpPostMaxBytes = $convertToBytes($phpPostMax);
+        
+        // Use the smaller of: PHP limit or 50MB for validation
+        // This allows uploads within PHP limits even if PHP is set lower than 50MB
+        $maxAllowedKB = min($phpUploadMaxBytes, 50 * 1024 * 1024) / 1024;
+        
         try {
             $validated = $request->validate([
-                'file' => 'required|file|max:20480', // 20MB
+                'file' => 'required|file|max:' . (int)$maxAllowedKB, // Use actual PHP limit or 50MB, whichever is smaller
                 'name' => 'nullable|string|max:255',
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             \Log::error('General template validation failed', ['errors' => $e->errors()]);
             $errorMessage = 'Validation failed';
-            if (isset($e->errors()['file']) && str_contains(json_encode($e->errors()['file']), 'failed to upload')) {
-                $errorMessage = 'File upload failed. Please ensure your file is under 20MB. Current PHP upload_max_filesize: ' . ini_get('upload_max_filesize');
+            $errorDetails = $e->errors();
+            
+            // Check if file upload failed due to PHP limits
+            if (!$request->hasFile('file') || !$request->file('file')->isValid()) {
+                $errorMessage = 'File upload failed. The file may be too large or corrupted. Current PHP upload_max_filesize: ' . $phpUploadMax . ', post_max_size: ' . $phpPostMax;
+            } elseif (isset($errorDetails['file'])) {
+                $fileError = json_encode($errorDetails['file']);
+                if (str_contains($fileError, 'failed to upload') || str_contains($fileError, 'too large')) {
+                    $errorMessage = 'File upload failed. Please ensure your file is under 50MB. Current PHP upload_max_filesize: ' . $phpUploadMax . ', post_max_size: ' . $phpPostMax;
+                }
             }
+            
             return response()->json([
                 'success' => false,
                 'message' => $errorMessage,
-                'errors' => $e->errors()
+                'errors' => $errorDetails
             ], 422);
         }
         
         try {
             $file = $request->file('file');
             if (!$file || !$file->isValid()) {
-                throw new \Exception('Invalid file upload');
+                throw new \Exception('Invalid file upload. PHP upload_max_filesize: ' . $phpUploadMax . ', post_max_size: ' . $phpPostMax);
             }
             
             $templateName = $request->name ?: pathinfo($file->getClientOriginalName(), PATHINFO_FILENAME);

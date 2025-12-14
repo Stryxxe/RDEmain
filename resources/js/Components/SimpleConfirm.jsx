@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Info } from 'lucide-react';
 
 const SimpleConfirm = ({ message, onConfirm, onCancel, title = null }) => {
   const [isVisible, setIsVisible] = useState(false);
@@ -24,12 +24,15 @@ const SimpleConfirm = ({ message, onConfirm, onCancel, title = null }) => {
   }, []);
 
   // Determine alert type from title or message - use red for deletions/warnings
-  const isWarning = title?.toLowerCase().includes('warning') || 
+  // Exclude activation confirmations from warning style
+  const isActivation = title?.toLowerCase().includes('activation');
+  const isWarning = !isActivation && (
+                    title?.toLowerCase().includes('warning') || 
                     title?.toLowerCase().includes('delete') ||
                     title?.toLowerCase().includes('deletion') ||
                     message?.toLowerCase().includes('delete') ||
-                    message?.toLowerCase().includes('cannot be undone') ||
-                    message?.toLowerCase().includes('sure');
+                    message?.toLowerCase().includes('cannot be undone')
+                  );
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
@@ -55,7 +58,11 @@ const SimpleConfirm = ({ message, onConfirm, onCancel, title = null }) => {
             : 'bg-gray-600'
         }`}>
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-white flex-shrink-0" />
+            {isWarning ? (
+              <AlertTriangle className="w-5 h-5 text-white flex-shrink-0" />
+            ) : (
+              <Info className="w-5 h-5 text-white flex-shrink-0" />
+            )}
             <h3 className="text-sm font-bold text-white uppercase tracking-wide">
               {title || 'Confirm Action'}
             </h3>

@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
+use App\Mail\TestMail;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TimelineStageController;
 use Inertia\Inertia;
@@ -10,6 +11,13 @@ use Inertia\Inertia;
 Route::get('/csrf-token', function (Request $request) {
     return response()->json(['csrf_token' => csrf_token()]);
 })->name('csrf-token');
+
+Route::get('/send', function () {
+      Mail::
+      to(["boybawang141@gmail.com"])
+      ->send(new TestMail());
+    return "email sent";
+}); 
 
 // Include auth routes
 require __DIR__ . '/auth.php';
@@ -31,7 +39,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/statistics', fn() => Inertia::render('RoleViews/RDD/RDDStatistics'))->name('statistics');
         Route::get('/review-proposal', fn() => Inertia::render('RoleViews/RDD/RDDEndorsement'))->name('endorsement');
         Route::get('/review-proposal/{id}', fn($id) => Inertia::render('RoleViews/RDD/RDDEndorsementDetail', ['id' => $id]))->name('endorsement.detail');
-        Route::get('/progress-report', fn() => Inertia::render('RoleViews/RDD/RDDProgressReport'))->name('progress-report');
+        Route::get('/for-revision', fn() => Inertia::render('RoleViews/RDD/RDDForRevision'))->name('for-revision');
         Route::get('/archive', fn() => Inertia::render('RoleViews/RDD/RDDArchive'))->name('archive');
         Route::get('/submit-report', fn() => Inertia::render('RoleViews/RDD/RDDSubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('RoleViews/RDD/RDDResources'))->name('resources');
@@ -66,6 +74,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('RoleViews/CM/CMDashboard'))->name('dashboard');
         Route::get('/proposal/{id}', fn($id) => Inertia::render('RoleViews/CM/CMProposalDetail', ['id' => $id]))->name('proposal.detail');
         Route::get('/review-proposal', fn() => Inertia::render('RoleViews/CM/CMReviewProposal'))->name('review-proposal');
+        Route::get('/for-revision', fn() => Inertia::render('RoleViews/CM/CMForRevision'))->name('for-revision');
         Route::get('/progress-report', fn() => Inertia::render('RoleViews/CM/CMProgressReport'))->name('progress-report');
         Route::get('/submit-report', fn() => Inertia::render('RoleViews/CM/CMSubmitReport'))->name('submit-report');
         Route::get('/resources', fn() => Inertia::render('RoleViews/CM/CMResources'))->name('resources');

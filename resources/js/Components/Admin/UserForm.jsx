@@ -39,7 +39,7 @@ const UserForm = ({ user, onClose }) => {
         else if (!/\S+@\S+\.\S+/.test(formData.email))
             newErrors.email = "Email is invalid";
         if (!formData.department.trim())
-            newErrors.department = "Department is required";
+            newErrors.department = "Academic Unit is required";
         if (!formData.phone.trim()) newErrors.phone = "Phone is required";
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
@@ -217,7 +217,7 @@ const UserForm = ({ user, onClose }) => {
                                                     ? "border-red-500"
                                                     : ""
                                             }`}
-                                            placeholder="Enter department"
+                                            placeholder="Enter Academic Unit"
                                         />
                                     </div>
                                     {errors.department && (

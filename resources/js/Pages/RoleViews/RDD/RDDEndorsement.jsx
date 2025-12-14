@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { router } from "@inertiajs/react";
+import { router, Link } from "@inertiajs/react";
 import rddService from "../../../services/rddService";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
@@ -138,12 +138,6 @@ const RDDEndorsement = () => {
                         <div className="text-center">
                             <div className="text-red-600 text-6xl mb-4">⚠️</div>
                             <p className="text-gray-600 mb-4">{error}</p>
-                            <button
-                                onClick={fetchProposals}
-                                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-                            >
-                                Retry
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -268,26 +262,6 @@ const RDDEndorsement = () => {
                                 {filteredProposals.length} records found
                             </p>
                         </div>
-                        <button
-                            onClick={fetchProposals}
-                            disabled={loading}
-                            className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            <svg
-                                className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-                                />
-                            </svg>
-                            Refresh
-                        </button>
                     </div>
 
                     {/* Filter Bar */}
@@ -395,16 +369,12 @@ const RDDEndorsement = () => {
                                                 )}
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
-                                                <button
-                                                    onClick={() =>
-                                                        handleViewClick(
-                                                            proposal
-                                                        )
-                                                    }
-                                                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg text-white bg-emerald-600 hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500 transition-colors duration-150"
+                                                <Link
+                                                    href={`/rdd/proposal/${proposal.id}`}
+                                                    className="text-blue-600 hover:text-blue-800 text-sm"
                                                 >
                                                     View Details
-                                                </button>
+                                                </Link>
                                             </td>
                                         </tr>
                                     ))
@@ -413,7 +383,7 @@ const RDDEndorsement = () => {
                         </table>
                     </div>
 
-                    {/* Pagination */}
+                    {/* Pagination Info */}
                     {totalPages > 1 && (
                         <div className="px-6 py-4 border-t border-gray-200 bg-gray-50">
                             <div className="flex items-center justify-between">
@@ -424,44 +394,6 @@ const RDDEndorsement = () => {
                                         filteredProposals.length
                                     )}{" "}
                                     of {filteredProposals.length} results
-                                </div>
-                                <div className="flex items-center space-x-2">
-                                    <button
-                                        onClick={() =>
-                                            handlePageChange(currentPage - 1)
-                                        }
-                                        disabled={currentPage === 1}
-                                        className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        Previous
-                                    </button>
-                                    {Array.from(
-                                        { length: totalPages },
-                                        (_, i) => i + 1
-                                    ).map((page) => (
-                                        <button
-                                            key={page}
-                                            onClick={() =>
-                                                handlePageChange(page)
-                                            }
-                                            className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                                                currentPage === page
-                                                    ? "bg-emerald-600 text-white shadow-sm"
-                                                    : "text-gray-500 bg-white border border-gray-300 hover:bg-gray-50"
-                                            }`}
-                                        >
-                                            {page}
-                                        </button>
-                                    ))}
-                                    <button
-                                        onClick={() =>
-                                            handlePageChange(currentPage + 1)
-                                        }
-                                        disabled={currentPage === totalPages}
-                                        className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                        Next
-                                    </button>
                                 </div>
                             </div>
                         </div>

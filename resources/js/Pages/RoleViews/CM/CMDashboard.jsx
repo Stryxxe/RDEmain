@@ -49,6 +49,23 @@ const CMDashboard = () => {
         fetchProposals();
         fetchStatistics();
     }, []);
+
+    // Refresh data when page becomes visible (user navigates back to dashboard)
+    // This ensures final endorsed proposals are removed when user returns to dashboard
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                // Page became visible - refresh data to ensure final endorsed proposals are removed
+                fetchProposals();
+                fetchStatistics();
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
     
     // Debug: Log when proposals state changes
     useEffect(() => {
@@ -335,16 +352,16 @@ const CMDashboard = () => {
 
     const statsData = [
         {
-            number: stats.total.toString(),
-            label: "Total of Submitted Proposals",
+            number: (stats.received_proposals || 0).toString(),
+            label: "Received Proposals",
         },
         {
-            number: stats.under_review.toString(),
+            number: (stats.under_review || 0).toString(),
             label: "Under Review",
         },
         {
-            number: stats.completed.toString(),
-            label: "Done/Utilized Proposals",
+            number: (stats.endorsed_proposals || 0).toString(),
+            label: "Total of Endorsed Proposals",
         },
     ];
 

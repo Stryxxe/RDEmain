@@ -35,6 +35,7 @@ class ProposalController extends Controller
                 'files:fileID,proposalID,fileName,filePath,fileType',
                 'user:userID,firstName,lastName,email,researchCenterID,departmentID,userRolesID',
                 'user.department:departmentID,name',
+                'user.researchCenter:centerID,centerName,name',
                 'user.role:userRoleID,userRole',
                 // Don't use column selection for many-to-many relationships - it can cause issues
                 'proponents',
@@ -71,6 +72,10 @@ class ProposalController extends Controller
                       ->where('endorsementStatus', 'approved');
                 });
                 
+                // Exclude proposals sent for revision (statusID = 4)
+                // These proposals should only appear in the For Revision page
+                $query->where('statusID', '!=', 4);
+                
                 // Filter by research center if provided
                 if ($request->has('centerID') && $request->centerID) {
                     $query->whereHas('user', function($q) use ($request) {
@@ -86,16 +91,45 @@ class ProposalController extends Controller
                 }
             } elseif ($role === 'CM') {
                 // Show submitted proposals from same research center
-                // Show all proposals that haven't been endorsed by this CM yet, or were rejected
+                // For Dashboard and Endorsement view:
+                // - Show proposals with statusID != 4 (normal flow), OR
+                // - Show proposals with statusID 4 that have been endorsed once (from For Revision Accept button)
+                //   These need to appear in Endorsement view for final checking
                 if ($user->researchCenterID) {
                     // Filter by research center first
                     $query->whereHas('user', function($q) use ($user) {
                         $q->where('researchCenterID', $user->researchCenterID);
                     });
                     
-                    // Exclude proposals that this CM has already approved
-                    $query->whereDoesntHave('endorsements', function ($q) use ($user) {
-                        $q->where('endorserID', $user->userID)
+                    // Get RDD user IDs for filtering
+                    $rddUserIds = User::whereHas('role', function($q) {
+                        $q->where('userRole', 'RDD');
+                    })->pluck('userID')->toArray();
+                    
+                    // Show proposals that:
+                    // 1. Have statusID = 1 (Under Review) - includes resubmitted proposals
+                    // 2. Have statusID 4 AND have been endorsed once by this CM (from For Revision Accept)
+                    //    This allows proposals from For Revision to appear in Endorsement view for final checking
+                    // BUT EXCLUDE proposals where this CM has endorsed twice (forwarded to RDD)
+                    $query->where(function($q) use ($user) {
+                        $q->where(function($statusQ) use ($user) {
+                            // StatusID = 1 proposals (includes resubmitted)
+                            $statusQ->where('statusID', 1)
+                                    // Exclude if CM has endorsed twice
+                                    ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                                        [$user->userID, 'approved']);
+                        })
+                        ->orWhere(function($subQ) use ($user) {
+                            // StatusID = 4 proposals that have been endorsed once (from Accept button)
+                            $subQ->where('statusID', 4)
+                                 ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) = 1', 
+                                     [$user->userID, 'approved']);
+                        });
+                    });
+                    
+                    // Exclude proposals that have been forwarded to RDD (have RDD endorsement)
+                    $query->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                        $q->whereIn('endorserID', $rddUserIds)
                           ->where('endorsementStatus', 'approved');
                     });
                     
@@ -103,7 +137,9 @@ class ProposalController extends Controller
                     Log::info('CM Dashboard Query Applied', [
                         'user_id' => $user->userID,
                         'research_center_id' => $user->researchCenterID,
-                        'role' => $role
+                        'role' => $role,
+                        'query_sql' => $query->toSql(),
+                        'query_bindings' => $query->getBindings()
                     ]);
                 } else {
                     // If CM has no research center assigned, return empty set
@@ -158,8 +194,18 @@ class ProposalController extends Controller
         // Cache key includes user ID to handle different permissions
         $cacheKey = "proposal_{$id}_user_{$user->userID}";
         
+        // If request has 'force_refresh' parameter, bypass cache to get fresh data
+        // This is important when viewing resubmitted proposals to see updated information
+        $forceRefresh = $request->has('force_refresh') && $request->force_refresh;
+        
+        if ($forceRefresh) {
+            // Clear cache first to ensure fresh data
+            Cache::forget($cacheKey);
+        }
+        
         // Cache for 2 minutes - balance between performance and data freshness
-        $proposal = Cache::remember($cacheKey, 120, function () use ($id, $user) {
+        // If force_refresh is true, we'll fetch fresh data (cache was cleared above)
+        $proposal = Cache::remember($cacheKey, $forceRefresh ? 0 : 120, function () use ($id, $user) {
             // For RDD users, show all proposals; for CM users, show proposals from their department; for others, show only their own
             $query = Proposal::where('proposalID', $id)->with([
                 'status:statusID,statusName,statusDescription',
@@ -258,7 +304,7 @@ class ProposalController extends Controller
                 'gadCertificate' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
                 'matrixOfCompliance' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
                 'supportingDocuments' => 'nullable|array|max:10',
-                'supportingDocuments.*' => "file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'supportingDocuments.*' => "file|max:{$maxFileSizeKB}",
             ]);
         } catch (ValidationException $e) {
             // Log validation errors for debugging
@@ -272,6 +318,49 @@ class ProposalController extends Controller
                     'error_code' => $matrixFile->getError(),
                 ]);
             }
+            
+            // Log supporting documents validation errors
+            if ($request->hasFile('supportingDocuments')) {
+                $supportingDocs = $request->file('supportingDocuments');
+                foreach ($supportingDocs as $index => $file) {
+                    if ($file) {
+                        Log::warning("Supporting document {$index} validation failed", [
+                            'file_name' => $file->getClientOriginalName(),
+                            'file_size' => $file->getSize(),
+                            'file_mime' => $file->getMimeType(),
+                            'file_extension' => $file->getClientOriginalExtension(),
+                            'is_valid' => $file->isValid(),
+                            'error_code' => $file->getError(),
+                        ]);
+                    }
+                }
+            }
+
+            // Log supporting documents validation errors
+            if ($request->hasFile('supportingDocuments')) {
+                $supportingDocs = $request->file('supportingDocuments');
+                if (is_array($supportingDocs)) {
+                    foreach ($supportingDocs as $index => $file) {
+                        if ($file) {
+                            Log::warning("Supporting document {$index} validation failed", [
+                                'file_name' => $file->getClientOriginalName(),
+                                'file_size' => $file->getSize(),
+                                'file_mime' => $file->getMimeType(),
+                                'file_extension' => $file->getClientOriginalExtension(),
+                                'is_valid' => $file->isValid(),
+                                'error_code' => $file->getError(),
+                            ]);
+                        }
+                    }
+                }
+            }
+            
+            // Also log what was actually received
+            Log::warning('Proposal submission validation failed', [
+                'errors' => $e->errors(),
+                'has_supporting_docs' => $request->hasFile('supportingDocuments'),
+                'supporting_docs_count' => $request->hasFile('supportingDocuments') ? count($request->file('supportingDocuments')) : 0,
+            ]);
 
             return response()->json([
                 'success' => false,
@@ -555,20 +644,42 @@ class ProposalController extends Controller
         // Get dynamic max file size from settings
         $maxFileSizeKB = SettingsHelper::getMaxFileSizeKB();
         
-        $validated = $request->validate([
-            'researchTitle' => 'sometimes|string|max:255',
-            'description' => 'sometimes|string',
-            'objectives' => 'sometimes|string',
-            'researchCenter' => 'sometimes|string',
-            'researchAgenda' => 'sometimes|array',
-            'dostSPs' => 'sometimes|array',
-            'sustainableDevelopmentGoals' => 'sometimes|array',
-            'proposedBudget' => 'sometimes|numeric|min:0',
-            'budgetBreakdown' => 'sometimes|array',
-            'statusID' => 'sometimes|integer',
-            'revisionComments' => 'sometimes|string|nullable',
-            'updatedForm' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}"
-        ]);
+        try {
+            $validated = $request->validate([
+                'researchTitle' => 'sometimes|string|max:255',
+                'description' => 'sometimes|string',
+                'objectives' => 'sometimes|string',
+                'researchCenter' => 'sometimes|string',
+                'researchAgenda' => 'sometimes|array',
+                'dostSPs' => 'sometimes|array',
+                'sustainableDevelopmentGoals' => 'sometimes|array',
+                'proposedBudget' => 'sometimes|numeric|min:0',
+                'budgetBreakdown' => 'sometimes|array',
+                'statusID' => 'sometimes|integer',
+                'revisionComments' => 'sometimes|string|nullable',
+                'updatedForm' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'setiFile' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'gadFile' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'matrixFile' => "nullable|file|mimes:pdf,doc,docx|max:{$maxFileSizeKB}",
+                'supportingDocuments' => 'nullable|array|max:10',
+                'supportingDocuments.*' => "file|max:{$maxFileSizeKB}",
+                'revisionImages' => 'nullable|array|max:10',
+                'revisionImages.*' => "nullable|file|mimes:jpeg,jpg,png,gif,webp|max:{$maxFileSizeKB}",
+            ]);
+        } catch (ValidationException $e) {
+            Log::error('Proposal update validation failed', [
+                'proposal_id' => $id,
+                'user_id' => $user->userID,
+                'errors' => $e->errors(),
+                'request_data' => $request->except(['updatedForm', 'setiFile', 'gadFile', 'matrixFile', 'supportingDocuments', 'revisionImages'])
+            ]);
+            
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        }
 
         try {
             $updateData = [];
@@ -582,22 +693,195 @@ class ProposalController extends Controller
             if ($request->has('dostSPs')) $updateData['dostSPs'] = $request->dostSPs;
             if ($request->has('sustainableDevelopmentGoals')) $updateData['sustainableDevelopmentGoals'] = $request->sustainableDevelopmentGoals;
             if ($request->has('proposedBudget')) $updateData['proposedBudget'] = $request->proposedBudget;
-            if ($request->has('statusID')) $updateData['statusID'] = $request->statusID;
+            
+            // Initialize requestedStatusID for logging purposes
+            $requestedStatusID = $request->has('statusID') ? (int) $request->input('statusID') : null;
+            
+            // Only allow statusID update if explicitly changing to For Revision (statusID 4) by CM/RDD
+            // When proponent resubmits, the statusID will be changed to 1 later in the resubmission logic (line ~937)
+            // This ensures the proposal becomes visible in R&D Initiatives and Endorsement pages again
+            if ($request->has('statusID')) {
+                // Only allow CM/RDD to set status to 4 (For Revision)
+                // Proponents should not be able to change statusID when resubmitting
+                if ($requestedStatusID === 4 && $user->role && in_array($user->role->userRole, ['CM', 'RDD'])) {
+                    $updateData['statusID'] = 4;
+                }
+            }
 
-            // Handle file upload if provided
+            // Handle file uploads if provided
+            // Main proposal file (updatedForm)
             if ($request->hasFile('updatedForm')) {
                 $file = $request->file('updatedForm');
                 $fileName = 'updated_form_' . time() . '.' . $file->getClientOriginalExtension();
                 $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
 
-                // Create file record
+                // Create file record - replace existing report file if any
+                // First, mark old report files as replaced (optional: delete old files)
+                File::where('proposalID', $proposal->proposalID)
+                    ->whereIn('fileType', ['report', 'concept_paper', 'updated_form'])
+                    ->delete();
+
                 File::create([
                     'proposalID' => $proposal->proposalID,
                     'fileName' => $fileName,
                     'filePath' => $filePath,
-                    'fileType' => 'updated_form',
+                    'fileType' => 'report',
                     'fileSize' => $file->getSize(),
                 ]);
+            }
+
+            // SETI Scorecard file
+            if ($request->hasFile('setiFile')) {
+                $file = $request->file('setiFile');
+                $fileName = 'seti_' . time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                // Replace existing SETI files
+                File::where('proposalID', $proposal->proposalID)
+                    ->where('fileType', 'seti_scorecard')
+                    ->delete();
+
+                File::create([
+                    'proposalID' => $proposal->proposalID,
+                    'fileName' => $fileName,
+                    'filePath' => $filePath,
+                    'fileType' => 'seti_scorecard',
+                    'fileSize' => $file->getSize(),
+                ]);
+            }
+
+            // GAD Certificate file
+            if ($request->hasFile('gadFile')) {
+                $file = $request->file('gadFile');
+                $fileName = 'gad_' . time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                // Replace existing GAD files
+                File::where('proposalID', $proposal->proposalID)
+                    ->where('fileType', 'gad_certificate')
+                    ->delete();
+
+                File::create([
+                    'proposalID' => $proposal->proposalID,
+                    'fileName' => $fileName,
+                    'filePath' => $filePath,
+                    'fileType' => 'gad_certificate',
+                    'fileSize' => $file->getSize(),
+                ]);
+            }
+
+            // Matrix of Compliance file
+            if ($request->hasFile('matrixFile')) {
+                $file = $request->file('matrixFile');
+                $fileName = 'matrix_' . time() . '_' . $file->getClientOriginalName();
+                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                // Replace existing MOC files
+                File::where('proposalID', $proposal->proposalID)
+                    ->where('fileType', 'matrix_compliance')
+                    ->delete();
+
+                File::create([
+                    'proposalID' => $proposal->proposalID,
+                    'fileName' => $fileName,
+                    'filePath' => $filePath,
+                    'fileType' => 'matrix_compliance',
+                    'fileSize' => $file->getSize(),
+                ]);
+            }
+
+            // Supporting documents
+            if ($request->hasFile('supportingDocuments')) {
+                foreach ($request->file('supportingDocuments') as $file) {
+                    if (!$file || !$file->isValid()) {
+                        Log::warning("Invalid supporting document skipped", [
+                            'proposalID' => $proposal->proposalID,
+                            'error' => $file?->getError(),
+                        ]);
+                        continue;
+                    }
+
+                    try {
+                        $fileName = 'supporting_' . time() . '_' . $file->getClientOriginalName();
+                        $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                        File::create([
+                            'proposalID' => $proposal->proposalID,
+                            'fileName' => $fileName,
+                            'filePath' => $filePath,
+                            'fileType' => 'supporting_document',
+                            'fileSize' => $file->getSize(),
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Error uploading supporting document', [
+                            'proposalID' => $proposal->proposalID,
+                            'error' => $e->getMessage()
+                        ]);
+                    }
+                }
+            }
+
+            // Revision images (pasted images in revision comments)
+            // Handle array file uploads - check if revisionImages exists as array
+            if ($request->hasFile('revisionImages')) {
+                $revisionImageFiles = $request->file('revisionImages');
+                
+                // Handle both array format and single file
+                if ($revisionImageFiles && (is_array($revisionImageFiles) ? count($revisionImageFiles) > 0 : $revisionImageFiles !== null)) {
+                    // If it's an array, iterate through it
+                    if (is_array($revisionImageFiles)) {
+                        foreach ($revisionImageFiles as $index => $file) {
+                            if (!$file || !$file->isValid()) {
+                                Log::warning("Invalid revision image skipped", [
+                                    'proposalID' => $proposal->proposalID,
+                                    'index' => $index,
+                                    'error' => $file?->getError(),
+                                ]);
+                                continue;
+                            }
+
+                            try {
+                                $fileName = 'revision_image_' . time() . '_' . $index . '_' . $file->getClientOriginalName();
+                                $filePath = $file->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                                File::create([
+                                    'proposalID' => $proposal->proposalID,
+                                    'fileName' => $fileName,
+                                    'filePath' => $filePath,
+                                    'fileType' => 'revision_image',
+                                    'fileSize' => $file->getSize(),
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('Error uploading revision image', [
+                                    'proposalID' => $proposal->proposalID,
+                                    'index' => $index,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                    } else {
+                        // Single file (shouldn't happen but handle it)
+                        if ($revisionImageFiles->isValid()) {
+                            try {
+                                $fileName = 'revision_image_' . time() . '_' . $revisionImageFiles->getClientOriginalName();
+                                $filePath = $revisionImageFiles->storeAs('proposals/' . $proposal->proposalID, $fileName, 'public');
+
+                                File::create([
+                                    'proposalID' => $proposal->proposalID,
+                                    'fileName' => $fileName,
+                                    'filePath' => $filePath,
+                                    'fileType' => 'revision_image',
+                                    'fileSize' => $revisionImageFiles->getSize(),
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('Error uploading revision image', [
+                                    'proposalID' => $proposal->proposalID,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                    }
+                }
             }
 
             $proposedBudget = isset($updateData['proposedBudget'])
@@ -613,23 +897,152 @@ class ProposalController extends Controller
                 $updateData['budgetBreakdown'] = $this->generateDefaultBudgetBreakdown($proposedBudget);
             }
 
+            // Get current proposal status BEFORE any updates
+            $currentStatusID = (int) $proposal->statusID;
+            
             // Track status change before updating
             $wasRevisionStatusChange = $request->has('statusID')
                 && (int) $request->statusID === 4
-                && (int) $proposal->statusID !== 4;
+                && $currentStatusID !== 4;
 
             // Track when resubmitting after revision
-            $isResubmitAfterRevision = $request->has('statusID') && $request->statusID == 1 && (int) $proposal->statusID === 4;
+            // When proponent resubmits (status is 4), set resubmittedAfterRevision timestamp
+            // IMPORTANT: Status should remain 4 (For Revision) - do NOT change to 1
+            $isResubmitAfterRevision = false;
+            
+            // Check if this is a resubmission: current status is 4 (For Revision) and user is the proposal owner
+            // This allows proponent to resubmit without changing statusID
+            if ($currentStatusID === 4 && $proposal->userID === $user->userID) {
+                $isResubmitAfterRevision = true;
+                Log::info('Resubmission detected', [
+                    'proposal_id' => $proposal->proposalID,
+                    'current_status_id' => $currentStatusID,
+                    'user_id' => $user->userID,
+                    'proposal_owner_id' => $proposal->userID,
+                    'is_owner' => $proposal->userID === $user->userID
+                ]);
+            }
 
+            // Save revision comments when marking for revision
+            if ($wasRevisionStatusChange && $request->has('revisionComments')) {
+                $updateData['revisionComments'] = $request->input('revisionComments');
+            }
+
+            // When resubmitting after revision, set resubmittedAfterRevision timestamp
+            // IMPORTANT: Change statusID to 1 (Under Review) so proposal disappears from Proponent's For Revision page
+            // The proposal will still appear in CM's For Revision page because we filter by resubmittedAfterRevision
+            // This allows the proposal to be visible in both Dashboard/Endorsement AND For Revision views
+            if ($isResubmitAfterRevision) {
+                $updateData['resubmittedAfterRevision'] = now();
+                // Change statusID to 1 (Under Review) so proposal disappears from Proponent's For Revision page
+                // The proposal will still appear in CM's For Revision page (filtered by resubmittedAfterRevision)
+                // And will also appear in Dashboard/Endorsement views (statusID = 1)
+                $updateData['statusID'] = 1;
+                
+                Log::info('Setting resubmission data - changing statusID to 1', [
+                    'proposal_id' => $proposal->proposalID,
+                    'resubmitted_after_revision' => now(),
+                    'new_status_id' => 1,
+                    'current_status_id' => $currentStatusID
+                ]);
+            }
+            
+            // IMPORTANT: When CM marks proposal for revision, ensure statusID is 4
+            // Override any statusID sent from frontend to ensure it's always 4 when marked for revision
+            if ($wasRevisionStatusChange) {
+                $updateData['statusID'] = 4;
+            }
+
+            // Log what will be updated
+            if (!empty($updateData)) {
+                Log::info('Proposal update data', [
+                    'proposal_id' => $proposal->proposalID,
+                    'update_data' => $updateData,
+                    'is_resubmit' => $isResubmitAfterRevision
+                ]);
+            }
+
+            // Update the proposal
             $proposal->update($updateData);
+            
+            // IMPORTANT: If files were uploaded, we need to ensure they're committed to the database
+            // before we refresh the proposal. Laravel auto-commits, but we'll force a fresh query.
+            // Check for file uploads - handle array file uploads properly
+            $hasRevisionImages = false;
+            if ($request->hasFile('revisionImages')) {
+                $revisionImageFiles = $request->file('revisionImages');
+                $hasRevisionImages = is_array($revisionImageFiles) ? count($revisionImageFiles) > 0 : $revisionImageFiles !== null;
+            }
+            
+            $hasFileUploads = $request->hasFile('updatedForm') || 
+                             $request->hasFile('setiFile') || 
+                             $request->hasFile('gadFile') || 
+                             $request->hasFile('matrixFile') || 
+                             $request->hasFile('supportingDocuments') ||
+                             $hasRevisionImages;
+            
+            // Clear proposal cache BEFORE updating to ensure fresh data
+            $this->clearProposalCache($proposal->proposalID);
+            
+            // Clear ALL relationships to force fresh load
+            $proposal->unsetRelation('files');
+            $proposal->unsetRelation('status');
+            $proposal->unsetRelation('user');
+            $proposal->unsetRelation('proponents');
+            
+            // Reload proposal to get updated status and verify the update
+            $proposal->refresh();
+            
+            // Verify status was updated correctly
+            if ($isResubmitAfterRevision) {
+                Log::info('Proposal status after update', [
+                    'proposal_id' => $proposal->proposalID,
+                    'status_id' => $proposal->statusID,
+                    'resubmitted_after_revision' => $proposal->resubmittedAfterRevision,
+                    'expected_status' => 1, // Status should be 1 (Under Review) after resubmission
+                    'status_correct' => $proposal->statusID === 1
+                ]);
+            }
+            
+            // If files were uploaded, query them directly from database to ensure we get the latest
+            if ($hasFileUploads) {
+                // Force a fresh query to get the actual files from database
+                $actualFiles = \App\Models\File::where('proposalID', $proposal->proposalID)->get();
+                
+                Log::info('Files uploaded - querying directly from database', [
+                    'proposal_id' => $proposal->proposalID,
+                    'files_count' => $actualFiles->count(),
+                    'file_types' => $actualFiles->pluck('fileType')->toArray(),
+                    'file_names' => $actualFiles->pluck('fileName')->toArray()
+                ]);
+                
+                // Set the files relationship directly with fresh data
+                $proposal->setRelation('files', $actualFiles);
+            }
+            
+            // Force reload all other relationships
             $proposal->load([
                 'status',
-                'files',
                 'user.department',
                 'user.role',
+                'user.researchCenter',
                 'proponents',
                 'proponents.role'
             ]);
+            
+            // If files weren't uploaded but we're resubmitting, still verify files are loaded
+            if ($isResubmitAfterRevision && !$hasFileUploads) {
+                // Ensure files relationship is loaded
+                if (!$proposal->relationLoaded('files')) {
+                    $proposal->load('files');
+                }
+                
+                Log::info('Proposal files after resubmission (no new files)', [
+                    'proposal_id' => $proposal->proposalID,
+                    'files_count' => $proposal->files->count(),
+                    'file_types' => $proposal->files->pluck('fileType')->toArray()
+                ]);
+            }
 
             // Load project roles for proponents
             $proposal->proponents->each(function ($proponent) {
@@ -639,72 +1052,324 @@ class ProposalController extends Controller
                 }
             });
 
-            // Notify proponent when CM sets proposal to revision and include comments
+            // Notify proponent when proposal is set to revision and include comments
+            // Handle both CM and RDD revision workflows
             if ($wasRevisionStatusChange) {
                 $revisionComments = $request->input('revisionComments');
-                $message = $revisionComments
-                    ? "For revision: {$revisionComments}"
-                    : 'Your proposal requires revision. Please check the details and resubmit.';
+                $userRole = $user->role?->userRole ?? null;
+                
+                // Determine notification message based on who is sending for revision
+                if ($userRole === 'RDD') {
+                    // RDD workflow: Direct notification to Proponent
+                    $message = $revisionComments
+                        ? "The R&D Division requested a revision: {$revisionComments}"
+                        : 'The R&D Division requested a revision. Please check the details and resubmit.';
 
-                Notification::create([
-                    'userID' => $proposal->userID,
-                    'type' => 'revision',
-                    'title' => 'Proposal Sent for Revision',
-                    'message' => $message,
-                    'data' => [
-                        'proposal_id' => $proposal->proposalID,
-                        'proposal_title' => $proposal->researchTitle,
-                        'revision_comments' => $revisionComments,
-                        'event' => 'proposal.revision_required'
-                    ]
-                ]);
-            }
-
-            // Notify CM when proposal is resubmitted after revision
-            if ($isResubmitAfterRevision) {
-                $cmUsers = User::whereHas('role', function ($query) {
-                    $query->where('userRole', 'CM');
-                })
-                    ->where('researchCenterID', $proposal->user->researchCenterID)
-                    ->get();
-
-                foreach ($cmUsers as $cmUser) {
-                    Notification::create([
-                        'userID' => $cmUser->userID,
-                        'type' => 'proposal',
-                        'title' => 'Revised Proposal Resubmitted',
-                        'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" after revision. Please review the updated proposal.",
-                        'data' => [
+                    // Notify Proponent
+                    try {
+                        Notification::create([
+                            'userID' => $proposal->userID,
+                            'type' => 'revision',
+                            'title' => 'R&D Division Requested Revision',
+                            'message' => $message,
+                            'data' => [
+                                'proposal_id' => $proposal->proposalID,
+                                'proposal_title' => $proposal->researchTitle,
+                                'revision_comments' => $revisionComments,
+                                'event' => 'proposal.revision_required.rdd',
+                                'requested_by' => 'RDD'
+                            ]
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create notification for Proponent (RDD revision)', [
                             'proposal_id' => $proposal->proposalID,
-                            'proposal_title' => $proposal->researchTitle,
-                            'proponent_name' => $proposal->user->fullName,
-                            'event' => 'proposal.resubmitted_after_revision',
-                            'is_resubmission' => true
-                        ]
-                    ]);
+                            'proponent_user_id' => $proposal->userID,
+                            'error' => $e->getMessage()
+                        ]);
+                        // Don't fail the entire update if notification fails
+                    }
+
+                    // Notify CM (view-only, for awareness)
+                    if ($proposal->user && $proposal->user->researchCenterID) {
+                        try {
+                            $cmUsers = User::whereHas('role', function ($query) {
+                                $query->where('userRole', 'CM');
+                            })
+                                ->where('researchCenterID', $proposal->user->researchCenterID)
+                                ->get();
+
+                            foreach ($cmUsers as $cmUser) {
+                                try {
+                                    Notification::create([
+                                        'userID' => $cmUser->userID,
+                                        'type' => 'info',
+                                        'title' => 'RDD Requested Revision',
+                                        'message' => "The R&D Division requested a revision for \"{$proposal->researchTitle}\" directly from the Proponent.",
+                                        'data' => [
+                                            'proposal_id' => $proposal->proposalID,
+                                            'proposal_title' => $proposal->researchTitle,
+                                            'event' => 'proposal.revision_required.rdd.cm_notification',
+                                            'is_view_only' => true
+                                        ]
+                                    ]);
+                                } catch (\Exception $e) {
+                                    Log::error('Failed to create notification for CM (RDD revision)', [
+                                        'cm_user_id' => $cmUser->userID,
+                                        'proposal_id' => $proposal->proposalID,
+                                        'error' => $e->getMessage()
+                                    ]);
+                                }
+                            }
+                        } catch (\Exception $e) {
+                            Log::error('Failed to fetch CM users for RDD revision notification', [
+                                'proposal_id' => $proposal->proposalID,
+                                'research_center_id' => $proposal->user->researchCenterID,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    } else {
+                        Log::warning('Cannot notify CM for RDD revision - proposal user has no research center', [
+                            'proposal_id' => $proposal->proposalID,
+                            'user_id' => $proposal->userID,
+                            'research_center_id' => $proposal->user?->researchCenterID
+                        ]);
+                    }
+                } else {
+                    // CM workflow: Standard notification to Proponent
+                    $message = $revisionComments
+                        ? "For revision: {$revisionComments}"
+                        : 'Your proposal requires revision. Please check the details and resubmit.';
+
+                    try {
+                        Notification::create([
+                            'userID' => $proposal->userID,
+                            'type' => 'revision',
+                            'title' => 'Proposal Sent for Revision',
+                            'message' => $message,
+                            'data' => [
+                                'proposal_id' => $proposal->proposalID,
+                                'proposal_title' => $proposal->researchTitle,
+                                'revision_comments' => $revisionComments,
+                                'event' => 'proposal.revision_required',
+                                'requested_by' => 'CM'
+                            ]
+                        ]);
+                    } catch (\Exception $e) {
+                        Log::error('Failed to create notification for Proponent (CM revision)', [
+                            'proposal_id' => $proposal->proposalID,
+                            'proponent_user_id' => $proposal->userID,
+                            'error' => $e->getMessage()
+                        ]);
+                        // Don't fail the entire update if notification fails
+                    }
                 }
             }
 
-            // Clear cache for this proposal for all users
-            $this->clearProposalCache($id);
+            // Notify when proposal is resubmitted after revision
+            // Determine if this was originally sent for revision by CM or RDD
+            if ($isResubmitAfterRevision) {
+                // Ensure user relationship is loaded with research center
+                if (!$proposal->relationLoaded('user')) {
+                    $proposal->load('user');
+                }
+                
+                // Check who originally sent for revision by looking at the most recent revision comment
+                // If there's an RDD endorsement with revision status, it was RDD
+                // Otherwise, assume it was CM
+                $rddRevisionEndorsement = $proposal->endorsements()
+                    ->whereHas('endorser.role', function ($q) {
+                        $q->where('userRole', 'RDD');
+                    })
+                    ->where('endorsementStatus', 'rejected') // RDD revision is typically rejected status
+                    ->latest('endorsedAt')
+                    ->first();
+                
+                $wasRddRevision = $rddRevisionEndorsement !== null;
+                
+                if ($wasRddRevision) {
+                    // RDD workflow: Notify RDD users directly
+                    $rddUsers = User::whereHas('role', function ($query) {
+                        $query->where('userRole', 'RDD');
+                    })->get();
+
+                    $notificationsCreated = 0;
+                    foreach ($rddUsers as $rddUser) {
+                        try {
+                            Notification::create([
+                                'userID' => $rddUser->userID,
+                                'type' => 'proposal',
+                                'title' => 'Revised Proposal Resubmitted',
+                                'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" after RDD revision. Please review the updated proposal.",
+                                'data' => [
+                                    'proposal_id' => $proposal->proposalID,
+                                    'proposal_title' => $proposal->researchTitle,
+                                    'proponent_name' => $proposal->user->fullName,
+                                    'event' => 'proposal.resubmitted_after_revision.rdd',
+                                    'is_resubmission' => true
+                                ]
+                            ]);
+                            $notificationsCreated++;
+                        } catch (\Exception $e) {
+                            Log::error('Failed to create notification for RDD', [
+                                'rdd_user_id' => $rddUser->userID,
+                                'proposal_id' => $proposal->proposalID,
+                                'error' => $e->getMessage()
+                            ]);
+                        }
+                    }
+                    
+                    // Also notify CM for awareness (view-only)
+                    if ($proposal->user && $proposal->user->researchCenterID) {
+                        $cmUsers = User::whereHas('role', function ($query) {
+                            $query->where('userRole', 'CM');
+                        })
+                            ->where('researchCenterID', $proposal->user->researchCenterID)
+                            ->get();
+
+                        foreach ($cmUsers as $cmUser) {
+                            try {
+                                Notification::create([
+                                    'userID' => $cmUser->userID,
+                                    'type' => 'info',
+                                    'title' => 'Proposal Resubmitted to RDD',
+                                    'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" to the R&D Division after revision.",
+                                    'data' => [
+                                        'proposal_id' => $proposal->proposalID,
+                                        'proposal_title' => $proposal->researchTitle,
+                                        'proponent_name' => $proposal->user->fullName,
+                                        'event' => 'proposal.resubmitted_after_revision.rdd.cm_notification',
+                                        'is_view_only' => true
+                                    ]
+                                ]);
+                            } catch (\Exception $e) {
+                                Log::error('Failed to create notification for CM', [
+                                    'cm_user_id' => $cmUser->userID,
+                                    'proposal_id' => $proposal->proposalID,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                    }
+                    
+                    Log::info('Proposal resubmitted after RDD revision - notifications sent', [
+                        'proposal_id' => $proposal->proposalID,
+                        'rdd_notifications' => $notificationsCreated,
+                        'cm_notifications' => $cmUsers->count() ?? 0
+                    ]);
+                } else {
+                    // CM workflow: Notify CM users
+                    if (!$proposal->user || !$proposal->user->researchCenterID) {
+                        Log::error('Cannot notify CM - proposal user has no research center', [
+                            'proposal_id' => $proposal->proposalID,
+                            'user_id' => $proposal->userID,
+                            'research_center_id' => $proposal->user?->researchCenterID
+                        ]);
+                    } else {
+                        // Get CM users from the same research center
+                        $cmUsers = User::whereHas('role', function ($query) {
+                            $query->where('userRole', 'CM');
+                        })
+                            ->where('researchCenterID', $proposal->user->researchCenterID)
+                            ->get();
+
+                        // Create notifications for all CM users
+                        $notificationsCreated = 0;
+                        foreach ($cmUsers as $cmUser) {
+                            try {
+                                Notification::create([
+                                    'userID' => $cmUser->userID,
+                                    'type' => 'proposal',
+                                    'title' => 'Revised Proposal Resubmitted',
+                                    'message' => "{$proposal->user->fullName} resubmitted \"{$proposal->researchTitle}\" after revision. Please review the updated proposal.",
+                                    'data' => [
+                                        'proposal_id' => $proposal->proposalID,
+                                        'proposal_title' => $proposal->researchTitle,
+                                        'proponent_name' => $proposal->user->fullName,
+                                        'event' => 'proposal.resubmitted_after_revision',
+                                        'is_resubmission' => true
+                                    ]
+                                ]);
+                                $notificationsCreated++;
+                            } catch (\Exception $e) {
+                                Log::error('Failed to create notification for CM', [
+                                    'cm_user_id' => $cmUser->userID,
+                                    'proposal_id' => $proposal->proposalID,
+                                    'error' => $e->getMessage()
+                                ]);
+                            }
+                        }
+                        
+                        // Log for debugging
+                        Log::info('Proposal resubmitted after revision - CM notification sent', [
+                            'proposal_id' => $proposal->proposalID,
+                            'old_status' => 4,
+                            'new_status' => $proposal->statusID,
+                            'resubmitted_at' => $proposal->resubmittedAfterRevision,
+                            'cm_users_found' => $cmUsers->count(),
+                            'notifications_created' => $notificationsCreated,
+                            'research_center_id' => $proposal->user->researchCenterID
+                        ]);
+                    }
+                }
+            } else {
+                // Log why notification was not sent
+                Log::info('Proposal resubmission notification NOT sent', [
+                    'proposal_id' => $proposal->proposalID,
+                    'current_status' => $currentStatusID,
+                    'requested_status' => $requestedStatusID,
+                    'is_resubmit_flag' => $isResubmitAfterRevision
+                ]);
+            }
+
+            // Clear cache for this proposal for all users (do this BEFORE returning response)
+            $this->clearProposalCache($proposal->proposalID);
+            
+            // IMPORTANT: Make one final refresh to ensure all relationships are loaded with latest data
+            // This is critical for file uploads - we need to ensure files are included in the response
+            $proposal->refresh();
+            $proposal->load([
+                'status',
+                'files', // Ensure files are loaded
+                'user.department',
+                'user.role',
+                'user.researchCenter',
+                'proponents',
+                'proponents.role',
+                'endorsements',
+                'endorsements.endorser',
+                'endorsements.endorser.role'
+            ]);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Proposal updated successfully',
-                'data' => $proposal
+                'data' => $proposal,
+                'debug' => $isResubmitAfterRevision ? [
+                    'is_resubmission' => true,
+                    'files_count' => $proposal->files->count(),
+                    'file_types' => $proposal->files->pluck('fileType')->toArray(),
+                    'resubmitted_at' => $proposal->resubmittedAfterRevision,
+                    'status_id' => $proposal->statusID
+                ] : null
             ]);
         } catch (\Exception $e) {
             Log::error('Proposal update failed', [
                 'proposal_id' => $id,
                 'user_id' => $user->userID,
+                'user_role' => $user->role?->userRole,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'error_file' => $e->getFile(),
+                'error_line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request_data_keys' => array_keys($request->except(['updatedForm', 'setiFile', 'gadFile', 'matrixFile', 'supportingDocuments', 'revisionImages'])),
+                'has_revision_images' => $request->hasFile('revisionImages'),
+                'revision_images_count' => $request->hasFile('revisionImages') ? (is_array($request->file('revisionImages')) ? count($request->file('revisionImages')) : 1) : 0
             ]);
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to update proposal',
-                'error' => $e->getMessage()
+                'message' => 'Failed to update proposal: ' . $e->getMessage(),
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred while updating the proposal'
             ], 500);
         }
     }
@@ -763,32 +1428,40 @@ class ProposalController extends Controller
         // Apply authorization filters based on user role
         $userRole = $user->role?->userRole;
         if ($userRole === 'RDD') {
-            // For RDD statistics, count ALL proposals that have been endorsed by CM
-            // This includes proposals that RDD has already endorsed (for accurate totals)
-            // Exclude archived proposals
-            $query->whereNull('archivedByRDD');
-            
             // Get all CM user IDs
             $cmUserIds = User::whereHas('role', function($q) {
                 $q->where('userRole', 'CM');
             })->pluck('userID')->toArray();
             
-            // Count ALL proposals with approved endorsements from CM users
-            // (including those that RDD has already endorsed)
-            $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
-                $q->whereIn('endorserID', $cmUserIds)
-                  ->where('endorsementStatus', 'approved');
-            });
+            // Get all RDD user IDs
+            $rddUserIds = User::whereHas('role', function($q) {
+                $q->where('userRole', 'RDD');
+            })->pluck('userID')->toArray();
+            
+            // For Cards 1 & 2: Only proposals endorsed by CM but NOT yet archived by RDD
+            // This means when CM endorses, cards 1 & 2 increment
+            // When RDD endorses, cards 1 & 2 decrement
+            $query->whereNull('archivedByRDD')
+                ->whereHas('endorsements', function ($q) use ($cmUserIds) {
+                    $q->whereIn('endorserID', $cmUserIds)
+                      ->where('endorsementStatus', 'approved');
+                })
+                ->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                    $q->whereIn('endorserID', $rddUserIds)
+                      ->where('endorsementStatus', 'approved');
+                });
         } elseif ($userRole === 'CM') {
-            $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+            if ($user->researchCenterID) {
+                $query->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+                // Exclude proposals with statusID 4 (For Revision) from statistics
+                $query->where('statusID', '!=', 4);
+            } else {
+                $query->whereRaw('1=0');
+            }
         } else {
             $query->where('userID', $user->userID);
         }
 
-        // For status-based counts, we need to check by status name or statusID
-        // Use a base query that can be cloned for each status count
-        $baseQuery = clone $query;
-        
         // Get all statuses to map names to IDs
         $underReviewStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['under review'])->first();
         $approvedStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['approved'])->first();
@@ -796,24 +1469,134 @@ class ProposalController extends Controller
         $ongoingStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['ongoing'])->first();
         $completedStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['completed'])->first();
 
-        $stats = [
-            'total' => $baseQuery->count(),
-            'under_review' => $underReviewStatus 
-                ? (clone $query)->where('statusID', $underReviewStatus->statusID)->count()
-                : (clone $query)->where('statusID', 1)->count(), // Fallback to statusID 1
-            'approved' => $approvedStatus
-                ? (clone $query)->where('statusID', $approvedStatus->statusID)->count()
-                : (clone $query)->where('statusID', 2)->count(), // Fallback to statusID 2
-            'rejected' => $rejectedStatus
-                ? (clone $query)->where('statusID', $rejectedStatus->statusID)->count()
-                : (clone $query)->where('statusID', 3)->count(), // Fallback to statusID 3
-            'ongoing' => $ongoingStatus
-                ? (clone $query)->where('statusID', $ongoingStatus->statusID)->count()
-                : (clone $query)->where('statusID', 4)->count(), // Fallback to statusID 4
-            'completed' => $completedStatus
-                ? (clone $query)->where('statusID', $completedStatus->statusID)->count()
-                : (clone $query)->where('statusID', 5)->count() // Fallback to statusID 5
-        ];
+        // For RDD users, calculate cards differently:
+        // Card 1 & 2: Proposals endorsed by CM but NOT archived by RDD
+        // Card 3: Proposals archived by RDD (endorsed by RDD)
+        if ($userRole === 'RDD') {
+            // Get CM and RDD user IDs (already defined above)
+            // Card 1: Total proposals endorsed by CM but not archived
+            $card1Query = Proposal::query()
+                ->whereNull('archivedByRDD')
+                ->whereHas('endorsements', function ($q) use ($cmUserIds) {
+                    $q->whereIn('endorserID', $cmUserIds)
+                      ->where('endorsementStatus', 'approved');
+                })
+                ->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                    $q->whereIn('endorserID', $rddUserIds)
+                      ->where('endorsementStatus', 'approved');
+                });
+            
+            // Card 2: Under Review proposals (same as Card 1 but with statusID = 1)
+            // Exclude proposals sent for revision (statusID = 4) - these should not count in Under Review
+            $card2Query = clone $card1Query;
+            $underReviewStatusId = $underReviewStatus ? $underReviewStatus->statusID : 1;
+            $card2Query->where('statusID', $underReviewStatusId); // Only statusID = 1 (Under Review), which automatically excludes statusID = 4
+            
+            // Card 3: Proposals archived by RDD (endorsed by RDD)
+            $card3Query = Proposal::query()
+                ->whereNotNull('archivedByRDD')
+                ->whereHas('endorsements', function ($q) use ($rddUserIds) {
+                    $q->whereIn('endorserID', $rddUserIds)
+                      ->where('endorsementStatus', 'approved');
+                });
+            
+            $stats = [
+                'total' => $card1Query->count(),
+                'under_review' => $card2Query->count(),
+                'approved' => $approvedStatus
+                    ? (clone $card1Query)->where('statusID', $approvedStatus->statusID)->count()
+                    : (clone $card1Query)->where('statusID', 2)->count(),
+                'rejected' => $rejectedStatus
+                    ? (clone $card1Query)->where('statusID', $rejectedStatus->statusID)->count()
+                    : (clone $card1Query)->where('statusID', 3)->count(),
+                'ongoing' => $ongoingStatus
+                    ? (clone $card1Query)->where('statusID', $ongoingStatus->statusID)->count()
+                    : (clone $card1Query)->where('statusID', 4)->count(),
+                'completed' => $card3Query->count() // Card 3: Total archived/endorsed by RDD
+            ];
+        } else {
+            // For non-RDD users, use original logic
+            // Use a base query that can be cloned for each status count
+            $baseQuery = clone $query;
+            
+            $stats = [
+                'total' => $baseQuery->count(),
+                'under_review' => $underReviewStatus 
+                    ? (clone $query)->where('statusID', $underReviewStatus->statusID)->count()
+                    : (clone $query)->where('statusID', 1)->count(),
+                'approved' => $approvedStatus
+                    ? (clone $query)->where('statusID', $approvedStatus->statusID)->count()
+                    : (clone $query)->where('statusID', 2)->count(),
+                'rejected' => $rejectedStatus
+                    ? (clone $query)->where('statusID', $rejectedStatus->statusID)->count()
+                    : (clone $query)->where('statusID', 3)->count(),
+                'ongoing' => $ongoingStatus
+                    ? (clone $query)->where('statusID', $ongoingStatus->statusID)->count()
+                    : (clone $query)->where('statusID', 4)->count(),
+                'completed' => $completedStatus
+                    ? (clone $query)->where('statusID', $completedStatus->statusID)->count()
+                    : (clone $query)->where('statusID', 5)->count()
+            ];
+        }
+
+        // For CM users, add received_proposals and endorsed_proposals
+        if ($userRole === 'CM') {
+            // Get RDD user IDs for filtering
+            $rddUserIds = User::whereHas('role', function($q) {
+                $q->where('userRole', 'RDD');
+            })->pluck('userID')->toArray();
+            
+            // received_proposals = total count of all proposals from CM's research center
+            // INCLUDES proposals with statusID 4 (For Revision) - these should still count as "received"
+            // EXCLUDE proposals that have been forwarded to RDD (have RDD endorsement)
+            // EXCLUDE proposals where CM has endorsed twice (forwarded to RDD)
+            // Create a new query that includes For Revision proposals (statusID 4)
+            $receivedQuery = Proposal::query();
+            if ($user->researchCenterID) {
+                $receivedQuery->whereHas('user', fn($q) => $q->where('researchCenterID', $user->researchCenterID));
+                // Include all statuses including statusID 4 (For Revision)
+                // Don't exclude statusID 4 here - we want to count them in received_proposals
+            } else {
+                $receivedQuery->whereRaw('1=0');
+            }
+            
+            $stats['received_proposals'] = $receivedQuery
+                ->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                    $q->whereIn('endorserID', $rddUserIds)
+                      ->where('endorsementStatus', 'approved');
+                })
+                ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                    [$user->userID, 'approved'])
+                ->count();
+            
+            // under_review = proposals with statusID 1 that haven't been forwarded to RDD
+            // INCLUDES resubmitted proposals (statusID = 1 with resubmittedAfterRevision set)
+            // and haven't been endorsed by this CM twice (not forwarded to RDD yet)
+            $underReviewStatus = \App\Models\Status::whereRaw('LOWER(statusName) = ?', ['under review'])->first();
+            $underReviewStatusId = $underReviewStatus ? $underReviewStatus->statusID : 1;
+            
+            // Recalculate under_review with proper filters for CM
+            // Include all proposals with statusID 1 (includes resubmitted proposals)
+            // Exclude proposals forwarded to RDD and proposals where CM has endorsed twice
+            $underReviewQuery = clone $baseQuery;
+            $stats['under_review'] = $underReviewQuery
+                ->where('statusID', $underReviewStatusId)
+                ->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                    $q->whereIn('endorserID', $rddUserIds)
+                      ->where('endorsementStatus', 'approved');
+                })
+                ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                    [$user->userID, 'approved'])
+                ->count();
+            
+            // endorsed_proposals = count of proposals that have been endorsed by the current CM user
+            // (regardless of whether forwarded to RDD or not)
+            $endorsedQuery = clone $baseQuery;
+            $stats['endorsed_proposals'] = $endorsedQuery->whereHas('endorsements', function ($q) use ($user) {
+                $q->where('endorserID', $user->userID)
+                  ->where('endorsementStatus', 'approved');
+            })->count();
+        }
 
         return response()->json([
             'success' => true,
@@ -833,8 +1616,6 @@ class ProposalController extends Controller
         $query = Proposal::with(['status', 'user.department']);
 
         if ($user->role?->userRole === 'RDD') {
-            // For RDD analytics/statistics, count ALL proposals that have been endorsed by CM
-            // This includes proposals that RDD has already endorsed (for accurate totals)
             // Exclude archived proposals
             $query->whereNull('archivedByRDD');
             
@@ -843,12 +1624,25 @@ class ProposalController extends Controller
                 $q->where('userRole', 'CM');
             })->pluck('userID')->toArray();
             
-            // Count ALL proposals with approved endorsements from CM users
-            // (including those that RDD has already endorsed)
+            // Only include proposals with approved endorsements from CM users
             $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
                 $q->whereIn('endorserID', $cmUserIds)
                   ->where('endorsementStatus', 'approved');
             });
+            
+            // Exclude proposals that RDD has already endorsed/archived
+            $rddUserIds = User::whereHas('role', function($q) {
+                $q->where('userRole', 'RDD');
+            })->pluck('userID')->toArray();
+            
+            $query->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
+                $q->whereIn('endorserID', $rddUserIds)
+                  ->where('endorsementStatus', 'approved');
+            });
+            
+            // Exclude proposals sent for revision (statusID = 4)
+            // These proposals should only appear in the For Revision page
+            $query->where('statusID', '!=', 4);
         } else {
             $query->where('userID', $user->userID);
         }
@@ -857,12 +1651,6 @@ class ProposalController extends Controller
 
         // RDE Agenda data
         $rdeAgendaData = $this->getRdeAgendaData($proposals);
-        
-        // Log RDE Agenda data for debugging
-        Log::info('RDD Analytics - RDE Agenda Data', [
-            'count' => count($rdeAgendaData),
-            'data' => $rdeAgendaData
-        ]);
 
         // DOST 6Ps data
         $dost6PsData = $this->getDost6PsData($proposals);
@@ -876,7 +1664,7 @@ class ProposalController extends Controller
         $totalCompleted = $proposals->where('statusID', 5)->count();
         $completionRate = $totalProposals > 0 ? round(($totalCompleted / $totalProposals) * 100) : 0;
 
-        $responseData = [
+        return response()->json([
             'success' => true,
             'data' => [
                 'overview' => [
@@ -889,16 +1677,7 @@ class ProposalController extends Controller
                 'dost6Ps' => $dost6PsData,
                 'sdg' => $sdgData
             ]
-        ];
-        
-        // Log final response for debugging
-        Log::info('RDD Analytics - Final Response', [
-            'total_proposals' => $totalProposals,
-            'rde_agenda_count' => count($rdeAgendaData),
-            'rde_agenda_names' => array_column($rdeAgendaData, 'name')
         ]);
-
-        return response()->json($responseData);
     }
 
     /**
@@ -932,8 +1711,10 @@ class ProposalController extends Controller
 
             // Get proposals that have approved endorsements from CM users
             // but NOT yet endorsed by RDD users, and are not archived
+            // Exclude proposals sent for revision (statusID = 4) - these should only appear in For Revision page
             $proposals = Proposal::with(['status', 'files', 'user.department', 'user.role', 'endorsements.endorser.role'])
                 ->whereNull('archivedByRDD')
+                ->where('statusID', '!=', 4) // Exclude proposals sent for revision
                 ->whereHas('endorsements', function ($query) use ($cmUserIds) {
                     $query->where('endorsementStatus', 'approved')
                         ->whereIn('endorserID', $cmUserIds);
@@ -1026,59 +1807,12 @@ class ProposalController extends Controller
         $additionalData = [];
 
         foreach ($proposals as $proposal) {
-            // Get research agenda - check matrixOfCompliance first, then direct column
-            $researchAgenda = null;
-            
-            // Get matrixOfCompliance once for data extraction
-            $rawMatrix = $proposal->getRawOriginal('matrixOfCompliance');
-            $matrixOfCompliance = null;
-            if ($rawMatrix) {
-                if (is_string($rawMatrix)) {
-                    $matrixOfCompliance = json_decode($rawMatrix, true);
-                } else {
-                    $matrixOfCompliance = $rawMatrix;
-                }
-            }
-            
-            // Check matrixOfCompliance directly (bypass accessor)
-            if ($matrixOfCompliance && is_array($matrixOfCompliance) && isset($matrixOfCompliance['researchAgenda']) && !empty($matrixOfCompliance['researchAgenda'])) {
-                $researchAgenda = $matrixOfCompliance['researchAgenda'];
-            }
-            
-            // If still empty, try the accessor (which also reads from matrixOfCompliance)
-            if (empty($researchAgenda)) {
-                $matrixAgenda = $proposal->researchAgenda;
-                if (!empty($matrixAgenda) && is_array($matrixAgenda)) {
-                    $researchAgenda = $matrixAgenda;
-                }
-            }
-            
-            // Final fallback to direct column
-            if (empty($researchAgenda)) {
-                $rawAgenda = $proposal->getRawOriginal('researchAgenda');
-                if ($rawAgenda !== null) {
-                    if (is_string($rawAgenda)) {
-                        $decoded = json_decode($rawAgenda, true);
-                        $researchAgenda = json_last_error() === JSON_ERROR_NONE && is_array($decoded) && !empty($decoded) ? $decoded : null;
-                    } elseif (is_array($rawAgenda) && !empty($rawAgenda)) {
-                        $researchAgenda = $rawAgenda;
-                    }
-                }
-            }
-            
-            $agendas = $researchAgenda ?? [];
+            $agendas = $proposal->researchAgenda ?? [];
             $status = $proposal->statusID;
 
             foreach ($agendas as $agenda) {
-                // Normalize agenda value (handle both string and array formats)
-                $normalizedAgenda = is_string($agenda) ? trim($agenda) : (is_array($agenda) ? ($agenda['name'] ?? $agenda['value'] ?? null) : $agenda);
-                
-                if ($normalizedAgenda === '' || $normalizedAgenda === null) {
-                    continue;
-                }
-                
-                $match = $this->matchOfficialAgenda($normalizedAgenda, $officialAgendas);
-                $key = $match ?? $this->formatAgendaLabel($normalizedAgenda);
+                $match = $this->matchOfficialAgenda($agenda, $officialAgendas);
+                $key = $match ?? $this->formatAgendaLabel($agenda);
 
                 $bucket = $match !== null ? $officialData[$match] : ($additionalData[$key] ?? [
                     'name' => $key,
@@ -1439,10 +2173,11 @@ class ProposalController extends Controller
             ], 403);
         }
 
-        // Only include proposals that have been endorsed by CM
-        // Exclude archived proposals
-        $query = Proposal::with(['status', 'endorsements', 'user.researchCenter', 'user.department'])
-            ->whereNull('archivedByRDD');
+        // IMPORTANT: For statistics, include BOTH archived and non-archived proposals
+        // This ensures statistics remain as real-time numbers and are NOT deducted when RDD endorses
+        // When CM endorses, statistics are added/updated
+        // When RDD endorses, statistics remain unchanged (not deducted)
+        $query = Proposal::with(['status', 'endorsements', 'user.researchCenter', 'user.department']);
         
         // Get all CM user IDs
         $cmUserIds = User::whereHas('role', function($q) {
@@ -1450,18 +2185,9 @@ class ProposalController extends Controller
         })->pluck('userID')->toArray();
         
         // Only include proposals with approved endorsements from CM users
+        // This includes both archived and non-archived proposals
         $query->whereHas('endorsements', function ($q) use ($cmUserIds) {
             $q->whereIn('endorserID', $cmUserIds)
-              ->where('endorsementStatus', 'approved');
-        });
-        
-        // Exclude proposals that RDD has already endorsed/archived
-        $rddUserIds = User::whereHas('role', function($q) {
-            $q->where('userRole', 'RDD');
-        })->pluck('userID')->toArray();
-        
-        $query->whereDoesntHave('endorsements', function ($q) use ($rddUserIds) {
-            $q->whereIn('endorserID', $rddUserIds)
               ->where('endorsementStatus', 'approved');
         });
         
@@ -1695,6 +2421,212 @@ class ProposalController extends Controller
     }
 
     /**
+     * Get proposals for CM's "For Revision" panel
+     * Returns proposals with statusID 4 (For Revision) from CM's research center
+     * that haven't been endorsed by the current CM after resubmission
+     */
+    public function getCmForRevisionProposals(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $user->loadMissing('role');
+
+            // Only CM users can access this endpoint
+            if ($user->role?->userRole !== 'CM') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only CM users can access this endpoint.'
+                ], 403);
+            }
+
+            if (!$user->researchCenterID) {
+                return response()->json([
+                    'success' => true,
+                    'data' => [],
+                    'debug' => [
+                        'message' => 'CM user has no research center assigned',
+                        'user_id' => $user->userID
+                    ]
+                ]);
+            }
+
+            // Get all proposals for revision from CM's research center
+            // Include proposals with:
+            // 1. statusID = 4 (For Revision) - original proposals sent for revision
+            // 2. statusID = 1 AND resubmittedAfterRevision IS NOT NULL - resubmitted proposals (status changed to 1 but still need to be in For Revision)
+            $query = Proposal::with([
+                'status:statusID,statusName,statusDescription',
+                'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
+                'user:userID,firstName,lastName,email,researchCenterID,departmentID',
+                'user.department:departmentID,name',
+                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt'
+            ])
+            ->whereHas('user', function($q) use ($user) {
+                $q->where('researchCenterID', $user->researchCenterID);
+            })
+            ->where(function($q) use ($user) {
+                // Original proposals sent for revision (statusID = 4)
+                $q->where(function($status4Q) use ($user) {
+                    $status4Q->where('statusID', 4)
+                             // Exclude if CM has endorsed twice
+                             ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                                 [$user->userID, 'approved']);
+                })
+                // OR resubmitted proposals (statusID = 1 but resubmittedAfterRevision is set)
+                ->orWhere(function($subQ) use ($user) {
+                    $subQ->where('statusID', 1)
+                         ->whereNotNull('resubmittedAfterRevision')
+                         // Exclude if CM has endorsed twice
+                         ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
+                             [$user->userID, 'approved']);
+                });
+            });
+
+            $allProposals = $query->get();
+
+            // Double-check: Filter out any proposals where CM has endorsed twice (safety check)
+            $filteredProposals = $allProposals->filter(function($proposal) use ($user) {
+                $cmEndorsements = $proposal->endorsements->filter(function($endorsement) use ($user) {
+                    return $endorsement->endorserID === $user->userID 
+                        && $endorsement->endorsementStatus === 'approved';
+                });
+                // Exclude if CM has endorsed twice or more
+                return $cmEndorsements->count() < 2;
+            });
+
+            // Log for debugging
+            Log::info('CM For Revision Query Results', [
+                'user_id' => $user->userID,
+                'research_center_id' => $user->researchCenterID,
+                'total_proposals_before_filter' => $allProposals->count(),
+                'filtered_proposals_count' => $filteredProposals->count(),
+                'proposal_ids' => $filteredProposals->pluck('proposalID')->toArray(),
+                'endorsement_counts' => $filteredProposals->map(function($p) use ($user) {
+                    $count = $p->endorsements->filter(function($e) use ($user) {
+                        return $e->endorserID === $user->userID && $e->endorsementStatus === 'approved';
+                    })->count();
+                    return ['proposal_id' => $p->proposalID, 'endorsement_count' => $count];
+                })->toArray()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $filteredProposals->values()->all(),
+                'debug' => [
+                    'total_proposals_in_center' => $allProposals->count(),
+                    'filtered_proposals_count' => $filteredProposals->count(),
+                    'research_center_id' => $user->researchCenterID
+                ]
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching CM for revision proposals: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch proposals for revision',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred'
+            ], 500);
+        }
+    }
+
+    /**
+     * Get proposals for RDD's "For Revision" panel
+     * IMPORTANT: RDD's For Revision is at a different level than CM/Proponent's For Revision
+     * This should ONLY show proposals that:
+     * 1. Have been endorsed by CM (forwarded to RDD level)
+     * 2. Have been reviewed by RDD and sent for revision (statusID = 4 set by RDD)
+     * 3. OR have been resubmitted after RDD sent for revision
+     * 
+     * DO NOT include proposals that are still at CM/Proponent level (statusID = 4 but not yet reviewed by RDD)
+     */
+    public function getRddForRevisionProposals(Request $request): JsonResponse
+    {
+        try {
+            $user = Auth::user();
+            $user->loadMissing('role');
+
+            // Only RDD users can access this endpoint
+            if ($user->role?->userRole !== 'RDD') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Unauthorized. Only RDD users can access this endpoint.'
+                ], 403);
+            }
+
+            // Get all CM user IDs
+            $cmUserIds = User::whereHas('role', function ($q) {
+                $q->where('userRole', 'CM');
+            })->pluck('userID')->toArray();
+
+            // Get all RDD user IDs
+            $rddUserIds = User::whereHas('role', function ($q) {
+                $q->where('userRole', 'RDD');
+            })->pluck('userID')->toArray();
+
+            // RDD's For Revision should ONLY show proposals that:
+            // 1. Have been endorsed by CM (forwarded to RDD level)
+            // 2. Have been reviewed by RDD (have an endorsement record from RDD, regardless of status)
+            //    This ensures we only show proposals at the RDD level, not CM/Proponent level
+            // 3. Have statusID = 4 (sent for revision by RDD) OR statusID = 1 with resubmittedAfterRevision (resubmitted after RDD revision)
+            $query = Proposal::with([
+                'status:statusID,statusName,statusDescription',
+                'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
+                'user:userID,firstName,lastName,email,researchCenterID,departmentID',
+                'user.department:departmentID,name',
+                'user.researchCenter:centerID,centerName,name',
+                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt'
+            ])
+            ->whereNull('archivedByRDD')
+            // Must have been endorsed by CM (forwarded to RDD level)
+            ->whereHas('endorsements', function ($query) use ($cmUserIds) {
+                $query->where('endorsementStatus', 'approved')
+                    ->whereIn('endorserID', $cmUserIds);
+            })
+            // CRITICAL: Must have been reviewed by RDD (has an endorsement from RDD)
+            // This ensures we only show proposals at RDD level, excluding CM/Proponent level proposals
+            ->whereHas('endorsements', function ($query) use ($rddUserIds) {
+                $query->whereIn('endorserID', $rddUserIds);
+                // Include both approved and rejected/revision endorsements from RDD
+            })
+            ->where(function($q) {
+                // Proposals sent for revision by RDD (statusID = 4)
+                $q->where('statusID', 4)
+                // OR resubmitted proposals after RDD sent for revision (statusID = 1 but resubmittedAfterRevision is set)
+                ->orWhere(function($subQ) {
+                    $subQ->where('statusID', 1)
+                         ->whereNotNull('resubmittedAfterRevision');
+                });
+            });
+
+            $allProposals = $query->get();
+
+            Log::info('RDD For Revision proposals fetched', [
+                'count' => $allProposals->count(),
+                'user_id' => $user->userID
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => $allProposals->values()->all()
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error fetching RDD for revision proposals: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'user_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to fetch proposals for revision',
+                'error' => config('app.debug') ? $e->getMessage() : 'An error occurred'
+            ], 500);
+        }
+    }
+
+    /**
      * Clear proposal cache for all users
      * 
      * @param int $proposalId
@@ -1715,12 +2647,34 @@ class ProposalController extends Controller
                         Cache::getRedis()->del($keys);
                     }
                 } else {
-                    // For non-Redis stores, we can't use wildcard patterns
-                    // Instead, we'll clear the cache entry for the current user if we have access to it
-                    // Note: This is a limitation - we can't clear all user-specific caches for this proposal
-                    // without knowing all user IDs. Consider using cache tags if your store supports them.
-                    Log::info("Cache wildcard pattern not supported for non-Redis store. Skipping cache clear for pattern: {$pattern}");
+                    // For non-Redis stores, try to clear using cache tags if supported
+                    if (method_exists($store, 'tags')) {
+                        try {
+                            Cache::tags(["proposal_{$proposalId}"])->flush();
+                        } catch (\Exception $e) {
+                            // Tags might not be supported, fall back to manual clearing
+                            Log::info("Cache tags not supported, attempting manual cache clear");
+                        }
+                    }
+                    
+                    // Also try to clear common cache keys manually
+                    // Get all users who might have cached this proposal
+                    $users = \App\Models\User::pluck('userID');
+                    foreach ($users as $userId) {
+                        $cacheKey = "proposal_{$proposalId}_user_{$userId}";
+                        Cache::forget($cacheKey);
+                    }
+                    
+                    // Clear the general proposal cache
+                    Cache::forget("proposal_{$proposalId}");
                 }
+                
+                // Also clear any list caches that might include this proposal
+                Cache::forget("cm_for_revision_proposals");
+                Cache::forget("rdd_for_revision_proposals");
+                Cache::forget("proponent_proposals");
+                
+                Log::info("Proposal cache cleared", ['proposal_id' => $proposalId]);
             } catch (\Exception $e) {
                 Log::warning("Failed to clear proposal cache: " . $e->getMessage());
             }

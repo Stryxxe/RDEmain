@@ -235,6 +235,59 @@ const UserManagement = () => {
         }
     };
 
+    const handleBulkActivate = async () => {
+        if (selectedUsers.length === 0) {
+            await window.customAlert("Please select users to activate", 'Warning');
+            return;
+        }
+
+        // Filter to only pending users
+        const pendingUsers = paginatedUsers.filter(user => {
+            const userId = user.id || user.userID;
+            return selectedUsers.includes(userId) && user.status === 'pending';
+        });
+
+        if (pendingUsers.length === 0) {
+            await window.customAlert("No pending users selected. Please select users with 'pending' status.", 'Warning');
+            return;
+        }
+
+        const confirmed = await window.customConfirm(
+            `Are you sure you want to activate ${pendingUsers.length} selected user(s)? Activation emails will be sent to all activated users.`,
+            "Confirm Activation"
+        );
+        
+        if (!confirmed) return;
+
+        try {
+            const userIds = pendingUsers.map(u => u.id || u.userID);
+            const response = await fetch('/api/admin/users/bulk-activate', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+                },
+                credentials: 'include',
+                body: JSON.stringify({ user_ids: userIds })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                await window.customAlert('', data.message || `${data.activated_count} user(s) activated successfully!`, 3000);
+                await fetchUsers();
+                setSelectedUsers([]);
+            } else {
+                const errorData = await response.json();
+                const errorMessage = errorData?.message || "Error activating users. Please try again.";
+                await window.customAlert(errorMessage, 'Error');
+            }
+        } catch (error) {
+            console.error('Error activating users:', error);
+            await window.customAlert("Error activating users. Please try again.", 'Error');
+        }
+    };
+
     const handleBulkDelete = async () => {
         if (selectedUsers.length === 0) {
             await window.customAlert("Please select users to delete", 'Warning');
@@ -352,15 +405,39 @@ const UserManagement = () => {
                     </div>
                 <div className="flex space-x-2">
                     {selectedUsers.length > 0 && (
-                        <button
-                            onClick={handleBulkDelete}
-                            className="admin-button-danger flex items-center space-x-2"
-                        >
-                            <FiTrash2 className="w-4 h-4" />
-                            <span>
-                                Delete Selected ({selectedUsers.length})
-                            </span>
-                        </button>
+                        <>
+                            {(() => {
+                                // Check if any selected users have pending status
+                                const pendingSelectedUsers = paginatedUsers.filter(user => {
+                                    const userId = user.id || user.userID;
+                                    return selectedUsers.includes(userId) && user.status === 'pending';
+                                });
+                                
+                                if (pendingSelectedUsers.length > 0) {
+                                    return (
+                                        <button
+                                            onClick={handleBulkActivate}
+                                            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center space-x-2 transition-colors"
+                                        >
+                                            <FiCheckCircle className="w-4 h-4" />
+                                            <span>
+                                                Activate Selected ({pendingSelectedUsers.length})
+                                            </span>
+                                        </button>
+                                    );
+                                }
+                                return null;
+                            })()}
+                            <button
+                                onClick={handleBulkDelete}
+                                className="admin-button-danger flex items-center space-x-2"
+                            >
+                                <FiTrash2 className="w-4 h-4" />
+                                <span>
+                                    Delete Selected ({selectedUsers.length})
+                                </span>
+                            </button>
+                        </>
                     )}
                     <button
                         onClick={() => setShowUserForm(true)}
@@ -455,7 +532,7 @@ const UserManagement = () => {
                                 <th>User</th>
                                 <th>Role</th>
                                 <th>Status</th>
-                                <th>Department</th>
+                                <th>Academic Unit</th>
                                 <th>Research Center</th>
                                 <th>Action</th>
                             </tr>
