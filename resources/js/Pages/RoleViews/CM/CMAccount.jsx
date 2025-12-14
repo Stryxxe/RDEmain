@@ -329,7 +329,7 @@ const CMAccount = () => {
                             <div>
                                 <label className="block text-base font-medium text-gray-700 mb-2">
                                     <Building className="inline w-4 h-4 mr-2" />
-                                    Department
+                                    Academic Unit
                                 </label>
                                 <p className="text-gray-900 py-2 text-base">
                                     {formData.department || "Not specified"}

@@ -43,8 +43,10 @@ const SubmitPage = () => {
 
             // Check if user is a Proponent - only redirect if NOT a proponent
             // Don't redirect if already on a proponent route to prevent loops
-            if (currentUser.role?.userRole !== "Proponent" && 
-                !currentPath.startsWith("/proponent")) {
+            if (
+                currentUser.role?.userRole !== "Proponent" &&
+                !currentPath.startsWith("/proponent")
+            ) {
                 router.visit("/dashboard");
                 return;
             }
@@ -52,10 +54,10 @@ const SubmitPage = () => {
 
         return () => clearTimeout(checkAuth);
     }, [currentUser]);
-    
+
     // Get dynamic upload settings from backend
     const { maxFileSizeMB, loading: settingsLoading } = useUploadSettings();
-    
+
     const [formData, setFormData] = useState({
         reportFile: null,
         reportTitle: "",
@@ -180,11 +182,11 @@ const SubmitPage = () => {
         const fetchRoles = async () => {
             try {
                 setRolesLoading(true);
-                const data = await apiService.get('/project-roles/active');
+                const data = await apiService.get("/project-roles/active");
                 const list = Array.isArray(data?.data) ? data.data : [];
                 setProjectRoles(list);
             } catch (e) {
-                console.warn('Failed to load project roles');
+                console.warn("Failed to load project roles");
             } finally {
                 setRolesLoading(false);
             }
@@ -450,9 +452,9 @@ const SubmitPage = () => {
     return (
         <div className="max-w-4xl w-full">
             <div className="mb-4">
-                <Breadcrumbs items={[
-                    { label: 'Submit Proposal', href: null }
-                ]} />
+                <Breadcrumbs
+                    items={[{ label: "Submit Proposal", href: null }]}
+                />
             </div>
             <div className="text-center mb-8">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
@@ -600,23 +602,41 @@ const SubmitPage = () => {
                 </div>
 
                 <div className="mb-8">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Submitting Researcher</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Submitting Researcher
+                    </label>
                     <div className="flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <div>
-                            <div className="text-gray-900 font-medium">{currentUser?.fullName || `${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`}</div>
-                            <div className="text-xs text-gray-500">Proponent</div>
+                            <div className="text-gray-900 font-medium">
+                                {currentUser?.fullName ||
+                                    `${currentUser?.firstName || ""} ${
+                                        currentUser?.lastName || ""
+                                    }`}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                                Proponent
+                            </div>
                         </div>
                         <div className="w-64">
-                            <label className="block text-xs text-gray-600 mb-1">Project Role</label>
+                            <label className="block text-xs text-gray-600 mb-1">
+                                Project Role
+                            </label>
                             <select
                                 value={submitterProjectRoleID || ""}
-                                onChange={(e) => setSubmitterProjectRoleID(e.target.value)}
+                                onChange={(e) =>
+                                    setSubmitterProjectRoleID(e.target.value)
+                                }
                                 disabled={rolesLoading}
                                 className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-red-500 focus:border-red-500"
                             >
                                 <option value="">Select role...</option>
-                                {projectRoles.map(r => (
-                                    <option key={r.projectRoleID} value={r.projectRoleID}>{r.roleName}</option>
+                                {projectRoles.map((r) => (
+                                    <option
+                                        key={r.projectRoleID}
+                                        value={r.projectRoleID}
+                                    >
+                                        {r.roleName}
+                                    </option>
                                 ))}
                             </select>
                         </div>
@@ -624,11 +644,19 @@ const SubmitPage = () => {
                 </div>
                 <div className="mb-8">
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Additional Proponents <span className="text-gray-400 font-normal">(optional)</span>
+                        Additional Proponents{" "}
+                        <span className="text-gray-400 font-normal">
+                            (optional)
+                        </span>
                     </label>
                     <AsyncProponentSelect
                         value={formData.proponents}
-                        onChange={(list) => setFormData(prev => ({ ...prev, proponents: list }))}
+                        onChange={(list) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                proponents: list,
+                            }))
+                        }
                         placeholder="Type a name to add co-proponents"
                     />
                 </div>
@@ -642,7 +670,12 @@ const SubmitPage = () => {
                         </label>
                         <DragDropUpload
                             selectedFile={formData.setiFile}
-                            onFileSelect={(file) => setFormData(prev => ({ ...prev, setiFile: file }))}
+                            onFileSelect={(file) =>
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    setiFile: file,
+                                }))
+                            }
                             maxSize={`${maxFileSizeMB}MB`}
                             acceptedTypes="PDF, DOC, DOCX"
                         />
@@ -655,7 +688,12 @@ const SubmitPage = () => {
                         </label>
                         <DragDropUpload
                             selectedFile={formData.gadFile}
-                            onFileSelect={(file) => setFormData(prev => ({ ...prev, gadFile: file }))}
+                            onFileSelect={(file) =>
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    gadFile: file,
+                                }))
+                            }
                             maxSize={`${maxFileSizeMB}MB`}
                             acceptedTypes="PDF, DOC, DOCX"
                         />
@@ -668,7 +706,12 @@ const SubmitPage = () => {
                         </label>
                         <DragDropUpload
                             selectedFile={formData.matrixFile}
-                            onFileSelect={(file) => setFormData(prev => ({ ...prev, matrixFile: file }))}
+                            onFileSelect={(file) =>
+                                setFormData((prev) => ({
+                                    ...prev,
+                                    matrixFile: file,
+                                }))
+                            }
                             maxSize={`${maxFileSizeMB}MB`}
                             acceptedTypes="PDF, DOC, DOCX"
                         />
@@ -683,7 +726,8 @@ const SubmitPage = () => {
                         maxFiles={10}
                         maxSizeMB={maxFileSizeMB}
                         label="Other Supporting Documents (Optional)"
-                        description="Attach any other approvals or supporting files. Accepted formats: PDF, DOC, DOCX."
+                        description="Attach any other approvals or supporting files."
+                        allowAllFileTypes={true}
                     />
                 </div>
 
@@ -715,9 +759,7 @@ const SubmitPage = () => {
 SubmitPage.layout = (page) => (
     <AppLayout>
         <RoleBasedLayout roleName="Proponent">
-            <div className="flex justify-center">
-                {page}
-            </div>
+            <div className="flex justify-center">{page}</div>
         </RoleBasedLayout>
     </AppLayout>
 );

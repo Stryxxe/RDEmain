@@ -496,7 +496,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                                        Department
+                                        Academic Unit
                                     </label>
                                     <div className="relative">
                                         <FiHome
@@ -512,7 +512,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 } bg-gray-50`}
                                             >
                                                 <span className="text-gray-500 text-sm">
-                                                    Loading departments...
+                                                    Loading academic units...
                                                 </span>
                                             </div>
                                         ) : departments.length > 0 ? (
@@ -532,7 +532,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                                 }`}
                                             >
                                                 <option value="">
-                                                    Select a department
+                                                    Select an Academic Unit
                                                 </option>
                                                 {departments.map((dept) => (
                                                     <option
@@ -563,7 +563,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                                         ? "bg-gray-100 cursor-not-allowed opacity-60"
                                                         : ""
                                                 }`}
-                                                placeholder="Enter department"
+                                                placeholder="Enter Academic Unit"
                                             />
                                         )}
                                     </div>
@@ -604,8 +604,8 @@ const UserFormFixed = ({ user, onClose }) => {
                                             >
                                                 <option value="">
                                                     {formData.department 
-                                                        ? "Select a research center for this department"
-                                                        : "Select Department first"}
+                                                        ? "Select a research center for this Academic Unit"
+                                                        : "Select Academic Unit first"}
                                                 </option>
                                                 {formData.department && researchCenters.map((rc) => (
                                                     <option
@@ -634,7 +634,7 @@ const UserFormFixed = ({ user, onClose }) => {
                                                         ? 'bg-gray-100 cursor-not-allowed opacity-60' 
                                                         : ''
                                                 }`}
-                                                placeholder={formData.department ? "Enter research center" : "Select Department first"}
+                                                placeholder={formData.department ? "Enter research center" : "Select Academic Unit first"}
                                             />
                                         )}
                                     </div>

@@ -89,7 +89,7 @@ class RegisteredUserController extends Controller
                     // Ensure research center belongs to selected department
                     if ($departmentID && $researchCenter->departmentID != $departmentID) {
                         return back()->withErrors([
-                            'researchCenter' => 'The selected research center does not belong to the selected department.'
+                            'researchCenter' => 'The selected research center does not belong to the selected Academic Unit.'
                         ]);
                     }
                 }

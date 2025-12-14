@@ -156,14 +156,24 @@ export default function Login({ status, canResetPassword }) {
                             </button>
                         </form>
 
-                        <div className="text-center mt-6">
-                            <span className="text-gray-600">Don't have an account? </span>
-                            <Link
-                                href="/register"
-                                className="text-orange-500 hover:text-orange-600 underline font-semibold transition duration-300"
-                            >
-                                Create Account
-                            </Link>
+                        <div className="text-center mt-6 space-y-2">
+                            <div>
+                                <Link
+                                    href="/password/request-otp"
+                                    className="text-orange-500 hover:text-orange-600 underline font-semibold transition duration-300 text-sm"
+                                >
+                                    Forgot Password?
+                                </Link>
+                            </div>
+                            <div>
+                                <span className="text-gray-600">Don't have an account? </span>
+                                <Link
+                                    href="/register"
+                                    className="text-orange-500 hover:text-orange-600 underline font-semibold transition duration-300"
+                                >
+                                    Create Account
+                                </Link>
+                            </div>
                         </div>
                         
                         {/* Temporarily hidden */}

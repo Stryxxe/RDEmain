@@ -32,6 +32,10 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [showEditProposal, setShowEditProposal] = useState(false);
   const [fullProposal, setFullProposal] = useState(null);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionComments, setRevisionComments] = useState('');
+  const [isSendingForRevision, setIsSendingForRevision] = useState(false);
+  const [revisionImages, setRevisionImages] = useState([]);
 
   useEffect(() => {
     const fetchFullProposal = async () => {
@@ -131,6 +135,18 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
 
   const researchPaperPath = getResearchPaperPath();
 
+  // Helper function to check if a file is a research proposal file
+  const isResearchProposalFile = (file) => {
+    const fileName = file.fileName?.toLowerCase() || "";
+    return (
+      file.fileType === "concept_paper" ||
+      file.fileType === "report" ||
+      fileName.includes("concept") ||
+      fileName.includes("research") ||
+      fileName.includes("paper")
+    );
+  };
+
   const getAttachedDocuments = () => {
     if (!fullProposal?.files || !Array.isArray(fullProposal.files) || fullProposal.files.length === 0) {
       return [];
@@ -145,11 +161,19 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
       'supporting_document': 'Supporting Document'
     };
 
-    // Exclude SETI, GAD, and MOC from attached documents as they have their own section
+    // Exclude SETI, GAD, MOC, and research proposal files from attached documents
     const requiredDocTypes = ['seti_scorecard', 'gad_certificate', 'matrix_compliance'];
 
     const filtered = fullProposal.files
-      .filter(file => file.filePath && !requiredDocTypes.includes(file.fileType))
+      .filter(file => {
+        // Exclude files without paths
+        if (!file.filePath) return false;
+        // Exclude SETI, GAD, MOC files
+        if (requiredDocTypes.includes(file.fileType)) return false;
+        // Exclude research proposal files to avoid duplication
+        if (isResearchProposalFile(file)) return false;
+        return true;
+      })
       .map(file => {
         const fileType = file.fileType || '';
         const displayName = fileTypeMap[fileType] || file.fileName || 'Document';
@@ -262,6 +286,117 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
   const handleEndorsementCancel = () => {
     setShowEndorsementModal(false);
     setEndorsementComments('');
+  };
+
+  const handleForRevision = () => {
+    setShowRevisionModal(true);
+  };
+
+  const handleRevisionCancel = () => {
+    setShowRevisionModal(false);
+    setRevisionComments('');
+    setRevisionImages([]);
+  };
+
+  const handleRevisionCommentsChange = (e) => {
+    setRevisionComments(e.target.value);
+  };
+
+  const handleImagePaste = (e) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf('image') !== -1) {
+        e.preventDefault();
+        const file = items[i].getAsFile();
+        handleImageAdd(file);
+        break;
+      }
+    }
+  };
+
+  const handleImageUpload = (e) => {
+    const files = Array.from(e.target.files);
+    files.forEach(file => {
+      if (file.type.startsWith('image/')) {
+        handleImageAdd(file);
+      }
+    });
+    // Reset input
+    e.target.value = '';
+  };
+
+  const handleImageAdd = (file) => {
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      window.customAlert('Image size must be less than 5MB', 'Error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const imageData = {
+        id: Date.now() + Math.random(),
+        file: file,
+        preview: reader.result,
+        name: file.name
+      };
+      setRevisionImages(prev => [...prev, imageData]);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveImage = (imageId) => {
+    setRevisionImages(prev => prev.filter(img => img.id !== imageId));
+  };
+
+  const handleSendForRevision = async () => {
+    if (isSendingForRevision) return;
+
+    try {
+      setIsSendingForRevision(true);
+      
+      // Prepare update data with images if present
+      const updateData = {
+        statusID: 4, // Revisions Required status
+        revisionComments: revisionComments
+      };
+
+      // If there are images, add them to the data object
+      // The updateProposal function will handle FormData conversion
+      if (revisionImages.length > 0) {
+        updateData.revisionImages = revisionImages.map(img => img.file);
+      }
+
+      const response = await updateProposal(fullProposal.proposalID || fullProposal.id, updateData);
+      
+      if (response && response.success) {
+        setShowRevisionModal(false);
+        setRevisionComments('');
+        setRevisionImages([]);
+        
+        await window.customAlert('', 'Proposal sent for revision successfully!', 3000);
+        
+        setTimeout(() => {
+          router.visit('/rdd/review-proposal', { replace: true });
+        }, 3500);
+      } else {
+        await window.customAlert('Failed to send proposal for revision: ' + (response?.message || 'Unknown error'));
+      }
+    } catch (error) {
+      console.error('Error sending proposal for revision:', error);
+      let errorMessage = 'Unknown error';
+      
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      await window.customAlert('Error sending proposal for revision: ' + errorMessage);
+    } finally {
+      setIsSendingForRevision(false);
+    }
   };
 
   const handleDocumentClick = (document) => {
@@ -391,6 +526,9 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
       setIsEndorsing(true);
 
       const updateData = {
+        researchTitle: formData.researchTitle || fullProposal?.researchTitle,
+        description: formData.description || fullProposal?.description,
+        objectives: formData.objectives || fullProposal?.objectives,
         researchAgenda: formData.researchAgenda || [],
         dostSPs: formData.dostSPs || [],
         sustainableDevelopmentGoals: formData.sustainableDevelopmentGoals || [],
@@ -858,7 +996,7 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
         )}
 
         {/* Other Supporting Documents - Separate Container */}
-        {attachedDocuments.filter(d => !['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).length > 0 && (
+        {attachedDocuments.length > 0 && (
           <div className="mt-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center">
@@ -873,12 +1011,12 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
                 </div>
               </div>
               <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-bold bg-orange-100 text-orange-700">
-                {attachedDocuments.filter(d => !['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).length} files
+                {attachedDocuments.length} files
               </span>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {attachedDocuments.filter(d => !['seti_scorecard', 'gad_certificate', 'matrix_compliance'].includes(d.fileType)).map((document, index) => (
+              {attachedDocuments.map((document, index) => (
                 <div key={index} className="p-6 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-shadow">
                   <p className="text-sm font-semibold text-gray-900 mb-1">{document.fileName}</p>
                   {document.fileSize && <p className="text-xs text-gray-500 mb-4">{document.fileSize}</p>}
@@ -912,15 +1050,26 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
 
         <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 mt-8">
             {!isEndorsed && (
-              <button
-                onClick={() => setShowEditProposal(true)}
-                className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
-                </svg>
-                Edit Proposal
-              </button>
+              <>
+                <button
+                  onClick={() => setShowEditProposal(true)}
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
+                  </svg>
+                  Edit Proposal
+                </button>
+                <button
+                  onClick={handleForRevision}
+                  className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-semibold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  For Revision
+                </button>
+              </>
             )}
             {!isEndorsed && (
               <button
@@ -939,6 +1088,143 @@ const RDDEndorsementDetail = ({ id: proposalId }) => {
 
 
         {showDocumentModal && <DocumentModal />}
+
+        {/* For Revision Modal */}
+        {showRevisionModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-xl shadow-2xl max-w-xl w-full animate-fadeIn">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-cyan-50">
+                <div className="flex items-center space-x-2">
+                  <div className="w-9 h-9 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-lg font-bold text-gray-900">Send for Revision</h2>
+                </div>
+                <button
+                  onClick={handleRevisionCancel}
+                  className="text-gray-400 hover:text-gray-600 hover:bg-white p-1 rounded-lg transition-all duration-200"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Content */}
+              <div className="p-5">
+                <div className="mb-5 bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
+                  <h3 className="text-sm font-bold text-gray-900 mb-2 leading-tight">
+                    {fullProposal?.researchTitle || fullProposal?.title || proposal?.researchTitle || proposal?.title}
+                  </h3>
+                  <div className="flex items-center text-sm text-gray-700">
+                    <svg className="w-4 h-4 mr-2 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span className="font-medium">By:</span>
+                    <span className="ml-2">{fullProposal?.user?.fullName || fullProposal?.author || proposal?.user?.fullName || proposal?.author || 'Unknown'}</span>
+                  </div>
+                </div>
+
+                <div className="mb-5">
+                  <label htmlFor="revisionComments" className="flex items-center text-sm font-semibold text-gray-800 mb-2">
+                    <svg className="w-4 h-4 mr-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                    </svg>
+                    Revision Comments
+                    <span className="text-xs text-gray-500 font-normal ml-2">(Optional)</span>
+                  </label>
+                  <textarea
+                    id="revisionComments"
+                    value={revisionComments}
+                    onChange={handleRevisionCommentsChange}
+                    onPaste={handleImagePaste}
+                    rows={3}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all resize-none"
+                    placeholder="Add revision comments or notes for the proponent... (You can paste images here)"
+                  />
+                  
+                  {/* Image Upload Button */}
+                  <div className="mt-2 flex items-center gap-2">
+                    <label className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-md hover:bg-blue-100 cursor-pointer transition-colors">
+                      <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                      </svg>
+                      Upload Image
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        multiple
+                      />
+                    </label>
+                    <span className="text-xs text-gray-500">or paste image from clipboard</span>
+                  </div>
+
+                  {/* Image Previews */}
+                  {revisionImages.length > 0 && (
+                    <div className="mt-3 grid grid-cols-2 gap-2">
+                      {revisionImages.map((image) => (
+                        <div key={image.id} className="relative group">
+                          <img
+                            src={image.preview}
+                            alt={image.name}
+                            className="w-full h-24 object-cover rounded-md border border-gray-300"
+                          />
+                          <button
+                            onClick={() => handleRemoveImage(image.id)}
+                            className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                            type="button"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                          <p className="text-xs text-gray-600 mt-1 truncate">{image.name}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleRevisionCancel}
+                    disabled={isSendingForRevision}
+                    className="px-4 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors disabled:opacity-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSendForRevision}
+                    disabled={isSendingForRevision}
+                    className="px-6 py-2 text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-lg transition-all disabled:opacity-50 flex items-center font-semibold shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 disabled:transform-none"
+                  >
+                    {isSendingForRevision ? (
+                      <>
+                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d={"M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"}></path>
+                        </svg>
+                        Sending...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={"M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"} />
+                        </svg>
+                        Send for Revision
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {showEndorsementModal && (
           <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">

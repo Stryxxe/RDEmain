@@ -82,7 +82,7 @@ const RDDDashboard = () => {
                 setStatsData([
                     {
                         number: stats.total.toString(),
-                        label: "Total of Submitted Proposals",
+                        label: "Received Proposals",
                     },
                     {
                         number: stats.under_review.toString(),
@@ -90,7 +90,7 @@ const RDDDashboard = () => {
                     },
                     {
                         number: stats.completed.toString(),
-                        label: "Done/Utilized Proposals",
+                        label: "Total of Endorsed Proposals",
                     },
                 ]);
             } else {
@@ -150,8 +150,11 @@ const RDDDashboard = () => {
                                 ? `${proposal.user.firstName} ${proposal.user.lastName}`
                                 : "Unknown",
                             college:
-                                proposal.user?.department?.name ||
-                                "Unknown Department",
+                                proposal.user?.researchCenter?.centerName ||
+                                proposal.user?.researchCenter?.name ||
+                                proposal.user?.research_center?.centerName ||
+                                proposal.user?.research_center?.name ||
+                                "Not specified",
                             status: getStatusName(proposal.statusID),
                             progress: getProgress(proposal.statusID),
                             submittedDate: new Date(
@@ -280,12 +283,6 @@ const RDDDashboard = () => {
                         <div className="text-center">
                             <div className="text-red-600 text-6xl mb-4">⚠️</div>
                             <p className="text-gray-600 mb-4">{error}</p>
-                            <button
-                                onClick={fetchDashboardData}
-                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                            >
-                                Retry
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -466,72 +463,22 @@ const RDDDashboard = () => {
 
                                 {/* Actions */}
                                 <div className="flex items-center justify-center">
-                                    <button 
-                                        onClick={() => router.visit(`/rdd/proposal/${research.id}`)}
-                                        className="border border-red-500 text-red-500 bg-white px-3 py-1 rounded text-sm font-medium hover:bg-red-50 transition-colors duration-150 flex items-center gap-1"
+                                    <Link 
+                                        href={`/rdd/proposal/${research.id}`}
+                                        className="text-blue-600 hover:text-blue-800 text-sm"
                                     >
-                                        <BiShow className="text-sm" />
                                         View Details
-                                    </button>
+                                    </Link>
                                 </div>
                             </div>
                         ))}
                     </div>
 
-                    {/* Pagination */}
+                    {/* Pagination Info */}
                     {totalPages > 1 && (
                         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-200">
                             <div className="text-sm text-gray-600">
                                 Showing {indexOfFirstItem + 1} to {Math.min(indexOfLastItem, filteredResearch.length)} of {filteredResearch.length} results
-                            </div>
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => handlePageChange(currentPage - 1)}
-                                    disabled={currentPage === 1}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    Previous
-                                </button>
-                                
-                                <div className="flex gap-1">
-                                    {[...Array(totalPages)].map((_, index) => {
-                                        const pageNumber = index + 1;
-                                        // Show first, last, current, and pages around current
-                                        if (
-                                            pageNumber === 1 ||
-                                            pageNumber === totalPages ||
-                                            (pageNumber >= currentPage - 1 && pageNumber <= currentPage + 1)
-                                        ) {
-                                            return (
-                                                <button
-                                                    key={pageNumber}
-                                                    onClick={() => handlePageChange(pageNumber)}
-                                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                                                        currentPage === pageNumber
-                                                            ? 'bg-red-600 text-white'
-                                                            : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                    }`}
-                                                >
-                                                    {pageNumber}
-                                                </button>
-                                            );
-                                        } else if (
-                                            pageNumber === currentPage - 2 ||
-                                            pageNumber === currentPage + 2
-                                        ) {
-                                            return <span key={pageNumber} className="px-2 py-2 text-gray-500">...</span>;
-                                        }
-                                        return null;
-                                    })}
-                                </div>
-
-                                <button
-                                    onClick={() => handlePageChange(currentPage + 1)}
-                                    disabled={currentPage === totalPages}
-                                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    Next
-                                </button>
                             </div>
                         </div>
                     )}

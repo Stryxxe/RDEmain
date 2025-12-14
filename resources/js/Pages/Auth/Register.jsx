@@ -437,7 +437,7 @@ export default function Register() {
                                                 className="w-full px-3 py-2 text-sm rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white"
                                                 required
                                             >
-                                                <option value="">Select Department *</option>
+                                                <option value="">Select Academic Unit *</option>
                                                 {departments.map((dept) => (
                                                     <option
                                                         key={dept.departmentID || dept.id}
@@ -471,7 +471,7 @@ export default function Register() {
                                                 <option value="">
                                                     {data.department
                                                         ? 'Select Research Center'
-                                                        : 'Select Department first'}
+                                                        : 'Select Academic Unit first'}
                                                 </option>
                                                 {data.department && filteredResearchCenters.map((rc) => (
                                                     <option
@@ -491,7 +491,7 @@ export default function Register() {
                                                 filteredResearchCenters.length === 0 && (
                                                     <div className="mt-1 text-xs text-amber-600">
                                                         No research centers available for this
-                                                        department
+                                                        Academic Unit
                                                     </div>
                                                 )}
                                         </div>

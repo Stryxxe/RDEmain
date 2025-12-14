@@ -1,458 +1,93 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { router, usePage } from "@inertiajs/react";
+import { useAuth } from "../../../contexts/AuthContext";
+import ResourceGrid from "../../../Components/UI/ResourceGrid";
 import RoleBasedLayout from "../../../Components/Layouts/RoleBasedLayout";
 import AppLayout from "../../../Components/Layouts/AppLayout";
-
-const axiosInstance = window.axios.create({
-    baseURL: "/api",
-    withCredentials: true,
-});
-
-// Document card component with improved design
-const DocumentCard = ({ document, onDownload, onViewPDF }) => (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg hover:border-gray-300 transition-all duration-300 overflow-hidden group h-full flex flex-col">
-        <div className="p-6 flex-1 flex flex-col">
-            <div className="flex items-start space-x-4">
-                {/* Document icon */}
-                <div className="flex-shrink-0">
-                    <div className="w-14 h-18 bg-gradient-to-br from-red-50 to-red-100 rounded-lg flex items-center justify-center group-hover:from-red-100 group-hover:to-red-200 transition-all duration-300 border border-red-200">
-                        <svg
-                            className="w-8 h-8 text-red-600 transition-colors duration-300"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                        >
-                            <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={1.5}
-                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                            />
-                        </svg>
-                    </div>
-                </div>
-
-                {/* Document content */}
-                <div className="flex-1 min-w-0">
-                    <button
-                        onClick={() => onViewPDF(document)}
-                        className="w-full text-left focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 rounded-lg p-2 -m-2 group/button"
-                        aria-label={`View ${document.title}`}
-                    >
-                        <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-red-700 group/button-hover:text-red-700 transition-colors duration-200 line-clamp-2">
-                            {document.title}
-                        </h3>
-                        <p className="text-gray-600 text-sm mb-4 line-clamp-3 leading-relaxed">
-                            {document.description}
-                        </p>
-                    </button>
-
-                    {/* File info */}
-                    <div className="mb-4">
-                        <div className="text-sm text-gray-500 space-y-1">
-                            <p className="font-medium text-gray-700">
-                                {document.fileName}
-                            </p>
-                            <p className="text-xs">{document.fileSize}</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        {/* Download button - fixed at bottom */}
-        <div className="px-6 pb-6 mt-auto">
-            <button
-                onClick={() => onDownload(document)}
-                className="w-full bg-blue-600 hover:bg-blue-700 focus:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 text-white px-4 py-3 rounded-lg text-sm font-medium transition-all duration-200 flex items-center justify-center space-x-2 shadow-sm hover:shadow-md"
-                aria-label={`Download ${document.fileName}`}
-            >
-                <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    aria-hidden="true"
-                >
-                    <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                    />
-                </svg>
-                <span>Download</span>
-            </button>
-        </div>
-    </div>
-);
+import axios from "axios";
 
 const CMResources = () => {
-    const [searchTerm, setSearchTerm] = useState("");
-    const [showDownloadModal, setShowDownloadModal] = useState(false);
-    const [showPDFModal, setShowPDFModal] = useState(false);
-    const [selectedDocument, setSelectedDocument] = useState(null);
-    const [isDownloading, setIsDownloading] = useState(false);
-    const [documents, setDocuments] = useState([]);
+    const { user } = useAuth();
+    const { props } = usePage();
+    const currentUser = user || props?.auth?.user;
+    const [templates, setTemplates] = useState([]);
     const [loading, setLoading] = useState(true);
+
+    const axiosInstance = window.axios || axios;
+    if (!window.axios) {
+        axiosInstance.defaults.withCredentials = true;
+        axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+    }
 
     // Fetch templates from admin
     useEffect(() => {
         const fetchTemplates = async () => {
             try {
                 setLoading(true);
-                const response = await axiosInstance.get("/admin/templates/general");
-                // Map templates to document format
-                const mapped = response.data.map((template) => ({
-                    id: template.id,
-                    title: template.name,
-                    description: template.description || `Template document: ${template.name}`,
-                    fileName: template.file_name || template.name,
-                    fileSize: template.file_size || "Unknown",
-                    downloadUrl: template.url || template.download_url,
-                }));
-                setDocuments(mapped);
-            } catch (error) {
-                console.error("Failed to fetch templates:", error);
-                setDocuments([]);
+                const res = await axiosInstance.get("/admin/templates/general", {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                });
+                const list = res?.data?.data || res?.data || [];
+                setTemplates(Array.isArray(list) ? list : []);
+            } catch (e) {
+                console.error("Failed to load templates", e);
+                setTemplates([]);
             } finally {
                 setLoading(false);
             }
         };
-
         fetchTemplates();
     }, []);
 
-    // Event handlers with useCallback for performance
-    const handleDownload = useCallback((document) => {
-        setSelectedDocument(document);
-        setShowDownloadModal(true);
-    }, []);
+    // Map templates to resource format
+    const resources = templates.map((template) => ({
+        id: template.id || template.templateID,
+        title: template.name || template.fileName || "Untitled",
+        description: template.description || "Document template",
+        type: (template.type || template.fileType || "FILE").toUpperCase(),
+        fileSize: template.size || template.fileSize || "—",
+        fileName: template.name || template.fileName,
+        downloadUrl: template.url || template.filePath || "#",
+    }));
 
-    const handleViewPDF = useCallback((document) => {
-        setSelectedDocument(document);
-        setShowPDFModal(true);
-    }, []);
-
-    const confirmDownload = () => {
-        if (!selectedDocument || !selectedDocument.downloadUrl) return;
-
-        // Open download URL in new tab
-        window.open(selectedDocument.downloadUrl, "_blank");
-        closeModal();
+    const handleDownload = (resource) => {
+        if (resource.downloadUrl && resource.downloadUrl !== "#") {
+            window.open(resource.downloadUrl, "_blank");
+        }
     };
 
-    const closeModal = useCallback(() => {
-        setShowDownloadModal(false);
-        setShowPDFModal(false);
-        setSelectedDocument(null);
-        setIsDownloading(false);
-    }, []);
-
-    // Filter documents based on search term
-    const filteredDocuments = documents.filter(
-        (doc) =>
-            doc.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            doc.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    // Handle escape key to close modals
-    React.useEffect(() => {
-        const handleEscape = (event) => {
-            if (event.key === "Escape") {
-                closeModal();
-            }
-        };
-
-        if (showDownloadModal || showPDFModal) {
-            document.addEventListener("keydown", handleEscape);
-            return () => document.removeEventListener("keydown", handleEscape);
+    const handleView = (resource) => {
+        if (resource.downloadUrl && resource.downloadUrl !== "#") {
+            window.open(resource.downloadUrl, "_blank");
         }
-    }, [showDownloadModal, showPDFModal, closeModal]);
+    };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-            {/* Header Section */}
-            <div className="max-w-7xl mx-auto px-6 py-12">
-                <div className="text-center">
-                    <h1 className="text-4xl md:text-5xl font-bold mb-4 tracking-tight text-gray-900">
-                        Document Resources
+        <div className="min-h-screen bg-gray-50 py-8">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="mb-8">
+                    <h1 className="text-3xl font-bold text-gray-900">
+                        Resources
                     </h1>
-                    <p className="text-gray-600 text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-                        Access and download important documents and reports
+                    <p className="mt-2 text-gray-600">
+                        Access important documents, templates, and guidelines
+                        for research proposals.
                     </p>
                 </div>
-            </div>
 
-            <div className="max-w-7xl mx-auto px-6 py-8">
-                {/* Search Bar */}
-                <div className="mb-8">
-                    <div className="relative max-w-xl mx-auto">
-                        <input
-                            type="text"
-                            placeholder="Search documents, descriptions, or filenames..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-5 pr-12 py-4 border-2 border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-all duration-200 bg-white shadow-sm text-gray-900 placeholder-gray-500"
-                            aria-label="Search documents"
-                        />
-                        <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none">
-                            <svg
-                                className="h-6 w-6 text-gray-400"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                                aria-hidden="true"
-                            >
-                                <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                                />
-                            </svg>
-                        </div>
+                {loading ? (
+                    <div className="text-center py-12">
+                        <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-red-600 border-r-transparent"></div>
+                        <p className="mt-4 text-gray-600">Loading templates...</p>
                     </div>
-                </div>
-
-                {/* Loading state */}
-                {loading && (
-                    <div className="flex justify-center items-center py-12">
-                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
-                    </div>
-                )}
-
-                {/* Results count */}
-                {!loading && searchTerm && (
-                    <div className="mb-8 text-center">
-                        <p className="text-gray-600 bg-white rounded-full px-4 py-2 inline-block shadow-sm border">
-                            <span className="font-medium text-red-600">
-                                {filteredDocuments.length}
-                            </span>{" "}
-                            document{filteredDocuments.length !== 1 ? "s" : ""}{" "}
-                            found
-                            {searchTerm && (
-                                <>
-                                    {" "}
-                                    matching{" "}
-                                    <span className="font-medium">
-                                        "{searchTerm}"
-                                    </span>
-                                </>
-                            )}
-                        </p>
-                    </div>
-                )}
-
-                {/* Document Cards Grid */}
-                {!loading && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                        {filteredDocuments.length > 0 ? (
-                            filteredDocuments.map((document) => (
-                                <DocumentCard
-                                    key={document.id}
-                                    document={document}
-                                    onDownload={handleDownload}
-                                    onViewPDF={handleViewPDF}
-                                />
-                            ))
-                        ) : (
-                        <div className="col-span-full text-center py-16">
-                            <div className="max-w-md mx-auto">
-                                <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <svg
-                                        className="w-12 h-12 text-gray-400"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                        aria-hidden="true"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={1.5}
-                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                        />
-                                    </svg>
-                                </div>
-                                <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                                    No documents found
-                                </h3>
-                                <p className="text-gray-500 mb-6">
-                                    Try adjusting your search terms or browse
-                                    all available documents
-                                </p>
-                                {searchTerm && (
-                                    <button
-                                        onClick={() => setSearchTerm("")}
-                                        className="text-red-600 hover:text-red-700 font-medium transition-colors duration-200"
-                                    >
-                                        Clear search and show all documents
-                                    </button>
-                                )}
-                            </div>
-                        </div>
-                    )}
-                    </div>
-                )}
-
-                {/* Download Confirmation Modal */}
-                {showDownloadModal && (
-                    <div
-                        className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-                        onClick={closeModal}
-                    >
-                        <div
-                            className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 transform transition-all duration-300 scale-100"
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <div className="flex items-center mb-6">
-                                <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-4">
-                                    <svg
-                                        className="w-6 h-6 text-blue-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                        />
-                                    </svg>
-                                </div>
-                                <h3 className="text-2xl font-bold text-gray-900">
-                                    Download Document
-                                </h3>
-                            </div>
-
-                            <p className="text-gray-600 mb-8 leading-relaxed">
-                                Are you sure you want to download this document
-                                to your device?
-                            </p>
-
-                            <div className="bg-gray-50 p-6 rounded-2xl mb-8">
-                                <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                        <p className="font-semibold text-gray-900 mb-2 line-clamp-2">
-                                            {selectedDocument?.title}
-                                        </p>
-                                        <p className="text-sm text-gray-600 mb-1">
-                                            {selectedDocument?.fileName}
-                                        </p>
-                                    </div>
-                                    <div className="ml-4 flex-shrink-0">
-                                        <span className="inline-block text-xs font-medium text-gray-700 bg-white px-3 py-1 rounded-full border">
-                                            {selectedDocument?.fileSize}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end space-x-4">
-                                <button
-                                    className="px-6 py-3 rounded-2xl bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 font-medium"
-                                    onClick={closeModal}
-                                    disabled={isDownloading}
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    className="px-8 py-3 rounded-2xl bg-blue-600 text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 font-medium min-w-[120px] justify-center"
-                                    onClick={confirmDownload}
-                                    disabled={isDownloading}
-                                >
-                                    {isDownloading ? (
-                                        <>
-                                            <svg
-                                                className="animate-spin h-4 w-4 text-white"
-                                                fill="none"
-                                                viewBox="0 0 24 24"
-                                            >
-                                                <circle
-                                                    className="opacity-25"
-                                                    cx="12"
-                                                    cy="12"
-                                                    r="10"
-                                                    stroke="currentColor"
-                                                    strokeWidth="4"
-                                                ></circle>
-                                                <path
-                                                    className="opacity-75"
-                                                    fill="currentColor"
-                                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                                                ></path>
-                                            </svg>
-                                            <span>Downloading...</span>
-                                        </>
-                                    ) : (
-                                        <span>Download</span>
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                )}
-
-                {/* PDF Modal */}
-                {showPDFModal && (
-                    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50">
-                        {/* Header */}
-                        <div className="absolute top-0 left-0 right-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-                            <div className="flex items-center space-x-4">
-                                <button
-                                    onClick={closeModal}
-                                    className="p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 transition-all duration-200"
-                                    aria-label="Close PDF Viewer"
-                                >
-                                    <svg
-                                        className="w-6 h-6 text-gray-600"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M15 19l-7-7 7-7"
-                                        />
-                                    </svg>
-                                </button>
-                            </div>
-                            <div className="flex items-center space-x-2"></div>
-                        </div>
-                        {/* PDF Content - Full Screen */}
-                        <div className="absolute inset-0 pt-16">
-                            <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                                <div className="text-center">
-                                    <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <svg
-                                            className="w-8 h-8 text-gray-400"
-                                            fill="none"
-                                            stroke="currentColor"
-                                            viewBox="0 0 24 24"
-                                        >
-                                            <path
-                                                strokeLinecap="round"
-                                                strokeLinejoin="round"
-                                                strokeWidth={2}
-                                                d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"
-                                            />
-                                        </svg>
-                                    </div>
-                                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                                        {selectedDocument?.title}
-                                    </h3>
-                                    <p className="text-gray-500">
-                                        PDF Viewer would be implemented here
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                ) : (
+                    <ResourceGrid
+                        resources={resources}
+                        onDownload={handleDownload}
+                        onView={handleView}
+                        emptyMessage="No resources available at this time"
+                    />
                 )}
             </div>
         </div>

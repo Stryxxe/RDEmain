@@ -9,14 +9,14 @@ class SettingsHelper
     /**
      * Get the maximum file upload size in MB from settings
      * 
-     * @return int Maximum file size in MB (default: 20MB)
+     * @return int Maximum file size in MB (default: 50MB)
      */
     public static function getMaxFileSizeMB(): int
     {
         $path = storage_path('app/settings.json');
         
         if (!File::exists($path)) {
-            return 20; // Default 20MB
+            return 50; // Default 50MB
         }
         
         $settings = json_decode(File::get($path), true);
@@ -30,7 +30,7 @@ class SettingsHelper
             return (int) $settings['maxFileSize'];
         }
         
-        return 20; // Default 20MB
+        return 50; // Default 50MB
     }
     
     /**

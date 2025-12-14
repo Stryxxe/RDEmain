@@ -670,42 +670,6 @@ const CMProposalDetail = () => {
                                         {proposal.custom_proposal_id || `PRO-${proposal.proposalID.toString().padStart(6, "0")}`}
                                     </span>
                                 </div>
-                                <div className="flex items-center">
-                                    <svg
-                                        className="w-5 h-5 mr-2 text-gray-400"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"
-                                        />
-                                    </svg>
-                                    <span className="font-medium">Budget:</span>
-                                    <span className="ml-1">
-                                        ₱
-                                        {proposal.proposedBudget?.toLocaleString() ||
-                                            "0"}
-                                    </span>
-                                </div>
-                                <div className="flex items-center">
-                                    <svg
-                                        className="w-5 h-5 mr-2 text-gray-400"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        viewBox="0 0 24 24"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={2}
-                                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                                        />
-                                    </svg>
-                                </div>
                             </div>
                         </div>
 
@@ -764,7 +728,134 @@ const CMProposalDetail = () => {
                     <CoAuthorsCard proposal={proposal} />
                 </div>
 
-                {/* Status Timeline Section */}
+                {/* Proposal Details Section - Show when statusID is 4 (For Revision) */}
+                {proposal.statusID === 4 && (
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
+                        <div className="flex items-center mb-8">
+                            <div className="p-3 bg-blue-100 rounded-xl mr-4">
+                                <svg
+                                    className="w-6 h-6 text-blue-600"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                    />
+                                </svg>
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-bold text-gray-900">
+                                    Proposal Details
+                                </h2>
+                                <p className="text-gray-600">
+                                    View the complete proposal information
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="space-y-6">
+                            {/* Description */}
+                            {proposal.description && (
+                                <div>
+                                    <h3 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h7" />
+                                        </svg>
+                                        Description
+                                    </h3>
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                        <p className="text-gray-700 leading-relaxed text-justify w-full max-w-full overflow-hidden break-words whitespace-pre-wrap">{proposal.description}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Objectives */}
+                            {proposal.objectives && (
+                                <div>
+                                    <h3 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+                                        </svg>
+                                        Objectives
+                                    </h3>
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                        <p className="text-gray-700 leading-relaxed text-justify w-full max-w-full overflow-hidden break-words whitespace-pre-wrap">{proposal.objectives}</p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Research Agenda */}
+                            {(proposal.researchAgenda && Array.isArray(proposal.researchAgenda) && proposal.researchAgenda.length > 0) && (
+                                <div>
+                                    <h3 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                                        </svg>
+                                        Research Agenda
+                                    </h3>
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                        <div className="flex flex-wrap gap-2">
+                                            {proposal.researchAgenda.map((agenda, index) => (
+                                                <span key={index} className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm font-medium">
+                                                    {agenda}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* DOST Strategic Programs */}
+                            {(proposal.dostSPs && Array.isArray(proposal.dostSPs) && proposal.dostSPs.length > 0) && (
+                                <div>
+                                    <h3 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        DOST Strategic Programs
+                                    </h3>
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                        <div className="flex flex-wrap gap-2">
+                                            {proposal.dostSPs.map((sp, index) => (
+                                                <span key={index} className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-medium">
+                                                    {sp}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Sustainable Development Goals */}
+                            {(proposal.sustainableDevelopmentGoals && Array.isArray(proposal.sustainableDevelopmentGoals) && proposal.sustainableDevelopmentGoals.length > 0) && (
+                                <div>
+                                    <h3 className="flex items-center text-sm font-bold text-slate-700 uppercase tracking-wider mb-3">
+                                        <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        Sustainable Development Goals
+                                    </h3>
+                                    <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                                        <div className="flex flex-wrap gap-2">
+                                            {proposal.sustainableDevelopmentGoals.map((sdg, index) => (
+                                                <span key={index} className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm font-medium">
+                                                    {sdg}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {/* Status Timeline Section - Hide when statusID is 4 (For Revision) */}
+                {proposal.statusID !== 4 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
                     <div className="flex items-center mb-8">
                         <div className="p-3 bg-red-100 rounded-xl mr-4">
@@ -929,8 +1020,10 @@ const CMProposalDetail = () => {
                         );
                     })()}
                 </div>
+                )}
 
-                {/* Status History Section */}
+                {/* Status History Section - Hide when statusID is 4 (For Revision) */}
+                {proposal.statusID !== 4 && (
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="p-8 pb-6">
                         <div className="flex items-center mb-6">
@@ -1037,97 +1130,8 @@ const CMProposalDetail = () => {
                         </table>
                     </div>
                 </div>
+                )}
 
-                {/* Supporting Documents - SETI, GAD, MOC */}
-                {proposal.files && proposal.files.length > 0 && (() => {
-                    const setiFiles = proposal.files.filter(f => f.fileType === 'seti_scorecard');
-                    const gadFiles = proposal.files.filter(f => f.fileType === 'gad_certificate');
-                    const mocFiles = proposal.files.filter(f => f.fileType === 'matrix_compliance');
-                    const otherFiles = proposal.files.filter(f => 
-                        f.fileType !== 'seti_scorecard' && 
-                        f.fileType !== 'gad_certificate' && 
-                        f.fileType !== 'matrix_compliance'
-                    );
-
-                    const renderFileCard = (file) => (
-                        <div key={file.fileID} className="bg-gray-50 rounded-xl p-6 hover:bg-gray-100 transition-colors duration-200 border border-gray-200">
-                            <div className="flex items-start gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <h3 className="text-sm font-medium text-gray-900 mb-1 truncate">{file.fileName}</h3>
-                                    <p className="text-xs text-gray-500 mb-3">{file.formattedSize || `${Math.round(file.fileSize / 1024)} KB`}</p>
-                                    <div className="flex items-center gap-2">
-                                        <button onClick={() => window.open(`/storage/${file.filePath}`, "_blank")} className="flex items-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-200 transition-colors duration-200" title="View file">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
-                                            View
-                                        </button>
-                                        <button onClick={() => { const link = document.createElement("a"); link.href = `/storage/${file.filePath}`; link.download = file.fileName; link.target = "_blank"; document.body.appendChild(link); link.click(); document.body.removeChild(link); }} className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm font-medium hover:bg-green-200 transition-colors duration-200" title="Download file">
-                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                                            Download
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    );
-
-                    return (
-                        <>
-                            {(setiFiles.length > 0 || gadFiles.length > 0 || mocFiles.length > 0) && (
-                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-                                    <h2 className="text-2xl font-bold text-gray-900 mb-6">Supporting Documents</h2>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        {setiFiles.length > 0 && (
-                                            <div>
-                                                <div className="mb-4">
-                                                    <div className="flex items-start justify-between mb-2">
-                                                        <h3 className="font-bold text-blue-900">SETI</h3>
-                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{setiFiles.length} file{setiFiles.length !== 1 ? "s" : ""}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600">Science and Engineering Technology Initiative</p>
-                                                </div>
-                                                <div className="space-y-2">{setiFiles.map(renderFileCard)}</div>
-                                            </div>
-                                        )}
-                                        {gadFiles.length > 0 && (
-                                            <div>
-                                                <div className="mb-4">
-                                                    <div className="flex items-start justify-between mb-2">
-                                                        <h3 className="font-bold text-purple-900">GAD</h3>
-                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{gadFiles.length} file{gadFiles.length !== 1 ? "s" : ""}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600">Gender and Development</p>
-                                                </div>
-                                                <div className="space-y-2">{gadFiles.map(renderFileCard)}</div>
-                                            </div>
-                                        )}
-                                        {mocFiles.length > 0 && (
-                                            <div>
-                                                <div className="mb-4">
-                                                    <div className="flex items-start justify-between mb-2">
-                                                        <h3 className="font-bold text-green-900">MOC</h3>
-                                                        <span className="bg-red-600 text-white px-2 py-1 rounded-full text-xs font-medium whitespace-nowrap">{mocFiles.length} file{mocFiles.length !== 1 ? "s" : ""}</span>
-                                                    </div>
-                                                    <p className="text-xs text-gray-600">Matrix of Compliance</p>
-                                                </div>
-                                                <div className="space-y-2">{mocFiles.map(renderFileCard)}</div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            )}
-                            {otherFiles.length > 0 && (
-                                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-8">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center"><svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" /></svg></div>
-                                        <div><h2 className="text-2xl font-bold text-gray-900">Other Supporting Documents</h2><p className="text-sm text-gray-600">Additional files and attachments</p></div>
-                                        <span className="ml-auto bg-orange-100 text-orange-800 px-3 py-1 rounded-full text-sm font-medium">{otherFiles.length} file{otherFiles.length !== 1 ? "s" : ""}</span>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">{otherFiles.map(renderFileCard)}</div>
-                                </div>
-                            )}
-                        </>
-                    );
-                })()}
 
                 {/* PDF Viewer - Legacy support for revisionFile */}
                 {proposal.revisionFile && (

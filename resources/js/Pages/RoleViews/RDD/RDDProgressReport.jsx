@@ -229,7 +229,7 @@ const RDDProgressReport = () => {
                                 <thead className="bg-gray-50">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Research Center</th>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Department</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Academic Unit</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Submitted</th>
                                         <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600">Action</th>
                                     </tr>
@@ -243,7 +243,7 @@ const RDDProgressReport = () => {
                                             || "Unknown Center";
                                         const department = proposal?.user?.department?.name 
                                             || report.department?.name 
-                                            || "Unknown Department";
+                                            || "Unknown Academic Unit";
                                         
                                         return (
                                         <tr key={report.reportID} className="hover:bg-gray-50">

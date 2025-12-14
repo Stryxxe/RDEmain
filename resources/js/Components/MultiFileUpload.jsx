@@ -7,40 +7,56 @@ const MultiFileUpload = ({
     description = "Attach supplementary files such as SETI Scorecard, GAD Certificate, Matrix of Compliance, and other approvals.",
     files = [],
     onChange,
-    accept, // Optional override
+    accept, // Optional override - if not provided, accept all file types
     maxSizeMB, // Optional override
     maxFiles = 10,
     existingFiles = [],
     onRemoveExisting,
+    allowAllFileTypes = false, // New prop to allow all file types
 }) => {
     const uploadSettings = useUploadSettings();
-    
-    // Use props if provided, otherwise use settings from backend
-    const effectiveAccept = accept || uploadSettings.allowedFileTypes.map(type => `.${type}`);
+
+    // For supporting documents, accept all file types if allowAllFileTypes is true or accept is not specified
+    // Otherwise use props if provided, or settings from backend
+    const effectiveAccept =
+        accept ||
+        (allowAllFileTypes
+            ? []
+            : uploadSettings.allowedFileTypes.map((type) => `.${type}`));
     const effectiveMaxSizeMB = maxSizeMB || uploadSettings.maxFileSizeMB;
-    
+
     const [isDragOver, setIsDragOver] = useState(false);
     const [feedback, setFeedback] = useState("");
     const inputRef = useRef(null);
 
     const existing = Array.isArray(existingFiles) ? existingFiles : [];
-    const totalFiles = (Array.isArray(files) ? files.length : 0) + existing.length;
+    const totalFiles =
+        (Array.isArray(files) ? files.length : 0) + existing.length;
 
     const bytesLimit = effectiveMaxSizeMB * 1024 * 1024;
 
     const getFileKey = (file) =>
-        [file.name, file.size, file.lastModified]
-            .filter(Boolean)
-            .join("-");
+        [file.name, file.size, file.lastModified].filter(Boolean).join("-");
 
     const isValidType = (file) => {
+        // If allowAllFileTypes is true or no accept restrictions, accept all files
+        if (allowAllFileTypes || effectiveAccept.length === 0) {
+            return true;
+        }
         const extension = "." + file.name.split(".").pop().toLowerCase();
         return effectiveAccept.includes(extension);
     };
 
     const validateFile = (file) => {
-        if (!isValidType(file)) {
-            return `"${file.name}" is not an accepted format. Only ${effectiveAccept
+        // Only check file type if restrictions are in place
+        if (
+            !allowAllFileTypes &&
+            effectiveAccept.length > 0 &&
+            !isValidType(file)
+        ) {
+            return `"${
+                file.name
+            }" is not an accepted format. Only ${effectiveAccept
                 .map((type) => type.replace(".", "").toUpperCase())
                 .join(", ")} are allowed.`;
         }
@@ -63,7 +79,10 @@ const MultiFileUpload = ({
 
         incomingFiles.forEach((file) => {
             // Check if we've reached the limit
-            if (existing.length + currentFiles.length + validFiles.length >= maxFiles) {
+            if (
+                existing.length + currentFiles.length + validFiles.length >=
+                maxFiles
+            ) {
                 errors.push(`Maximum of ${maxFiles} files reached.`);
                 return;
             }
@@ -77,8 +96,12 @@ const MultiFileUpload = ({
 
             // Check for duplicates
             if (
-                currentFiles.some((existing) => getFileKey(existing) === getFileKey(file)) ||
-                validFiles.some((existing) => getFileKey(existing) === getFileKey(file))
+                currentFiles.some(
+                    (existing) => getFileKey(existing) === getFileKey(file)
+                ) ||
+                validFiles.some(
+                    (existing) => getFileKey(existing) === getFileKey(file)
+                )
             ) {
                 errors.push(`"${file.name}" is a duplicate.`);
                 return;
@@ -170,17 +193,32 @@ const MultiFileUpload = ({
                         or drag and drop your documents
                     </p>
                     <p className="text-xs text-gray-500">
-                        Accepted formats:{" "}
-                        {effectiveAccept
-                            .map((ext) => ext.replace(".", "").toUpperCase())
-                            .join(", ")}{" "}
-                        • Max {effectiveMaxSizeMB}MB per file
+                        {allowAllFileTypes || effectiveAccept.length === 0 ? (
+                            <>
+                                All file types accepted • Max{" "}
+                                {effectiveMaxSizeMB}MB per file
+                            </>
+                        ) : (
+                            <>
+                                Accepted formats:{" "}
+                                {effectiveAccept
+                                    .map((ext) =>
+                                        ext.replace(".", "").toUpperCase()
+                                    )
+                                    .join(", ")}{" "}
+                                • Max {effectiveMaxSizeMB}MB per file
+                            </>
+                        )}
                     </p>
                     <input
                         ref={inputRef}
                         type="file"
                         multiple
-                        accept={effectiveAccept.join(",")}
+                        accept={
+                            allowAllFileTypes || effectiveAccept.length === 0
+                                ? undefined
+                                : effectiveAccept.join(",")
+                        }
                         className="hidden"
                         onChange={handleInputChange}
                     />
@@ -201,15 +239,38 @@ const MultiFileUpload = ({
                                 <AlertTriangle className="w-5 h-5" />
                             </div>
                             <div>
-                                <p className="text-sm font-semibold text-red-700">Upload issue</p>
+                                <p className="text-sm font-semibold text-red-700">
+                                    Upload issue
+                                </p>
                                 <p className="text-xs text-gray-500">
-                                    Max {effectiveMaxSizeMB}MB per file · Allowed: {effectiveAccept.map((ext) => ext.replace('.', '').toUpperCase()).join(', ')}
+                                    {allowAllFileTypes ||
+                                    effectiveAccept.length === 0 ? (
+                                        <>
+                                            Max {effectiveMaxSizeMB}MB per file
+                                            · All file types accepted
+                                        </>
+                                    ) : (
+                                        <>
+                                            Max {effectiveMaxSizeMB}MB per file
+                                            · Allowed:{" "}
+                                            {effectiveAccept
+                                                .map((ext) =>
+                                                    ext
+                                                        .replace(".", "")
+                                                        .toUpperCase()
+                                                )
+                                                .join(", ")}
+                                        </>
+                                    )}
                                 </p>
                             </div>
                         </div>
                         <div className="px-5 py-4 text-sm text-gray-800 space-y-2">
                             <p>{feedback}</p>
-                            <p className="text-xs text-gray-600">Try another file within the limits, then upload again.</p>
+                            <p className="text-xs text-gray-600">
+                                Try another file within the limits, then upload
+                                again.
+                            </p>
                         </div>
                         <div className="flex justify-end gap-2 border-t border-gray-100 px-5 py-3">
                             <button
@@ -228,7 +289,9 @@ const MultiFileUpload = ({
                 <div className="space-y-3">
                     {existing.map((file, index) => (
                         <div
-                            key={`${file.filePath || file.fileName || 'existing'}-${index}`}
+                            key={`${
+                                file.filePath || file.fileName || "existing"
+                            }-${index}`}
                             className="flex items-center justify-between border border-gray-200 rounded-xl p-4 bg-white shadow-sm"
                         >
                             <div className="flex items-center gap-3">
@@ -237,10 +300,19 @@ const MultiFileUpload = ({
                                 </div>
                                 <div>
                                     <p className="text-sm font-medium text-gray-900">
-                                        {file.fileName || file.fileType || 'Existing file'}
+                                        {file.fileName ||
+                                            file.fileType ||
+                                            "Existing file"}
                                     </p>
                                     {file.fileSize && (
-                                        <p className="text-xs text-gray-500">{(file.fileSize / 1024 / 1024).toFixed(2)} MB</p>
+                                        <p className="text-xs text-gray-500">
+                                            {(
+                                                file.fileSize /
+                                                1024 /
+                                                1024
+                                            ).toFixed(2)}{" "}
+                                            MB
+                                        </p>
                                     )}
                                     {file.filePath && (
                                         <a
@@ -309,4 +381,3 @@ const MultiFileUpload = ({
 };
 
 export default MultiFileUpload;
-

@@ -56,7 +56,10 @@ const RDDArchive = () => {
 
   const researchCenters = useMemo(() => {
     const names = proposals
-      .map((p) => p.user?.researchCenter?.name)
+      .map((p) => p.user?.researchCenter?.centerName || 
+                  p.user?.researchCenter?.name ||
+                  p.user?.research_center?.centerName ||
+                  p.user?.research_center?.name)
       .filter(Boolean);
     return Array.from(new Set(names)).sort();
   }, [proposals]);
@@ -65,7 +68,13 @@ const RDDArchive = () => {
     let list = proposals;
     if (centerFilter !== "all") {
       list = list.filter(
-        (p) => (p.user?.researchCenter?.name || "") === centerFilter
+        (p) => {
+          const centerName = p.user?.researchCenter?.centerName || 
+                            p.user?.researchCenter?.name ||
+                            p.user?.research_center?.centerName ||
+                            p.user?.research_center?.name || "";
+          return centerName === centerFilter;
+        }
       );
     }
     if (search.trim()) {
@@ -168,8 +177,7 @@ const RDDArchive = () => {
                     <th>Proposal</th>
                     <th>Proponent</th>
                     <th>Research Center</th>
-                    <th>Archived Date</th>
-                    <th>Status</th>
+                    <th>Timestamp</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -188,19 +196,21 @@ const RDDArchive = () => {
                         {p.user?.fullName || `${p.user?.firstName || ""} ${p.user?.lastName || ""}`}
                       </td>
                       <td className="text-sm text-gray-900">
-                        {p.user?.researchCenter?.name || p.user?.department?.name || "—"}
+                        {p.user?.researchCenter?.centerName || 
+                         p.user?.researchCenter?.name || 
+                         p.user?.research_center?.centerName ||
+                         p.user?.research_center?.name ||
+                         "—"}
                       </td>
                       <td className="text-sm text-gray-600">
-                        {p.archivedByRDD ? new Date(p.archivedByRDD).toLocaleDateString("en-US", {
+                        {p.archivedByRDD ? new Date(p.archivedByRDD).toLocaleString("en-US", {
                           year: "numeric",
                           month: "short",
-                          day: "numeric"
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true
                         }) : "—"}
-                      </td>
-                      <td>
-                        <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-700">
-                          RDD Endorsed
-                        </span>
                       </td>
                       <td>
                         <a
@@ -225,22 +235,6 @@ const RDDArchive = () => {
                     start + ITEMS_PER_PAGE,
                     filtered.length
                   )} of ${filtered.length} results`}
-            </div>
-            <div className="flex space-x-2">
-              <button
-                onClick={handlePrev}
-                className="admin-button"
-                disabled={currentPage === 1}
-              >
-                Previous
-              </button>
-              <button
-                onClick={handleNext}
-                className="admin-button"
-                disabled={currentPage === totalPages}
-              >
-                Next
-              </button>
             </div>
           </div>
         </div>

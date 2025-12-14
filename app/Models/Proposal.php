@@ -35,7 +35,8 @@ class Proposal extends Model
         'statusID',
         'userID',
         'archivedByRDD',
-        'resubmittedAfterRevision'
+        'resubmittedAfterRevision',
+        'revisionComments'
     ];
 
     protected $casts = [

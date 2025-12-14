@@ -52,6 +52,20 @@ const CMReviewProposal = () => {
         }
     }, []);
 
+    // Refresh proposals when component becomes visible (user navigates back)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                fetchProposals();
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+        };
+    }, []);
+
     // Fetch endorsed proposals when user is available
     useEffect(() => {
         if (user) {
@@ -62,9 +76,12 @@ const CMReviewProposal = () => {
     const fetchProposals = async () => {
         try {
             setLoading(true);
+            // Fetch NEW submitted proposals for Endorsement view
+            // Same as Dashboard - proposals that haven't been endorsed by CM yet
+            // and haven't been forwarded to RDD
             const response = await axiosInstance.get("/proposals", {
                 headers: { Accept: "application/json" },
-                withCredentials: true,
+                withCredentials: true
             });
             if (response.data.success) {
                 setProposals(response.data.data);
@@ -130,33 +147,40 @@ const CMReviewProposal = () => {
 
     const handleViewClick = (proposal) => setSelectedProposal(proposal);
 
-    const handleBack = () => {
+    const handleBack = async () => {
         setSelectedProposal(null);
         // Refresh the list when going back to remove endorsed proposals
-        fetchEndorsedProposals();
+        // Force refresh to ensure final endorsed proposals are removed
+        await Promise.all([
+            fetchProposals(),
+            fetchEndorsedProposals()
+        ]);
     };
 
     // Remove a proposal from the list when it's endorsed
-    const handleProposalEndorsed = (proposalId) => {
-        setEndorsedProposalIds((prev) => new Set([...prev, proposalId]));
-        // Remove from proposals list
+    const handleProposalEndorsed = async (proposalId) => {
+        // CRITICAL: Immediately remove from local state to hide it from UI instantly
         setProposals((prev) =>
             prev.filter((p) => (p.proposalID || p.id) !== proposalId)
         );
-        // Redirect to dashboard's proposal details for the endorsed proposal
-        if (proposalId) {
-            router.visit(`/cm/proposal/${proposalId}`, { replace: true });
+        
+        // Mark as endorsed
+        setEndorsedProposalIds((prev) => new Set([...prev, proposalId]));
+        
+        // Force refresh the proposals list from backend to ensure final endorsed proposals are removed
+        // This ensures proposals that have been endorsed twice (forwarded to RDD) are removed
+        await fetchProposals();
+        
+        // Reset pagination to first page if current page becomes empty
+        if (currentPage > 1 && proposals.length <= 1) {
+            setCurrentPage(1);
         }
     };
 
-    // Filter proposals based on search and exclude already endorsed proposals
+    // Filter proposals based on search
+    // Note: Proposals in Endorsement view are already filtered by backend to show
+    // proposals that have been initially endorsed by CM but not yet forwarded to RDD
     const filteredProposals = proposals.filter((proposal) => {
-        const proposalId = proposal.proposalID || proposal.id;
-        // Exclude proposals that have been endorsed by the current user
-        if (endorsedProposalIds.has(proposalId)) {
-            return false;
-        }
-
         const matchesSearch =
             proposal.researchTitle
                 .toLowerCase()
@@ -287,9 +311,7 @@ const CMReviewProposal = () => {
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100">
-            <Breadcrumbs items={[
-                { label: 'Review Proposals', href: null }
-            ]} />
+            <Breadcrumbs items={[{ label: "Review Proposals", href: null }]} />
             {/* Header Section */}
             <div className="max-w-7xl mx-auto px-6 py-8">
                 <div className="text-center">

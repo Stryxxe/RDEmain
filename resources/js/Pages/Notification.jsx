@@ -28,15 +28,15 @@ const Notification = () => {
         try {
             setLoading(true);
             const axiosInstance = window.axios || axios;
-            const response = await axiosInstance.get('/notifications', {
-                headers: { Accept: 'application/json' },
+            const response = await axiosInstance.get("/notifications", {
+                headers: { Accept: "application/json" },
                 withCredentials: true,
             });
             const data = response.data?.data || response.data || [];
             setNotifications(data);
-            setUnreadCount(data.filter(n => !n.read).length);
+            setUnreadCount(data.filter((n) => !n.read).length);
         } catch (error) {
-            console.error('Failed to fetch notifications:', error);
+            console.error("Failed to fetch notifications:", error);
         } finally {
             setLoading(false);
         }
@@ -45,30 +45,40 @@ const Notification = () => {
     const markAsReadContext = async (notificationId) => {
         try {
             const axiosInstance = window.axios || axios;
-            await axiosInstance.put(`/notifications/${notificationId}/read`, {}, {
-                headers: { Accept: 'application/json' },
-                withCredentials: true,
-            });
-            setNotifications(prev => prev.map(n => 
-                n.id === notificationId ? { ...n, read: true } : n
-            ));
-            setUnreadCount(prev => Math.max(0, prev - 1));
+            await axiosInstance.put(
+                `/notifications/${notificationId}/read`,
+                {},
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+            setNotifications((prev) =>
+                prev.map((n) =>
+                    n.id === notificationId ? { ...n, read: true } : n
+                )
+            );
+            setUnreadCount((prev) => Math.max(0, prev - 1));
         } catch (error) {
-            console.error('Failed to mark notification as read:', error);
+            console.error("Failed to mark notification as read:", error);
         }
     };
 
     const markAllAsReadContext = async () => {
         try {
             const axiosInstance = window.axios || axios;
-            await axiosInstance.put('/notifications/mark-all-read', {}, {
-                headers: { Accept: 'application/json' },
-                withCredentials: true,
-            });
-            setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+            await axiosInstance.put(
+                "/notifications/mark-all-read",
+                {},
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+            setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
             setUnreadCount(0);
         } catch (error) {
-            console.error('Failed to mark all as read:', error);
+            console.error("Failed to mark all as read:", error);
         }
     };
 
@@ -76,12 +86,14 @@ const Notification = () => {
         try {
             const axiosInstance = window.axios || axios;
             await axiosInstance.delete(`/notifications/${notificationId}`, {
-                headers: { Accept: 'application/json' },
+                headers: { Accept: "application/json" },
                 withCredentials: true,
             });
-            setNotifications(prev => prev.filter(n => n.id !== notificationId));
+            setNotifications((prev) =>
+                prev.filter((n) => n.id !== notificationId)
+            );
         } catch (error) {
-            console.error('Failed to remove notification:', error);
+            console.error("Failed to remove notification:", error);
         }
     };
 
@@ -219,7 +231,10 @@ const Notification = () => {
         }
 
         // Show details for revision and endorsement notifications
-        if (notification.type === "revision" || notification.data?.revision_comments) {
+        if (
+            notification.type === "revision" ||
+            notification.data?.revision_comments
+        ) {
             setDetailNotification(notification);
             return;
         }
@@ -227,6 +242,21 @@ const Notification = () => {
         if (notification.data?.endorsement_comments) {
             setDetailNotification(notification);
             return;
+        }
+
+        // Handle resubmission notifications for CM users
+        // When CM clicks notification about resubmitted proposal, redirect to For Revision View Details
+        if (
+            notification.type === "proposal" &&
+            notification.data?.event === "proposal.resubmitted_after_revision"
+        ) {
+            const proposalId = notification.data?.proposal_id;
+            if (proposalId) {
+                // Redirect to For Revision page - the proposal will be visible there
+                // The CM can then click View Details to see the updated proposal
+                router.visit("/cm/for-revision");
+                return;
+            }
         }
 
         // Only navigate if it's a proposal notification, otherwise stay on the page
@@ -341,7 +371,10 @@ const Notification = () => {
     // Use unreadCount from context instead of calculating locally
 
     return (
-        <div className="max-w-6xl mx-auto p-6 flex flex-col" style={{ minHeight: "calc(100vh - 120px)" }}>
+        <div
+            className="max-w-6xl mx-auto p-6 flex flex-col"
+            style={{ minHeight: "calc(100vh - 120px)" }}
+        >
             {/* Fixed Header Section */}
             <div className="mb-4">
                 <div className="flex justify-between items-center">
@@ -491,7 +524,9 @@ const Notification = () => {
                         {currentNotifications.map((notification) => (
                             <div
                                 key={notification.id}
-                                onClick={() => handleNotificationClick(notification)}
+                                onClick={() =>
+                                    handleNotificationClick(notification)
+                                }
                                 className={`p-4 rounded-lg border border-gray-100 mb-2 hover:bg-gray-50 transition-colors cursor-pointer ${
                                     notification.unread ? "bg-blue-50" : ""
                                 }`}
@@ -499,7 +534,9 @@ const Notification = () => {
                                 <div className="flex items-center space-x-4 w-full">
                                     {getTypeIcon(notification.type)}
                                     <div className="flex-1 min-w-0">
-                                        <span className="text-[11px] uppercase tracking-wide text-red-600 font-semibold">Notification</span>
+                                        <span className="text-[11px] uppercase tracking-wide text-red-600 font-semibold">
+                                            Notification
+                                        </span>
                                         <div className="flex items-center gap-2 mb-1">
                                             <h4 className="text-sm font-semibold text-gray-900 truncate">
                                                 {notification.title}
@@ -508,8 +545,13 @@ const Notification = () => {
                                         <p className="text-sm text-gray-600 mb-2">
                                             {notification.message}
                                         </p>
-                                        {(notification.data?.revision_comments || notification.data?.endorsement_comments) && (
-                                            <p className="text-xs font-semibold text-red-600">Click to see more details</p>
+                                        {(notification.data
+                                            ?.revision_comments ||
+                                            notification.data
+                                                ?.endorsement_comments) && (
+                                            <p className="text-xs font-semibold text-red-600">
+                                                Click to see more details
+                                            </p>
                                         )}
                                         <p className="text-xs text-gray-400">
                                             {notification.time}
@@ -616,9 +658,16 @@ const Notification = () => {
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
                         <div className="flex items-start justify-between">
                             <div>
-                                <p className="text-xs font-semibold uppercase text-red-600">Notification here</p>
-                                <h3 className="text-xl font-bold text-gray-900">{detailNotification.title}</h3>
-                                <p className="text-sm text-gray-500 mt-1">{detailNotification.data?.proposal_title || 'Proposal update'}</p>
+                                <p className="text-xs font-semibold uppercase text-red-600">
+                                    Notification here
+                                </p>
+                                <h3 className="text-xl font-bold text-gray-900">
+                                    {detailNotification.title}
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">
+                                    {detailNotification.data?.proposal_title ||
+                                        "Proposal update"}
+                                </p>
                             </div>
                             <button
                                 onClick={() => setDetailNotification(null)}
@@ -630,10 +679,16 @@ const Notification = () => {
                         </div>
                         <div className="border border-gray-200 rounded-xl bg-gray-50 p-4">
                             <p className="text-sm font-semibold text-gray-800 mb-2">
-                                {detailNotification.data?.endorsement_comments ? 'Endorsement Comments' : 'Revision Details'}
+                                {detailNotification.data?.endorsement_comments
+                                    ? "Endorsement Comments"
+                                    : "Revision Details"}
                             </p>
                             <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                                {detailNotification.data?.endorsement_comments || detailNotification.data?.revision_comments || detailNotification.message}
+                                {detailNotification.data
+                                    ?.endorsement_comments ||
+                                    detailNotification.data
+                                        ?.revision_comments ||
+                                    detailNotification.message}
                             </p>
                         </div>
                         <div className="flex justify-between gap-3">
@@ -647,11 +702,16 @@ const Notification = () => {
                                 <button
                                     onClick={() => {
                                         setDetailNotification(null);
-                                        router.visit(`/proponent/revision/${detailNotification.data.proposal_id}`);
+                                        router.visit(
+                                            `/proponent/revision/${detailNotification.data.proposal_id}`
+                                        );
                                     }}
                                     className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors"
                                 >
-                                    {detailNotification.data?.endorsement_comments ? 'View Proposal' : 'Edit Proposal'}
+                                    {detailNotification.data
+                                        ?.endorsement_comments
+                                        ? "View Proposal"
+                                        : "Edit Proposal"}
                                 </button>
                             )}
                         </div>

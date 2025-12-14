@@ -83,7 +83,7 @@ const UserDetails = ({ user, onClose }) => {
                     </div>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-500 mb-1">Department</label>
+                    <label className="block text-sm font-medium text-gray-500 mb-1">Academic Unit</label>
                     <div className="flex items-center space-x-2">
                       <FiHome className="w-4 h-4 text-gray-400" />
                       <span className="text-sm text-gray-900">{user.department}</span>

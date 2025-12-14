@@ -3,8 +3,8 @@ import { Link, usePage } from '@inertiajs/react';
 import { 
   BiSearch, 
   BiFile, 
-  BiBarChart, 
-  BiUpload,
+  // BiBarChart, // Not used - Progress Reports hidden
+  // BiUpload, // Not used - Submit Report hidden
   BiFolder, 
   BiUser
 } from 'react-icons/bi';
@@ -14,8 +14,9 @@ const CMSidebar = () => {
   const menuItems = [
     { path: '/cm', label: 'Tracker', icon: BiSearch },
     { path: '/cm/review-proposal', label: 'Endorsement', icon: BiFile },
-    { path: '/cm/progress-report', label: 'Progress Reports', icon: BiBarChart },
-    { path: '/cm/submit-report', label: 'Submit Report', icon: BiUpload },
+    { path: '/cm/for-revision', label: 'For Revision', icon: BiFile },
+    // { path: '/cm/progress-report', label: 'Progress Reports', icon: BiBarChart }, // Hidden - not needed yet
+    // { path: '/cm/submit-report', label: 'Submit Report', icon: BiUpload }, // Hidden - not needed yet
     { path: '/cm/resources', label: 'Resources', icon: BiFolder },
     { path: '/cm/account', label: 'Account', icon: BiUser }
   ];
