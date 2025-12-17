@@ -216,6 +216,40 @@ const SubmitPage = () => {
         }));
     };
     
+    // Helper function to search for and match proponents
+    const findMatchingProponents = async (extractedNames) => {
+        if (!extractedNames || extractedNames.length === 0) {
+            return [];
+        }
+        
+        const matchedProponents = [];
+        
+        for (const name of extractedNames) {
+            try {
+                // Search for proponent by name
+                const response = await axios.get('/api/proponents/search', {
+                    params: { q: name }
+                });
+                
+                if (response.data && response.data.length > 0) {
+                    // Take the first match (best match)
+                    const match = response.data[0];
+                    // Avoid duplicates
+                    if (!matchedProponents.find(p => p.userID === match.userID)) {
+                        matchedProponents.push(match);
+                        console.log(`✓ Matched proponent: ${name} -> ${match.fullName}`);
+                    }
+                } else {
+                    console.log(`✗ No match found for: ${name}`);
+                }
+            } catch (error) {
+                console.error(`Error searching for proponent "${name}":`, error);
+            }
+        }
+        
+        return matchedProponents;
+    };
+    
     // OCR Extract Handler - Process the already-uploaded PDF file
     const handleOCRExtract = async () => {
         if (!formData.reportFile) {
@@ -295,6 +329,16 @@ const SubmitPage = () => {
                     .map((item) => researchAgendaMap[item] || item)
                     .filter((label) => researchAgendaOptions.includes(label));
 
+                // Search and auto-select proponents if extracted
+                let matchedProponents = [];
+                if (extractedData.proponents && Array.isArray(extractedData.proponents) && extractedData.proponents.length > 0) {
+                    console.log('🔍 Searching for proponents:', extractedData.proponents);
+                    matchedProponents = await findMatchingProponents(extractedData.proponents);
+                    if (matchedProponents.length > 0) {
+                        console.log(`✅ Auto-selected ${matchedProponents.length} proponent(s)`);
+                    }
+                }
+
                 // Map extracted data to form fields
                 setFormData((prev) => ({
                     ...prev,
@@ -319,6 +363,10 @@ const SubmitPage = () => {
                         mappedSDGs && mappedSDGs.length > 0
                             ? mappedSDGs
                             : prev.sustainableDevelopmentGoals,
+                    // Auto-select matched proponents
+                    proponents: matchedProponents.length > 0
+                        ? matchedProponents
+                        : prev.proponents,
                 }));
 
                 setAutoFilledData(extractedData);

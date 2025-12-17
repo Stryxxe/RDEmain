@@ -77,3 +77,22 @@ export const getOCRStatus = async () => {
         throw error.response?.data || error;
     }
 };
+
+/**
+ * Search for proponents by name
+ * Used to match OCR-extracted names with existing users in the system
+ * 
+ * @param {string} name - Full name or partial name to search
+ * @returns {Promise} Array of matching proponents
+ */
+export const searchProponentsByName = async (name) => {
+    try {
+        const response = await axios.get('/api/proponents/search', {
+            params: { q: name }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Proponent Search Error:', error);
+        return [];
+    }
+};

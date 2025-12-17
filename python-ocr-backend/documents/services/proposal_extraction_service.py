@@ -5,6 +5,7 @@ Proposal Extraction Service - Extract structured data from research proposal PDF
 import logging
 import re
 from documents.ocr.tesseract_processor import TesseractOCRProcessor
+from documents.ocr.checkbox_detector import CheckboxDetector
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,8 @@ class ProposalExtractionService:
     
     def __init__(self):
         self.ocr_processor = TesseractOCRProcessor()
+        self.checkbox_detector = CheckboxDetector()
+        self.file_bytes = None  # Store for checkbox detection
         logger.info("✓ Proposal Extraction Service initialized")
     
     def process_and_save_document(self, file, process_type):
@@ -32,6 +35,7 @@ class ProposalExtractionService:
             
             # Read file bytes
             file_bytes = file.read()
+            self.file_bytes = file_bytes  # Store for checkbox detection
             content_type = file.content_type
             
             logger.info(f"File type: {content_type}")
@@ -108,9 +112,12 @@ class ProposalExtractionService:
     def _extract_research_title(self, text):
         """Extract research title"""
         patterns = [
+            # Match "(1) R&D INITIATIVE TITLE" format
+            r'\(1\)\s*R&D\s+INITIATIVE\s+TITLE\s*\n\s*(.+?)(?=\n\(2\)|\n\s*$)',
+            r'\(1\)\s*R&D\s+INITIATIVE\s+TITLE\s*\n\s*(.+?)\n',
+            # Original patterns as fallback
             r'(?:TITLE|RESEARCH\s+TITLE|PROJECT\s+TITLE)\s*[:]\s*(.+?)(?=\n[A-Z]|\n\s*$)',
             r'(?:TITLE|RESEARCH\s+TITLE)\s*\n\s*(.+?)(?=\n[A-Z]|\n\s*$)',
-            # Fallback: first non-empty line after an initial heading like "RESEARCH PROPOSAL"
             r'^RESEARCH\s+PROPOSAL\s*\n\s*(.+?)\n',
         ]
         
@@ -128,6 +135,8 @@ class ProposalExtractionService:
     def _extract_description(self, text):
         """Extract description/background/rationale"""
         patterns = [
+            # Match "Il. RATIONALE" or "II. RATIONALE" (OCR may read II as Il)
+            r'I[Il]\.\s+RATIONALE\s*\n\s*(.+?)(?=\nI[Il]{1,2}\.\s+OBJECTIVES|\nIII\.)',
             # Between I. BACKGROUND ... and II. OBJECTIVES
             r'I\.\s+BACKGROUND(?:\s+AND\s+RATIONALE)?\s*(.+?)(?=\nII\.)',
             r'(?:BACKGROUND|DESCRIPTION|RATIONALE|INTRODUCTION)\s*[:]\s*(.+?)(?=\n[A-Z]{3,}|OBJECTIVE|GOAL)',
@@ -223,7 +232,7 @@ class ProposalExtractionService:
         return None
     
     def _extract_research_center(self, text):
-        """Extract research center from predefined list"""
+        """Extract research center from predefined list or map from research areas"""
         centers = [
             'Center for Information and Communications Technology',
             'Center for Environmental Studies and Research',
@@ -234,31 +243,78 @@ class ProposalExtractionService:
             'Center for Disaster Risk Reduction and Climate Change',
         ]
         
+        # First try direct match
         for center in centers:
             if center.lower() in text.lower():
                 logger.debug(f"Found research center: {center}")
+                return center
+        
+        # Map research areas to centers
+        area_mappings = {
+            'renewable energy': 'Center for Renewable Energy and Sustainability',
+            'sustainable energy': 'Center for Renewable Energy and Sustainability',
+            'solar': 'Center for Renewable Energy and Sustainability',
+            'food security': 'Center for Food Security and Agricultural Development',
+            'agriculture': 'Center for Food Security and Agricultural Development',
+            'agricultural': 'Center for Food Security and Agricultural Development',
+            'ict': 'Center for Information and Communications Technology',
+            'information technology': 'Center for Information and Communications Technology',
+            'health': 'Center for Health Informatics and Telemedicine',
+            'telemedicine': 'Center for Health Informatics and Telemedicine',
+            'environment': 'Center for Environmental Studies and Research',
+            'climate': 'Center for Disaster Risk Reduction and Climate Change',
+            'disaster': 'Center for Disaster Risk Reduction and Climate Change',
+            'indigenous': 'Center for Indigenous Studies and Cultural Heritage',
+            'cultural heritage': 'Center for Indigenous Studies and Cultural Heritage',
+        }
+        
+        text_lower = text.lower()
+        for keyword, center in area_mappings.items():
+            if keyword in text_lower:
+                logger.debug(f"Mapped research center from keyword '{keyword}': {center}")
                 return center
         
         logger.warning("Research center not found")
         return None
     
     def _extract_research_agenda(self, text):
-        """Extract RDE research agendas"""
-        agendas = [
-            'Food Security',
-            'Health and Nutrition',
-            'Climate Change',
-            'Disaster Risk Reduction',
-            'Environmental Protection',
-            'Renewable Energy',
-            'ICT and Digital Transformation',
-            'Cultural Heritage Preservation',
-        ]
+        """Extract RDE research agendas using visual checkbox detection"""
+        
+        # Try visual checkbox detection first
+        if self.file_bytes:
+            try:
+                checked_rde = self.checkbox_detector.detect_checked_items(
+                    self.file_bytes, 'RDE', []
+                )
+                if checked_rde:
+                    logger.debug(f"Found {len(checked_rde)} research agendas via checkbox detection")
+                    return checked_rde
+            except Exception as e:
+                logger.warning(f"Checkbox detection failed, falling back to text analysis: {e}")
+        
+        # Fallback: keyword-based detection
+        agenda_keywords = {
+            'Food Security': ['food security', 'agriculture', 'agricultural', 'farming', 'crop'],
+            'Health and Nutrition': ['health', 'nutrition', 'medical'],
+            'Climate Change': ['climate change'],
+            'Disaster Risk Reduction': ['disaster risk', 'disaster reduction'],
+            'Environmental Protection': ['environmental protection'],
+            'Environment and Natural Resources': ['environment', 'natural resources'],
+            'Renewable Energy': ['renewable energy'],
+            'Sustainable Energy Systems': ['sustainable energy'],
+            'ICT and Digital Transformation': ['ict', 'digital transformation', 'information technology'],
+            'Cultural Heritage Preservation': ['cultural heritage', 'indigenous'],
+        }
         
         found = []
-        for agenda in agendas:
-            if agenda.lower() in text.lower():
-                found.append(agenda)
+        text_lower = text.lower()
+        
+        for agenda, keywords in agenda_keywords.items():
+            for keyword in keywords:
+                if keyword in text_lower:
+                    found.append(agenda)
+                    logger.debug(f"Found research agenda '{agenda}' from keyword: {keyword}")
+                    break
         
         if found:
             logger.debug(f"Found {len(found)} research agendas")
@@ -268,31 +324,39 @@ class ProposalExtractionService:
         return found
 
     def _extract_dost_6ps(self, text):
-        """Extract DOST 6Ps (Product, People, Places, Policies, Programs, Publications).
-
-        Looks for the "DOST STRATEGIC PRIORITIES" / "DOST 6Ps" section and
-        maps any mentioned keywords into the standard 6Ps labels.
-        """
-        # Restrict search to the EXPECTED OUTPUTS / GAINS section if present
+        """Extract DOST 6Ps using visual checkmark detection"""
+        
+        # Try visual checkmark detection first
+        if self.file_bytes:
+            try:
+                checked_6ps = self.checkbox_detector.detect_checked_items(
+                    self.file_bytes, '6Ps', []
+                )
+                if checked_6ps:
+                    logger.debug(f"Found {len(checked_6ps)} DOST 6Ps via checkmark detection")
+                    return checked_6ps
+            except Exception as e:
+                logger.warning(f"Checkmark detection failed, falling back to text analysis: {e}")
+        
+        # Fallback: keyword-based detection
         section_pattern = r'(?:VIII\.?\s+EXPECTED\s+OUTPUTS[\w\s&]*?)(.+?)(?:IX\.|$)'
         section_match = re.search(section_pattern, text, re.IGNORECASE | re.DOTALL)
         search_text = section_match.group(1) if section_match else text
 
         keywords_map = {
             'product': 'Product',
-            'products': 'Product',
-            'people': 'People',
+            'prototype': 'Product',
             'people services': 'People Services',
-            'services': 'People Services',
-            'places': "Places and Partnership",
-            'partnership': "Places and Partnership",
+            'capacity-building': 'People Services',
+            'training': 'People Services',
+            'places and partnership': "Places and Partnership",
+            'collaboration': "Places and Partnership",
             'policies': 'Policies',
             'policy': 'Policies',
             'programs': 'Programs',
-            'programmes': 'Programs',
-            'publications': 'Publications',
+            'programme': 'Programs',
             'publication': 'Publications',
-            'innovation': 'Product',  # often grouped under product/innovation
+            'journal article': 'Publications',
         }
 
         found = set()
@@ -304,21 +368,35 @@ class ProposalExtractionService:
 
         result = sorted(list(found))
         if result:
-            logger.debug(f"Found DOST 6Ps: {result}")
+            logger.debug(f"Found {len(result)} DOST 6Ps: {result}")
         else:
             logger.warning("No DOST 6Ps found")
 
         return result
     
     def _extract_sdgs(self, text):
-        """Extract Sustainable Development Goal numbers (1-17)"""
-        # Look for patterns like "SDG 1", "SDG-3", "SDG No. 5", etc.
+        """Extract Sustainable Development Goal numbers using visual checkbox detection"""
+        
+        # Try visual checkbox detection first
+        if self.file_bytes:
+            try:
+                checked_sdgs = self.checkbox_detector.detect_checked_items(
+                    self.file_bytes, 'SDG', []
+                )
+                if checked_sdgs:
+                    logger.debug(f"Found SDGs via checkbox detection: {checked_sdgs}")
+                    return checked_sdgs
+            except Exception as e:
+                logger.warning(f"Checkbox detection failed, falling back to text analysis: {e}")
+        
+        # Fallback: Look for explicit SDG mentions and targeted inference
+        found_sdgs = set()
+        
         patterns = [
-            r'SDG[^\d]*(\d{1,2})',
-            r'SUSTAINABLE\s+DEVELOPMENT\s+GOAL[^\d]*(\d{1,2})',
+            r'SDG[\s\-:]*(\d{1,2})\b',
+            r'SUSTAINABLE\s+DEVELOPMENT\s+GOAL[\s\-:]*(\d{1,2})',
         ]
         
-        found_sdgs = set()
         for pattern in patterns:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for num in matches:
@@ -326,32 +404,67 @@ class ProposalExtractionService:
                 if 1 <= sdg_num <= 17:
                     found_sdgs.add(sdg_num)
         
+        # Targeted inference based on key research themes (only add most relevant SDGs)
+        if not found_sdgs:
+            text_lower = text.lower()
+            
+            # Only infer the 2 most relevant SDGs
+            if any(kw in text_lower for kw in ['solar', 'renewable energy', 'clean energy']):
+                found_sdgs.add(7)  # Affordable and Clean Energy
+                logger.debug("Inferred SDG 7 from renewable energy content")
+            
+            if any(kw in text_lower for kw in ['climate', 'climate change', 'climate action']):
+                found_sdgs.add(13)  # Climate Action
+                logger.debug("Inferred SDG 13 from climate content")
+        
         result = sorted(list(found_sdgs))
         if result:
             logger.debug(f"Found SDGs: {result}")
         else:
-            logger.warning("No SDGs found")
+            logger.warning("No SDGs found (checkboxes in PDF may not be distinguishable in OCR)")
         
         return result
     
     def _extract_budget(self, text):
         """Extract budget amount in PHP"""
         patterns = [
+            # Match GRAND TOTAL from budget table - extract all numbers and take the largest
+            r'GRAND\s+TOTAL\s+.*?([\d,]+\.\d{2})\s*$',
+            # Match line with TOTAL and get last number on that line
+            r'(?:^|\n)TOTAL\s+.*?([\d,]+\.\d{2})\s*(?:\n|$)',
+            # Original patterns as fallback
             r'(?:BUDGET|TOTAL\s+BUDGET|PROPOSED\s+BUDGET)\s*[:]\s*(?:PHP|₱)?\s*([\d,]+(?:\.\d{2})?)',
-            r'(?:PHP|₱)\s*([\d,]+(?:\.\d{2})?)',
-            r'(?:AMOUNT|FUNDING)\s*[:]\s*(?:PHP|₱)?\s*([\d,]+(?:\.\d{2})?)',
+            r'(?:BUDGETARY\s+REQUIREMENT).*?TOTAL\s+([\d,]+\.\d{2})',
         ]
         
         for pattern in patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                budget_str = match.group(1).replace(',', '')
-                try:
-                    budget = float(budget_str)
-                    logger.debug(f"Found budget: PHP {budget:,.2f}")
-                    return budget
-                except ValueError:
-                    continue
+            matches = list(re.finditer(pattern, text, re.IGNORECASE | re.MULTILINE))
+            if matches:
+                # For GRAND TOTAL, we need the last/largest number in the line
+                match = matches[-1]  # Get last match
+                line = match.group(0)
+                # Find all amounts on the line
+                all_amounts = re.findall(r'([\d,]+\.\d{2})', line)
+                if len(all_amounts) > 1:
+                    # Take the largest amount (usually the TOTAL column)
+                    amounts_float = []
+                    for amt in all_amounts:
+                        try:
+                            amounts_float.append(float(amt.replace(',', '')))
+                        except ValueError:
+                            continue
+                    if amounts_float:
+                        max_budget = max(amounts_float)
+                        logger.debug(f"Found budget: PHP {max_budget:,.2f}")
+                        return max_budget
+                else:
+                    budget_str = match.group(1).replace(',', '')
+                    try:
+                        budget = float(budget_str)
+                        logger.debug(f"Found budget: PHP {budget:,.2f}")
+                        return budget
+                    except ValueError:
+                        continue
         
         logger.warning("Budget not found")
         return None
