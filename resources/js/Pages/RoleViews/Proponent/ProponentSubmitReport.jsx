@@ -60,7 +60,9 @@ const ProponentSubmitReport = () => {
     // Format proposals for SearchableSelect
     const proposalOptions = proposals.map((proposal) => ({
         proposalID: proposal.proposalID,
-        label: `${proposal.researchTitle} (PRO-${proposal.proposalID.toString().padStart(6, "0")})`,
+        label: `${proposal.researchTitle} (PRO-${proposal.proposalID
+            .toString()
+            .padStart(6, "0")})`,
         title: proposal.researchTitle,
     }));
 
@@ -107,7 +109,8 @@ const ProponentSubmitReport = () => {
                                 You don't have any projects yet.
                             </p>
                             <p className="text-sm text-gray-500">
-                                Submit a proposal first to be able to submit progress reports.
+                                Submit a proposal first to be able to submit
+                                progress reports.
                             </p>
                         </div>
                     </div>
@@ -137,7 +140,8 @@ const ProponentSubmitReport = () => {
                         ) : (
                             <div className="bg-white rounded-lg shadow-lg p-8">
                                 <div className="text-center py-8 text-gray-500">
-                                    Please select a project above to submit a progress report.
+                                    Please select a project above to submit a
+                                    progress report.
                                 </div>
                             </div>
                         )}
@@ -153,5 +157,3 @@ ProponentSubmitReport.layout = (page) => (
 );
 
 export default ProponentSubmitReport;
-
-

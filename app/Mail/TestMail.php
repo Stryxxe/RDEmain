@@ -27,7 +27,7 @@ class TestMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Test Mail',
+            subject: 'Test Mail from Laravel 12',
         );
     }
 
@@ -37,7 +37,7 @@ class TestMail extends Mailable
     public function content(): Content
     {
         return new Content(
-            view: 'view.name',
+            view: 'view.TestMail',
         );
     }
 
