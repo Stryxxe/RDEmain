@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { BarChart3, TrendingUp, Users, Target, Filter } from "lucide-react";
+import { BarChart3, TrendingUp, Users, Target, Filter, RefreshCw } from "lucide-react";
 import rddService from "../../../services/rddService";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
@@ -23,6 +23,7 @@ const RDDStatistics = () => {
     const [selectedCenter, setSelectedCenter] = useState(null);
     const [researchCenters, setResearchCenters] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
     const [analyticsData, setAnalyticsData] = useState({
         overview: {
             totalProposals: 0,
@@ -40,11 +41,46 @@ const RDDStatistics = () => {
 
     useEffect(() => {
         fetchResearchCenters();
+        fetchAnalyticsData();
     }, []);
 
     useEffect(() => {
         fetchAnalyticsData();
     }, [selectedCenter]);
+
+    // Refresh data when page becomes visible (user navigates back)
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            if (!document.hidden) {
+                // Page became visible - refresh data
+                fetchAnalyticsData();
+            }
+        };
+
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, [selectedCenter]);
+
+    // Auto-refresh when window gains focus
+    useEffect(() => {
+        const handleFocus = () => {
+            fetchAnalyticsData();
+        };
+        
+        window.addEventListener('focus', handleFocus);
+        
+        return () => {
+            window.removeEventListener('focus', handleFocus);
+        };
+    }, [selectedCenter]);
+
+    const handleRefresh = async () => {
+        setIsRefreshing(true);
+        await fetchAnalyticsData();
+        setIsRefreshing(false);
+    };
 
     const fetchResearchCenters = async () => {
         try {
@@ -66,18 +102,35 @@ const RDDStatistics = () => {
 
     const fetchAnalyticsData = async () => {
         try {
-            setLoading(true);
+            // Only show loading spinner on initial load, not on refresh
+            if (!analyticsData.overview.totalProposals && !isRefreshing) {
+                setLoading(true);
+            }
             setError(null);
-            const response = await rddService.getRddAnalytics(selectedCenter, null);
-            console.log("🔍 [RDD Statistics] Full API Response:", response);
-            if (response.success) {
+            
+            // Add cache-busting timestamp to ensure fresh data
+            const response = await axiosInstance.get('/proposals/rdd-analytics', {
+                params: {
+                    centerID: selectedCenter || undefined,
+                    _t: Date.now(), // Cache-busting parameter
+                },
+                headers: { 
+                    Accept: "application/json",
+                    'Cache-Control': 'no-cache',
+                    'Pragma': 'no-cache'
+                },
+                withCredentials: true,
+            });
+            
+            console.log("🔍 [RDD Statistics] Full API Response:", response.data);
+            if (response.data.success) {
                 console.log("✅ [RDD Statistics] Response successful");
-                console.log("📊 [RDD Statistics] Analytics Data:", response.data);
-                console.log("📋 [RDD Statistics] RDE Agenda Data:", response.data.rdeAgenda);
-                console.log("📋 [RDD Statistics] RDE Agenda Count:", response.data.rdeAgenda?.length || 0);
-                setAnalyticsData(response.data);
+                console.log("📊 [RDD Statistics] Analytics Data:", response.data.data);
+                console.log("📋 [RDD Statistics] RDE Agenda Data:", response.data.data.rdeAgenda);
+                console.log("📋 [RDD Statistics] RDE Agenda Count:", response.data.data.rdeAgenda?.length || 0);
+                setAnalyticsData(response.data.data);
             } else {
-                console.error("❌ [RDD Statistics] Response failed:", response);
+                console.error("❌ [RDD Statistics] Response failed:", response.data);
                 setError("Failed to fetch analytics data");
             }
         } catch (err) {
@@ -235,6 +288,24 @@ const RDDStatistics = () => {
                             Comprehensive overview of research proposals and
                             outcomes
                         </p>
+                        {/* Manual Refresh Button */}
+                        <div className="mt-4">
+                            <button
+                                onClick={handleRefresh}
+                                disabled={isRefreshing}
+                                className="inline-flex items-center gap-2 px-4 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                                title="Refresh statistics"
+                            >
+                                <RefreshCw
+                                    className={`w-4 h-4 ${
+                                        isRefreshing ? "animate-spin" : ""
+                                    }`}
+                                />
+                                <span>
+                                    {isRefreshing ? "Refreshing..." : "Refresh Statistics"}
+                                </span>
+                            </button>
+                        </div>
                     </div>
                 </div>
 

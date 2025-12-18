@@ -10,6 +10,7 @@ import {
     FileText,
     Image as ImageIcon,
     MessageSquare,
+    Filter,
 } from "lucide-react";
 import { BiSearch } from "react-icons/bi";
 import axios from "axios";
@@ -37,6 +38,9 @@ const RDDForRevision = () => {
     const [loadingDetails, setLoadingDetails] = useState(false);
     const [viewingImage, setViewingImage] = useState(null); // For image popup modal
     const [imageZoom, setImageZoom] = useState(100); // Zoom percentage
+    const [selectedCenter, setSelectedCenter] = useState(null);
+    const [researchCenters, setResearchCenters] = useState([]);
+    const [loadingCenters, setLoadingCenters] = useState(true);
 
     // Helper function to check if a file is a research proposal file
     // IMPORTANT: Only check fileType, NOT filename keywords to avoid false positives
@@ -57,6 +61,7 @@ const RDDForRevision = () => {
     };
 
     useEffect(() => {
+        fetchResearchCenters();
         fetchProposals();
 
         // Refresh proposals every 30 seconds to catch updates
@@ -66,6 +71,26 @@ const RDDForRevision = () => {
 
         return () => clearInterval(interval);
     }, []);
+
+    const fetchResearchCenters = async () => {
+        try {
+            setLoadingCenters(true);
+            const response = await axiosInstance.get(
+                "/admin/research-centers",
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+            if (response.data.success) {
+                setResearchCenters(response.data.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching research centers:", err);
+        } finally {
+            setLoadingCenters(false);
+        }
+    };
 
     // Refresh data when page becomes visible
     useEffect(() => {
@@ -99,7 +124,31 @@ const RDDForRevision = () => {
             );
 
             if (response.data.success) {
-                setProposals(response.data.data || []);
+                const proposalsData = response.data.data || [];
+                
+                // Debug: Log proposals and their endorsement status
+                console.log("[RDD ForRevision] Fetched proposals:", proposalsData.length);
+                let cmEndorsedCount = 0;
+                proposalsData.forEach((proposal, idx) => {
+                    const endorsements = proposal.endorsements || [];
+                    const cmEndorsements = endorsements.filter((end) => {
+                        const endorserRole = end?.endorser?.role?.userRole || 
+                                            end?.endorserRole ||
+                                            end?.role?.userRole;
+                        return endorserRole === "CM" && end?.endorsementStatus === "approved";
+                    });
+                    if (cmEndorsements.length > 0) {
+                        cmEndorsedCount++;
+                        console.log(`[RDD ForRevision] ⚠️ Proposal ${proposal.proposalID || proposal.id} has CM endorsement - will be filtered out`);
+                    }
+                });
+                
+                if (cmEndorsedCount > 0) {
+                    console.log(`[RDD ForRevision] ⚠️ Found ${cmEndorsedCount} proposals with CM endorsements that will be filtered out`);
+                    console.log(`[RDD ForRevision] Note: Ideally, backend API should exclude these proposals`);
+                }
+                
+                setProposals(proposalsData);
             }
         } catch (error) {
             console.error("Error fetching proposals for revision:", error);
@@ -223,10 +272,61 @@ const RDDForRevision = () => {
     };
 
     const filteredProposals = proposals.filter((proposal) => {
+        // CRITICAL: Exclude ANY proposal that has been endorsed by CM
+        // Once CM endorses a proposal, it should NOT appear in RDD ForRevision page
+        // The proposal should only stay between CM and Proponent
+        const endorsements = proposal.endorsements || [];
+        
+        if (Array.isArray(endorsements) && endorsements.length > 0) {
+            // Check if there's any CM endorsement with "approved" status
+            // Handle different possible data structures for endorsement data
+            const cmEndorsements = endorsements.filter((endorsement) => {
+                if (!endorsement) return false;
+                
+                // Check endorsement status
+                const status = endorsement?.endorsementStatus || 
+                              endorsement?.status ||
+                              endorsement?.endorsement_status;
+                
+                if (status !== "approved" && status !== "Approved") {
+                    return false;
+                }
+                
+                // Check if endorser is CM - handle multiple possible data structures
+                const endorserRole = endorsement?.endorser?.role?.userRole || 
+                                    endorsement?.endorser?.userRole ||
+                                    endorsement?.endorserRole ||
+                                    endorsement?.role?.userRole ||
+                                    endorsement?.role;
+                
+                // Also check if endorserID matches a CM user (if we have user context)
+                const isCM = endorserRole === "CM" || 
+                            endorserRole === "cm" || 
+                            endorserRole === "Center Manager" ||
+                            (endorsement?.endorser?.userRole === "CM") ||
+                            (endorsement?.endorser?.role === "CM");
+
+                return isCM;
+            });
+
+            // If CM has endorsed even once, exclude from RDD ForRevision page
+            if (cmEndorsements.length >= 1) {
+                console.log(`[RDD ForRevision] Filtering out proposal ${proposal.proposalID || proposal.id} - already endorsed by CM`);
+                return false;
+            }
+        }
+
+        // Apply search filter
         const term = searchTerm.toLowerCase();
         const title = (proposal.researchTitle || "").toLowerCase();
         const author = (proposal.user?.fullName || "").toLowerCase();
-        return title.includes(term) || author.includes(term);
+        const matchesSearch = title.includes(term) || author.includes(term);
+        
+        // Apply research center filter
+        const proposalCenterID = proposal.user?.researchCenter?.centerID || proposal.user?.research_center?.centerID || null;
+        const matchesCenter = selectedCenter === null || proposalCenterID === selectedCenter;
+        
+        return matchesSearch && matchesCenter;
     });
 
     if (loading) {
@@ -277,19 +377,49 @@ const RDDForRevision = () => {
             </div>
 
             <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-                {/* Search Bar */}
+                {/* Search Bar and Filters */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-                    <div className="relative">
-                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                            <BiSearch className="w-5 h-5 text-gray-400" />
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="relative flex-1 min-w-64">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <BiSearch className="w-5 h-5 text-gray-400" />
+                            </div>
+                            <input
+                                type="text"
+                                placeholder="Search proposals..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
+                            />
                         </div>
-                        <input
-                            type="text"
-                            placeholder="Search proposals..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="block w-full pl-10 pr-3 py-2.5 border border-gray-300 rounded-lg text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 transition-colors"
-                        />
+                        <div className="flex items-center gap-2">
+                            <Filter className="h-5 w-5 text-gray-600" />
+                            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                Research Center:
+                            </span>
+                            <select
+                                value={selectedCenter || ""}
+                                onChange={(e) => {
+                                    setSelectedCenter(
+                                        e.target.value
+                                            ? parseInt(e.target.value)
+                                            : null
+                                    );
+                                }}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-gray-900 min-w-[200px]"
+                                disabled={loadingCenters}
+                            >
+                                <option value="">All Centers</option>
+                                {researchCenters.map((center) => (
+                                    <option
+                                        key={center.centerID}
+                                        value={center.centerID}
+                                    >
+                                        {center.centerName || center.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
                     </div>
                 </div>
 

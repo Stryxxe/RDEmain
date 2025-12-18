@@ -51,3 +51,10 @@ After restarting, you can verify the settings by checking the error message in t
 - PHP configuration: **Needs to be updated to 50M** ⚠️
 
 
+
+
+
+
+
+
+

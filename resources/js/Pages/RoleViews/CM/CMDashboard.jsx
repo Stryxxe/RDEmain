@@ -28,8 +28,6 @@ const CMDashboard = () => {
     const { user } = useAuth();
     const { refreshAllNotifications } = useNotifications();
     const { refreshAllMessages } = useMessages();
-    const [fromYear, setFromYear] = useState("2025");
-    const [toYear, setToYear] = useState("2025");
     const [searchTerm, setSearchTerm] = useState("");
     const [sortBy, setSortBy] = useState("Pending");
     const [proposals, setProposals] = useState([]);
@@ -549,40 +547,6 @@ const CMDashboard = () => {
                                 {isRefreshing ? "Refreshing..." : "Refresh"}
                             </span>
                         </button>
-                    </div>
-                </div>
-            </div>
-
-            {/* Year Filter Section */}
-            <div className="p-5">
-                <div className="flex gap-8 mb-8 bg-white p-5 rounded-lg shadow-md">
-                    <div className="flex items-center gap-3">
-                        <label className="font-medium text-gray-700">
-                            From Year:
-                        </label>
-                        <select
-                            value={fromYear}
-                            onChange={(e) => setFromYear(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded bg-white text-sm"
-                        >
-                            <option value="2025">2025</option>
-                            <option value="2024">2024</option>
-                            <option value="2023">2023</option>
-                        </select>
-                    </div>
-                    <div className="flex items-center gap-3">
-                        <label className="font-medium text-gray-700">
-                            To Year:
-                        </label>
-                        <select
-                            value={toYear}
-                            onChange={(e) => setToYear(e.target.value)}
-                            className="px-3 py-2 border border-gray-300 rounded bg-white text-sm"
-                        >
-                            <option value="2025">2025</option>
-                            <option value="2024">2024</option>
-                            <option value="2023">2023</option>
-                        </select>
                     </div>
                 </div>
             </div>

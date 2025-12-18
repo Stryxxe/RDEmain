@@ -618,36 +618,63 @@ const RDDEditProposal = ({ proposal, onBack, onSave }) => {
                                                                                 file,
                                                                                 idx
                                                                             ) => (
-                                                                                <a
+                                                                                <div
                                                                                     key={
                                                                                         idx
                                                                                     }
-                                                                                    href={`/storage/${file.filePath}`}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
-                                                                                    className="flex items-center space-x-2 p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700 hover:bg-blue-100 transition-colors"
+                                                                                    className="flex items-center justify-between p-2 bg-blue-50 border border-blue-200 rounded text-xs text-blue-700"
                                                                                 >
-                                                                                    <svg
-                                                                                        className="w-4 h-4"
-                                                                                        fill="none"
-                                                                                        stroke="currentColor"
-                                                                                        viewBox="0 0 24 24"
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            strokeWidth={
-                                                                                                2
+                                                                                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                                                        <svg
+                                                                                            className="w-4 h-4 flex-shrink-0"
+                                                                                            fill="none"
+                                                                                            stroke="currentColor"
+                                                                                            viewBox="0 0 24 24"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={
+                                                                                                    2
+                                                                                                }
+                                                                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span className="truncate">
+                                                                                            {
+                                                                                                file.fileName
                                                                                             }
-                                                                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span className="truncate">
-                                                                                        {
-                                                                                            file.fileName
-                                                                                        }
-                                                                                    </span>
-                                                                                </a>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <a
+                                                                                        href={`/storage/${file.filePath}`}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="flex items-center space-x-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 rounded text-blue-700 transition-colors ml-2 flex-shrink-0"
+                                                                                        title="View document"
+                                                                                    >
+                                                                                        <svg
+                                                                                            className="w-3.5 h-3.5"
+                                                                                            fill="none"
+                                                                                            stroke="currentColor"
+                                                                                            viewBox="0 0 24 24"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={2}
+                                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                                            />
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={2}
+                                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>View</span>
+                                                                                    </a>
+                                                                                </div>
                                                                             )
                                                                         )}
                                                                     </div>
@@ -668,36 +695,63 @@ const RDDEditProposal = ({ proposal, onBack, onSave }) => {
                                                                                 file,
                                                                                 idx
                                                                             ) => (
-                                                                                <a
+                                                                                <div
                                                                                     key={
                                                                                         idx
                                                                                     }
-                                                                                    href={`/storage/${file.filePath}`}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
-                                                                                    className="flex items-center space-x-2 p-2 bg-pink-50 border border-pink-200 rounded text-xs text-pink-700 hover:bg-pink-100 transition-colors"
+                                                                                    className="flex items-center justify-between p-2 bg-pink-50 border border-pink-200 rounded text-xs text-pink-700"
                                                                                 >
-                                                                                    <svg
-                                                                                        className="w-4 h-4"
-                                                                                        fill="none"
-                                                                                        stroke="currentColor"
-                                                                                        viewBox="0 0 24 24"
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            strokeWidth={
-                                                                                                2
+                                                                                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                                                        <svg
+                                                                                            className="w-4 h-4 flex-shrink-0"
+                                                                                            fill="none"
+                                                                                            stroke="currentColor"
+                                                                                            viewBox="0 0 24 24"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={
+                                                                                                    2
+                                                                                                }
+                                                                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span className="truncate">
+                                                                                            {
+                                                                                                file.fileName
                                                                                             }
-                                                                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span className="truncate">
-                                                                                        {
-                                                                                            file.fileName
-                                                                                        }
-                                                                                    </span>
-                                                                                </a>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <a
+                                                                                        href={`/storage/${file.filePath}`}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="flex items-center space-x-1 px-2 py-1 bg-pink-100 hover:bg-pink-200 rounded text-pink-700 transition-colors ml-2 flex-shrink-0"
+                                                                                        title="View document"
+                                                                                    >
+                                                                                        <svg
+                                                                                            className="w-3.5 h-3.5"
+                                                                                            fill="none"
+                                                                                            stroke="currentColor"
+                                                                                            viewBox="0 0 24 24"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={2}
+                                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                                            />
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={2}
+                                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>View</span>
+                                                                                    </a>
+                                                                                </div>
                                                                             )
                                                                         )}
                                                                     </div>
@@ -719,36 +773,63 @@ const RDDEditProposal = ({ proposal, onBack, onSave }) => {
                                                                                 file,
                                                                                 idx
                                                                             ) => (
-                                                                                <a
+                                                                                <div
                                                                                     key={
                                                                                         idx
                                                                                     }
-                                                                                    href={`/storage/${file.filePath}`}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
-                                                                                    className="flex items-center space-x-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700 hover:bg-yellow-100 transition-colors"
+                                                                                    className="flex items-center justify-between p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-700"
                                                                                 >
-                                                                                    <svg
-                                                                                        className="w-4 h-4"
-                                                                                        fill="none"
-                                                                                        stroke="currentColor"
-                                                                                        viewBox="0 0 24 24"
-                                                                                    >
-                                                                                        <path
-                                                                                            strokeLinecap="round"
-                                                                                            strokeLinejoin="round"
-                                                                                            strokeWidth={
-                                                                                                2
+                                                                                    <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                                                        <svg
+                                                                                            className="w-4 h-4 flex-shrink-0"
+                                                                                            fill="none"
+                                                                                            stroke="currentColor"
+                                                                                            viewBox="0 0 24 24"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={
+                                                                                                    2
+                                                                                                }
+                                                                                                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span className="truncate">
+                                                                                            {
+                                                                                                file.fileName
                                                                                             }
-                                                                                            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                        />
-                                                                                    </svg>
-                                                                                    <span className="truncate">
-                                                                                        {
-                                                                                            file.fileName
-                                                                                        }
-                                                                                    </span>
-                                                                                </a>
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <a
+                                                                                        href={`/storage/${file.filePath}`}
+                                                                                        target="_blank"
+                                                                                        rel="noopener noreferrer"
+                                                                                        className="flex items-center space-x-1 px-2 py-1 bg-yellow-100 hover:bg-yellow-200 rounded text-yellow-700 transition-colors ml-2 flex-shrink-0"
+                                                                                        title="View document"
+                                                                                    >
+                                                                                        <svg
+                                                                                            className="w-3.5 h-3.5"
+                                                                                            fill="none"
+                                                                                            stroke="currentColor"
+                                                                                            viewBox="0 0 24 24"
+                                                                                        >
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={2}
+                                                                                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                                            />
+                                                                                            <path
+                                                                                                strokeLinecap="round"
+                                                                                                strokeLinejoin="round"
+                                                                                                strokeWidth={2}
+                                                                                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                                            />
+                                                                                        </svg>
+                                                                                        <span>View</span>
+                                                                                    </a>
+                                                                                </div>
                                                                             )
                                                                         )}
                                                                     </div>
@@ -851,36 +932,63 @@ const RDDEditProposal = ({ proposal, onBack, onSave }) => {
                                                                         file,
                                                                         idx
                                                                     ) => (
-                                                                        <a
+                                                                        <div
                                                                             key={
                                                                                 idx
                                                                             }
-                                                                            href={`/storage/${file.filePath}`}
-                                                                            target="_blank"
-                                                                            rel="noopener noreferrer"
-                                                                            className="flex items-center space-x-2 p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700 hover:bg-orange-100 transition-colors"
+                                                                            className="flex items-center justify-between p-2 bg-orange-50 border border-orange-200 rounded text-xs text-orange-700"
                                                                         >
-                                                                            <svg
-                                                                                className="w-4 h-4"
-                                                                                fill="none"
-                                                                                stroke="currentColor"
-                                                                                viewBox="0 0 24 24"
-                                                                            >
-                                                                                <path
-                                                                                    strokeLinecap="round"
-                                                                                    strokeLinejoin="round"
-                                                                                    strokeWidth={
-                                                                                        2
+                                                                            <div className="flex items-center space-x-2 min-w-0 flex-1">
+                                                                                <svg
+                                                                                    className="w-4 h-4 flex-shrink-0"
+                                                                                    fill="none"
+                                                                                    stroke="currentColor"
+                                                                                    viewBox="0 0 24 24"
+                                                                                >
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        strokeWidth={
+                                                                                            2
+                                                                                        }
+                                                                                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                                                                                    />
+                                                                                </svg>
+                                                                                <span className="truncate">
+                                                                                    {
+                                                                                        file.fileName
                                                                                     }
-                                                                                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                                                                                />
-                                                                            </svg>
-                                                                            <span className="truncate">
-                                                                                {
-                                                                                    file.fileName
-                                                                                }
-                                                                            </span>
-                                                                        </a>
+                                                                                </span>
+                                                                            </div>
+                                                                            <a
+                                                                                href={`/storage/${file.filePath}`}
+                                                                                target="_blank"
+                                                                                rel="noopener noreferrer"
+                                                                                className="flex items-center space-x-1 px-2 py-1 bg-orange-100 hover:bg-orange-200 rounded text-orange-700 transition-colors ml-2 flex-shrink-0"
+                                                                                title="View document"
+                                                                            >
+                                                                                <svg
+                                                                                    className="w-3.5 h-3.5"
+                                                                                    fill="none"
+                                                                                    stroke="currentColor"
+                                                                                    viewBox="0 0 24 24"
+                                                                                >
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        strokeWidth={2}
+                                                                                        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                                                                    />
+                                                                                    <path
+                                                                                        strokeLinecap="round"
+                                                                                        strokeLinejoin="round"
+                                                                                        strokeWidth={2}
+                                                                                        d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                                                                                    />
+                                                                                </svg>
+                                                                                <span>View</span>
+                                                                            </a>
+                                                                        </div>
                                                                     )
                                                                 )}
                                                             </div>

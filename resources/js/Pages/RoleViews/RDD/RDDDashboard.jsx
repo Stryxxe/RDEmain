@@ -22,7 +22,7 @@ if (!window.axios) {
 
 const RDDDashboard = () => {
     const [searchTerm, setSearchTerm] = useState("");
-    const [sortBy, setSortBy] = useState("Date"); // Default to Date (Latest to Oldest)
+    const [sortBy, setSortBy] = useState("Title"); // Default to Title
     const [selectedCenter, setSelectedCenter] = useState(null);
     const [researchCenters, setResearchCenters] = useState([]);
     const [loadingCenters, setLoadingCenters] = useState(true);
@@ -232,11 +232,6 @@ const RDDDashboard = () => {
     // Sort the filtered data
     filteredResearch = [...filteredResearch].sort((a, b) => {
         switch (sortBy) {
-            case "Date":
-                // Latest to Oldest (descending by date)
-                const dateA = new Date(a.submittedDate);
-                const dateB = new Date(b.submittedDate);
-                return dateB - dateA;
             case "Title":
                 return a.title.localeCompare(b.title);
             case "Author":
@@ -244,10 +239,8 @@ const RDDDashboard = () => {
             case "Status":
                 return a.status.localeCompare(b.status);
             default:
-                // Default: Latest to Oldest
-                const defaultDateA = new Date(a.submittedDate);
-                const defaultDateB = new Date(b.submittedDate);
-                return defaultDateB - defaultDateA;
+                // Default: Title (A-Z)
+                return a.title.localeCompare(b.title);
         }
     });
 
@@ -355,29 +348,6 @@ const RDDDashboard = () => {
                             Comprehensive list of all research initiatives
                         </p>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <label className="text-sm font-medium text-gray-700">
-                            Sort by:
-                        </label>
-                        <select
-                            value={sortBy}
-                            onChange={(e) => setSortBy(e.target.value)}
-                            className="px-3 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                        >
-                            <option value="Date">
-                                Date (Latest to Oldest)
-                            </option>
-                            <option value="Title">Title</option>
-                            <option value="Author">Author</option>
-                            <option value="Status">Status</option>
-                        </select>
-                        {sortBy === "Date" && (
-                            <span className="text-gray-500 ml-1">↓</span>
-                        )}
-                        {sortBy !== "Date" && (
-                            <span className="text-gray-500 ml-1">↑</span>
-                        )}
-                    </div>
                 </div>
 
                 {/* Filters Section */}
@@ -427,6 +397,21 @@ const RDDDashboard = () => {
                                     </option>
                                 ))}
                             </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                                Sort by:
+                            </label>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500 bg-white text-gray-900 min-w-[120px]"
+                            >
+                                <option value="Title">Title</option>
+                                <option value="Author">Author</option>
+                                <option value="Status">Status</option>
+                            </select>
+                            <span className="text-gray-500">↑</span>
                         </div>
                     </div>
                 </div>

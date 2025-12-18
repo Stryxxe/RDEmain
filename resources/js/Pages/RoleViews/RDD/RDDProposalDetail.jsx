@@ -886,7 +886,7 @@ const RDDProposalDetail = ({ id: proposalId }) => {
                                                                     {index <
                                                                         timelineStages.length -
                                                                             1 && (
-                                                                        <div className="absolute top-[20px] sm:top-[24px] left-[calc(100%+1rem)] sm:left-[calc(100%+2rem)] z-0 -translate-x-1/2">
+                                                                        <div className="absolute top-1/2 -translate-y-1/2 left-[calc(100%+2rem)] sm:left-[calc(100%+4rem)] -translate-x-1/2 z-0">
                                                                             <svg
                                                                                 className={`w-6 h-6 sm:w-8 sm:h-8 ${
                                                                                     stage.status ===

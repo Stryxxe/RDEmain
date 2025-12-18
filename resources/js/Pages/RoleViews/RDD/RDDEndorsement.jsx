@@ -1,9 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { router, Link } from "@inertiajs/react";
+import { Filter } from "lucide-react";
 import rddService from "../../../services/rddService";
 import AppLayout from "../../../Components/Layouts/AppLayout";
 import RDDLayout from "../../../Components/Layouts/RDDLayout";
 import Breadcrumbs from "../../../Components/Breadcrumbs";
+import axios from "axios";
+
+const axiosInstance = window.axios || axios;
+if (!window.axios) {
+    axiosInstance.defaults.withCredentials = true;
+    axiosInstance.defaults.baseURL = `${window.location.origin}/api`;
+}
 
 const RDDEndorsement = () => {
     const [year, setYear] = useState("2025");
@@ -12,9 +20,13 @@ const RDDEndorsement = () => {
     const [proposals, setProposals] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [selectedCenter, setSelectedCenter] = useState(null);
+    const [researchCenters, setResearchCenters] = useState([]);
+    const [loadingCenters, setLoadingCenters] = useState(true);
     const itemsPerPage = 10;
 
     useEffect(() => {
+        fetchResearchCenters();
         fetchProposals();
         
         // Auto-refresh when window gains focus (e.g., after CM endorses and returns)
@@ -28,6 +40,26 @@ const RDDEndorsement = () => {
             window.removeEventListener('focus', handleFocus);
         };
     }, []);
+
+    const fetchResearchCenters = async () => {
+        try {
+            setLoadingCenters(true);
+            const response = await axiosInstance.get(
+                "/admin/research-centers",
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+            if (response.data.success) {
+                setResearchCenters(response.data.data || []);
+            }
+        } catch (err) {
+            console.error("Error fetching research centers:", err);
+        } finally {
+            setLoadingCenters(false);
+        }
+    };
 
     const fetchProposals = async () => {
         try {
@@ -57,6 +89,7 @@ const RDDEndorsement = () => {
                         author: proposal.user
                             ? `${proposal.user.firstName} ${proposal.user.lastName}`
                             : "Unknown",
+                        centerID: proposal.user?.researchCenter?.centerID || proposal.user?.research_center?.centerID || null,
                         dateSubmitted: new Date(
                             proposal.uploadedAt
                         ).toLocaleDateString("en-US", {
@@ -94,12 +127,13 @@ const RDDEndorsement = () => {
         router.visit(`/rdd/review-proposal/${proposal.id}`);
     };
 
-    // Filter proposals based on search
+    // Filter proposals based on search and research center
     const filteredProposals = proposals.filter((proposal) => {
         const matchesSearch =
             proposal.title.toLowerCase().includes(search.toLowerCase()) ||
             proposal.author.toLowerCase().includes(search.toLowerCase());
-        return matchesSearch;
+        const matchesCenter = selectedCenter === null || proposal.centerID === selectedCenter;
+        return matchesSearch && matchesCenter;
     });
 
     // Pagination
@@ -212,6 +246,36 @@ const RDDEndorsement = () => {
 
                 {/* Filters */}
                 <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-2">
+                        <Filter className="h-5 w-5 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-700 whitespace-nowrap">
+                            Research Center:
+                        </span>
+                        <select
+                            value={selectedCenter || ""}
+                            onChange={(e) => {
+                                setSelectedCenter(
+                                    e.target.value
+                                        ? parseInt(e.target.value)
+                                        : null
+                                );
+                                setCurrentPage(1);
+                            }}
+                            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white text-gray-900 min-w-[200px]"
+                            disabled={loadingCenters}
+                        >
+                            <option value="">All Centers</option>
+                            {researchCenters.map((center) => (
+                                <option
+                                    key={center.centerID}
+                                    value={center.centerID}
+                                >
+                                    {center.centerName || center.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
                     <div className="flex items-center space-x-2">
                         <FilterIcon />
                         <span className="text-sm font-medium text-gray-700">
@@ -370,7 +434,7 @@ const RDDEndorsement = () => {
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <Link
-                                                    href={`/rdd/proposal/${proposal.id}`}
+                                                    href={`/rdd/review-proposal/${proposal.id}`}
                                                     className="text-blue-600 hover:text-blue-800 text-sm"
                                                 >
                                                     View Details
