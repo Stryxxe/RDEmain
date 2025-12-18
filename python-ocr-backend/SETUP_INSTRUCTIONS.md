@@ -236,3 +236,4 @@ After setup, the following endpoints will be available:
 -   Make sure Tesseract path in `.env` matches your installation
 -   Keep virtual environment activated when running the server
 -   For production, change `DJANGO_SECRET_KEY` and set `DEBUG=False`
+

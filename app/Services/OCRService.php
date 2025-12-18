@@ -117,11 +117,56 @@ class OCRService
     public function isBackendAvailable(): bool
     {
         try {
-            $response = $this->client->get('health/', ['timeout' => 5]);
-            return $response->getStatusCode() === 200;
+            // Build full URL for health check
+            $healthUrl = rtrim($this->pythonBackendUrl, '/') . '/health';
+            
+            Log::info('Checking Python OCR backend availability', [
+                'url' => $healthUrl,
+                'python_backend_url' => $this->pythonBackendUrl
+            ]);
+            
+            // Use a fresh client instance to avoid base_uri path resolution issues
+            $healthClient = new Client([
+                'timeout' => 5,
+                'http_errors' => false, // Don't throw exceptions on 4xx/5xx
+                'verify' => false, // Disable SSL verification for localhost
+            ]);
+            
+            $response = $healthClient->get($healthUrl);
+            
+            $statusCode = $response->getStatusCode();
+            $isAvailable = $statusCode === 200;
+            
+            if (!$isAvailable) {
+                $responseBody = $response->getBody()->getContents();
+                Log::warning('Python OCR backend health check failed', [
+                    'status_code' => $statusCode,
+                    'url' => $healthUrl,
+                    'response' => $responseBody
+                ]);
+            } else {
+                Log::info('Python OCR backend health check passed', [
+                    'url' => $healthUrl,
+                    'status_code' => $statusCode
+                ]);
+            }
+            
+            return $isAvailable;
+        } catch (ConnectException $e) {
+            Log::error('Python OCR backend connection failed', [
+                'error' => $e->getMessage(),
+                'error_type' => get_class($e),
+                'url' => rtrim($this->pythonBackendUrl, '/') . '/health',
+                'python_backend_url' => $this->pythonBackendUrl
+            ]);
+            return false;
         } catch (\Exception $e) {
-            Log::warning('Python OCR backend not available', [
-                'error' => $e->getMessage()
+            Log::error('Python OCR backend not available', [
+                'error' => $e->getMessage(),
+                'error_type' => get_class($e),
+                'url' => rtrim($this->pythonBackendUrl, '/') . '/health',
+                'python_backend_url' => $this->pythonBackendUrl,
+                'trace' => $e->getTraceAsString()
             ]);
             return false;
         }

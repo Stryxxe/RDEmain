@@ -384,7 +384,31 @@ const SubmitPage = () => {
             
         } catch (error) {
             console.error("OCR extraction error:", error);
-            setOcrError(typeof error === 'string' ? error : error.message || "Failed to process PDF. Please try again or fill the form manually.");
+            
+            // Handle different error types
+            let errorMessage = "Failed to process PDF. Please try again or fill the form manually.";
+            
+            if (error.response) {
+                // HTTP error response
+                const status = error.response.status;
+                const data = error.response.data;
+                
+                if (status === 503) {
+                    errorMessage = data?.message || "OCR service is currently unavailable. Please ensure the Python OCR backend is running on port 8001, or fill the form manually.";
+                } else if (status === 422) {
+                    errorMessage = data?.message || "Invalid file format. Please upload a valid PDF file.";
+                } else if (data?.message) {
+                    errorMessage = data.message;
+                } else {
+                    errorMessage = `OCR processing failed (HTTP ${status}). Please try again or fill the form manually.`;
+                }
+            } else if (error.message) {
+                errorMessage = error.message;
+            } else if (typeof error === 'string') {
+                errorMessage = error;
+            }
+            
+            setOcrError(errorMessage);
         } finally {
             setIsOCRProcessing(false);
         }

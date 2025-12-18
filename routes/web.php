@@ -90,6 +90,7 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
         Route::get('/', fn() => Inertia::render('RoleViews/Dashboards/AdminDashboard'))->name('dashboard');
         Route::get('/user-management', fn() => Inertia::render('RoleViews/Admin/UserManagement'))->name('user-management');
         Route::get('/system-settings', fn() => Inertia::render('RoleViews/Admin/SystemSettings'))->name('system-settings');
+        Route::get('/reports', fn() => Inertia::render('RoleViews/Admin/Reports'))->name('reports');
         Route::post('/timeline-stages', [TimelineStageController::class, 'store'])->name('timeline-stages.store');
         Route::put('/timeline-stages/{id}', [TimelineStageController::class, 'update'])->name('timeline-stages.update');
         Route::delete('/timeline-stages/{id}', [TimelineStageController::class, 'destroy'])->name('timeline-stages.destroy');

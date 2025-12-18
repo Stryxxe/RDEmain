@@ -54,11 +54,17 @@ class OCRController extends Controller
 
             // Check if Python OCR backend is available
             if (!$this->ocrService->isBackendAvailable()) {
-                Log::error('Python OCR backend is not available');
+                $backendUrl = config('services.python_ocr.url', 'http://localhost:8001/api');
+                Log::error('Python OCR backend is not available', [
+                    'backend_url' => $backendUrl,
+                    'health_endpoint' => $backendUrl . '/health'
+                ]);
                 return response()->json([
                     'success' => false,
-                    'message' => 'OCR service is currently unavailable. Please try again later.',
-                    'error' => 'Python OCR backend not responding'
+                    'message' => 'OCR service is currently unavailable. The Python OCR backend is not running. Please start it using: cd python-ocr-backend && python manage.py runserver 8001',
+                    'error' => 'Python OCR backend not responding',
+                    'backend_url' => $backendUrl,
+                    'instructions' => 'To start the OCR backend, navigate to the python-ocr-backend directory and run: python manage.py runserver 8001'
                 ], 503);
             }
 
@@ -222,10 +228,15 @@ class OCRController extends Controller
     public function getStatus()
     {
         try {
+            $backendUrl = config('services.python_ocr.url', 'http://localhost:8001/api');
+            $isAvailable = $this->ocrService->isBackendAvailable();
             $status = $this->ocrService->getBackendStatus();
 
             return response()->json([
                 'success' => true,
+                'available' => $isAvailable,
+                'backend_url' => $backendUrl,
+                'health_check_url' => rtrim($backendUrl, '/') . '/health',
                 'status' => $status
             ], 200);
 
@@ -233,7 +244,8 @@ class OCRController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to get OCR status',
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
+                'trace' => config('app.debug') ? $e->getTraceAsString() : null
             ], 500);
         }
     }

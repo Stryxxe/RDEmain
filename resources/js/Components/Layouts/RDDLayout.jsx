@@ -24,13 +24,13 @@ const RDDLayout = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Header */}
-      <div className="fixed inset-x-0 top-0 z-30">
+      {/* Header - Fixed height of 72px */}
+      <div className="fixed inset-x-0 top-0 z-30 h-[72px]">
         <RoleBasedHeader role={role} />
       </div>
 
-      {/* Sidebar */}
-      <aside className="fixed left-0 top-24 bottom-0 w-64 bg-red-900 text-white z-20 overflow-y-auto">
+      {/* Sidebar - Positioned directly below header */}
+      <aside className="fixed left-0 top-[72px] bottom-0 w-64 bg-red-900 text-white z-20 overflow-y-auto">
         <nav className="flex flex-col py-4 space-y-1">
             {menuItems.map((item, index) => {
               const IconComponent = item.icon;
@@ -68,7 +68,7 @@ const RDDLayout = ({ children }) => {
       </aside>
 
       {/* Main Content */}
-      <main className="ml-64 pt-24 bg-gray-50 p-5 min-h-screen">
+      <main className="ml-64 pt-[72px] bg-gray-50 p-5 min-h-screen">
         {children}
       </main>
     </div>

@@ -50,13 +50,43 @@ class TesseractOCRProcessor:
         logger.info("Converting PDF to images...")
         
         try:
+            # Get Poppler path from environment or use default locations
+            poppler_path = os.getenv('POPPLER_PATH')
+            if not poppler_path:
+                # Try common Windows installation locations
+                possible_paths = [
+                    r'C:\Program Files\poppler\Library\bin',
+                    r'C:\poppler\Library\bin',
+                    r'C:\tools\poppler\Library\bin',
+                    r'C:\ProgramData\chocolatey\lib\poppler\tools\bin',
+                    r'C:\ProgramData\chocolatey\bin',  # Chocolatey adds to PATH
+                ]
+                # Also check if pdftoppm is in PATH
+                import shutil
+                pdftoppm_path = shutil.which('pdftoppm')
+                if pdftoppm_path:
+                    poppler_path = os.path.dirname(pdftoppm_path)
+                    logger.info(f"Found Poppler in PATH: {poppler_path}")
+                else:
+                    for path in possible_paths:
+                        if os.path.exists(os.path.join(path, 'pdftoppm.exe')):
+                            poppler_path = path
+                            logger.info(f"Found Poppler at: {poppler_path}")
+                            break
+            
             # Convert PDF to images (300 DPI for better quality)
-            images = convert_from_bytes(
-                pdf_bytes,
-                dpi=300,
-                fmt='jpeg',
-                thread_count=2  # Use 2 threads for faster processing
-            )
+            # pdf_bytes must be positional argument, not keyword
+            convert_kwargs = {
+                'dpi': 300,
+                'fmt': 'jpeg',
+                'thread_count': 2  # Use 2 threads for faster processing
+            }
+            
+            # Add poppler_path if found
+            if poppler_path:
+                convert_kwargs['poppler_path'] = poppler_path
+            
+            images = convert_from_bytes(pdf_bytes, **convert_kwargs)
             
             logger.info(f"PDF converted to {len(images)} pages")
             

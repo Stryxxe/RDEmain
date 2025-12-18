@@ -4,6 +4,7 @@ Checkbox Detection Module - Detect filled checkboxes and checkmarks in PDF forms
 
 import logging
 import re
+import os
 from PIL import Image
 from pdf2image import convert_from_bytes
 
@@ -14,7 +15,37 @@ class CheckboxDetector:
     """Detects checked/filled checkboxes in PDF images"""
     
     def __init__(self):
+        self.poppler_path = self._find_poppler_path()
         logger.info("✓ Checkbox Detector initialized")
+    
+    def _find_poppler_path(self):
+        """Find Poppler installation path"""
+        poppler_path = os.getenv('POPPLER_PATH')
+        if poppler_path:
+            return poppler_path
+        
+        # Check if pdftoppm is in PATH
+        import shutil
+        pdftoppm_path = shutil.which('pdftoppm')
+        if pdftoppm_path:
+            path = os.path.dirname(pdftoppm_path)
+            logger.info(f"Found Poppler in PATH: {path}")
+            return path
+        
+        # Try common Windows installation locations
+        possible_paths = [
+            r'C:\Program Files\poppler\Library\bin',
+            r'C:\poppler\Library\bin',
+            r'C:\tools\poppler\Library\bin',
+            r'C:\ProgramData\chocolatey\lib\poppler\tools\bin',
+            r'C:\ProgramData\chocolatey\bin',
+        ]
+        for path in possible_paths:
+            if os.path.exists(os.path.join(path, 'pdftoppm.exe')):
+                logger.info(f"Found Poppler at: {path}")
+                return path
+        
+        return None
     
     def detect_checked_items(self, file_bytes, section_name, items_list):
         """
@@ -30,7 +61,11 @@ class CheckboxDetector:
         """
         try:
             # Convert PDF to images
-            images = convert_from_bytes(file_bytes, dpi=300)
+            # file_bytes must be positional argument, not keyword
+            convert_kwargs = {'dpi': 300}
+            if self.poppler_path:
+                convert_kwargs['poppler_path'] = self.poppler_path
+            images = convert_from_bytes(file_bytes, **convert_kwargs)
             
             if section_name == 'SDG':
                 return self._detect_filled_boxes_sdg(images[0])  # SDGs are on page 1
