@@ -664,6 +664,8 @@ Route::middleware(['auth:web', \App\Http\Middleware\EnsureUserIsActive::class])-
     Route::get('/proposals/rdd-for-revision', [ProposalController::class, 'getRddForRevisionProposals']);
     Route::get('/proposals/cm-for-revision', [ProposalController::class, 'getCmForRevisionProposals']);
     Route::get('/proposals/{id}/revision-comments', [ProposalController::class, 'getRevisionComments']);
+    // Backward compatibility: allow POST for updates (older builds)
+    Route::post('/proposals/{id}', [ProposalController::class, 'update']);
     Route::apiResource('proposals', ProposalController::class);
     
     // Endorsement routes

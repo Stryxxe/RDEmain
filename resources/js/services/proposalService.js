@@ -96,7 +96,8 @@ export const updateProposal = async (proposalId, data) => {
             headers["Content-Type"] = "application/json";
         }
 
-        const response = await axiosInstance.post(
+        // Use PUT for updates; POST is only for create
+        const response = await axiosInstance.put(
             `/proposals/${proposalId}`,
             payload,
             {

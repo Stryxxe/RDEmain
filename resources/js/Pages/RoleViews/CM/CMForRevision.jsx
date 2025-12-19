@@ -36,6 +36,15 @@ const CMForRevision = () => {
     const { refreshAllNotifications } = useNotifications();
     const { refreshAllMessages } = useMessages();
     const [proposals, setProposals] = useState([]);
+    const [hiddenProposalIds, setHiddenProposalIds] = useState(() => {
+        try {
+            const stored = localStorage.getItem("cm_hidden_revision_ids");
+            const parsed = stored ? JSON.parse(stored) : [];
+            return Array.isArray(parsed) ? parsed : [];
+        } catch {
+            return [];
+        }
+    });
     const [loading, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
@@ -91,7 +100,16 @@ const CMForRevision = () => {
             );
 
             if (response.data.success) {
-                setProposals(response.data.data || []);
+                const list = response.data.data || [];
+                const filtered = Array.isArray(list)
+                    ? list.filter(
+                          (p) =>
+                              !hiddenProposalIds.includes(
+                                  p.proposalID || p.id
+                              )
+                      )
+                    : [];
+                setProposals(filtered);
             }
         } catch (error) {
             console.error("Error fetching proposals for revision:", error);
@@ -193,6 +211,22 @@ const CMForRevision = () => {
             localStorage.setItem(
                 "selectedProjectForEndorsement",
                 JSON.stringify(proposalDetails)
+            );
+
+            // Optimistically hide from For Revision list
+            const id = proposalDetails.proposalID || proposalDetails.id;
+            setHiddenProposalIds((prev) => {
+                const next = Array.from(new Set([...(prev || []), id]));
+                localStorage.setItem(
+                    "cm_hidden_revision_ids",
+                    JSON.stringify(next)
+                );
+                return next;
+            });
+            setProposals((prev) =>
+                Array.isArray(prev)
+                    ? prev.filter((p) => (p.proposalID || p.id) !== id)
+                    : []
             );
 
             // Close the modal

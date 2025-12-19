@@ -13,21 +13,34 @@ class SettingsHelper
      */
     public static function getMaxFileSizeMB(): int
     {
+        // 1) DB setting (admin-managed)
+        try {
+            if (class_exists(\App\Models\Setting::class)) {
+                $dbValue = \App\Models\Setting::get('max_file_size', null);
+                if (!is_null($dbValue)) {
+                    return max(1, min(50, (int) $dbValue));
+                }
+                // Fallback alternate key (if used)
+                $dbValueAlt = \App\Models\Setting::get('maxFileSize', null);
+                if (!is_null($dbValueAlt)) {
+                    return max(1, min(50, (int) $dbValueAlt));
+                }
+            }
+        } catch (\Throwable $e) {
+            // fall through to file/default
+        }
+
+        // 2) JSON settings file
         $path = storage_path('app/settings.json');
         
-        if (!File::exists($path)) {
-            return 50; // Default 50MB
-        }
-        
-        $settings = json_decode(File::get($path), true);
-        
-        if (isset($settings['fileStorage']['maxFileSize'])) {
-            return (int) $settings['fileStorage']['maxFileSize'];
-        }
-        
-        // Fallback to old format
-        if (isset($settings['maxFileSize'])) {
-            return (int) $settings['maxFileSize'];
+        if (File::exists($path)) {
+            $settings = json_decode(File::get($path), true);
+            if (isset($settings['fileStorage']['maxFileSize'])) {
+                return max(1, min(50, (int) $settings['fileStorage']['maxFileSize']));
+            }
+            if (isset($settings['maxFileSize'])) {
+                return max(1, min(50, (int) $settings['maxFileSize']));
+            }
         }
         
         return 50; // Default 50MB

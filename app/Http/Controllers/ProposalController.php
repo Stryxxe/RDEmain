@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -153,9 +154,15 @@ class ProposalController extends Controller
                     ]);
                 }
             } elseif ($role === 'Proponent') {
-                // Show proposals where this user is one of the proponents
-                $query->whereHas('proponents', function ($q) use ($user) {
-                    $q->where('users.userID', $user->userID);
+                // Show proposals where this user is either:
+                // - the owner/submitter (proposals.userID), OR
+                // - listed as a proponent/co-author (proposal_proponents)
+                // This prevents "For Revision" list from being empty when submitter isn't in pivot for some rows.
+                $query->where(function ($q) use ($user) {
+                    $q->where('userID', $user->userID)
+                      ->orWhereHas('proponents', function ($qp) use ($user) {
+                          $qp->where('users.userID', $user->userID);
+                      });
                 });
             } else {
                 // Fallback: show proposals submitted by the user
@@ -244,7 +251,13 @@ class ProposalController extends Controller
                     $query->whereRaw('1=0');
                 }
             } else {
-                $query->whereHas('proponents', fn($q) => $q->where('users.userID', $user->userID));
+                // Proponent/others: allow if user is owner OR a listed proponent
+                $query->where(function ($q) use ($user) {
+                    $q->where('userID', $user->userID)
+                      ->orWhereHas('proponents', function ($qp) use ($user) {
+                          $qp->where('users.userID', $user->userID);
+                      });
+                });
             }
 
             $result = $query->firstOrFail();
@@ -1036,27 +1049,44 @@ class ProposalController extends Controller
                 ]);
             }
 
-            // Track when resubmitting after revision
-            // When proponent resubmits (status is 4), set resubmittedAfterRevision timestamp
-            // IMPORTANT: Status should remain 4 (For Revision) - do NOT change to 1
+            // Track when resubmitting after revision – ONLY when done by the Proponent/owner.
             $isResubmitAfterRevision = false;
             
-            // Check if this is a resubmission: current status is 4 (For Revision) and user is the proposal owner
-            // This allows proponent to resubmit without changing statusID
-            if ($currentStatusID === 4 && $proposal->userID === $user->userID) {
+            if (
+                $currentStatusID === 4 &&
+                $proposal->userID === $user->userID &&
+                $user->role?->userRole === 'Proponent'
+            ) {
                 $isResubmitAfterRevision = true;
                 Log::info('Resubmission detected', [
                     'proposal_id' => $proposal->proposalID,
                     'current_status_id' => $currentStatusID,
                     'user_id' => $user->userID,
                     'proposal_owner_id' => $proposal->userID,
-                    'is_owner' => $proposal->userID === $user->userID
+                    'is_owner' => true
                 ]);
             }
 
             // Save revision comments when marking for revision
             if ($wasRevisionStatusChange && $request->has('revisionComments')) {
-                $updateData['revisionComments'] = $request->input('revisionComments');
+                // Some environments (e.g., sqlite dev) may not have this column if migrations not run
+                if (Schema::hasColumn('proposals', 'revisionComments')) {
+                    $updateData['revisionComments'] = $request->input('revisionComments');
+                } else {
+                    Log::warning('revisionComments column missing; skipping save', [
+                        'proposal_id' => $proposal->proposalID,
+                        'db_connection' => config('database.default')
+                    ]);
+                }
+            }
+
+            // If CM/RDD marks for revision, force status to 4, clear any prior resubmission flag, and tag requester (if column exists)
+            if ($wasRevisionStatusChange && $user->role && in_array($user->role->userRole, ['CM', 'RDD'])) {
+                $updateData['statusID'] = 4;
+                $updateData['resubmittedAfterRevision'] = null;
+                if (Schema::hasColumn('proposals', 'revisionRequestedBy')) {
+                    $updateData['revisionRequestedBy'] = $user->role->userRole; // 'CM' or 'RDD'
+                }
             }
 
             // When resubmitting after revision, set resubmittedAfterRevision timestamp
@@ -2659,10 +2689,8 @@ class ProposalController extends Controller
                 ]);
             }
 
-            // Get all proposals for revision from CM's research center
-            // Include proposals with:
-            // 1. statusID = 4 (For Revision) - original proposals sent for revision
-            // 2. statusID = 1 AND resubmittedAfterRevision IS NOT NULL - resubmitted proposals (status changed to 1 but still need to be in For Revision)
+            // CM "For Revision" should show ONLY proposals that were resubmitted by the proponent.
+            // (Do NOT show immediately after CM clicks "Send for revision".)
             $query = Proposal::with([
                 'status:statusID,statusName,statusDescription',
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
@@ -2673,39 +2701,20 @@ class ProposalController extends Controller
             ->whereHas('user', function($q) use ($user) {
                 $q->where('researchCenterID', $user->researchCenterID);
             })
-            ->where(function($q) use ($user) {
-                // Original proposals sent for revision (statusID = 4)
-                $q->where(function($status4Q) use ($user) {
-                    $status4Q->where('statusID', 4)
-                             // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
-                             // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
-                             ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
-                                 [$user->userID, 'approved']);
-                })
-                // OR resubmitted proposals (statusID = 1 but resubmittedAfterRevision is set)
-                ->orWhere(function($subQ) use ($user) {
-                    $subQ->where('statusID', 1)
-                         ->whereNotNull('resubmittedAfterRevision')
-                         // CRITICAL: Exclude if CM has endorsed twice (count >= 2)
-                         // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
-                         ->whereRaw('(SELECT COUNT(*) FROM endorsements WHERE endorsements.proposalID = proposals.proposalID AND endorsements.endorserID = ? AND endorsements.endorsementStatus = ?) < 2', 
-                             [$user->userID, 'approved']);
+            ->where('statusID', 1)
+            ->whereNotNull('resubmittedAfterRevision')
+            // If the column exists, include only CM-requested revisions (or legacy null)
+            ->when(Schema::hasColumn('proposals', 'revisionRequestedBy'), function($q) {
+                $q->where(function($inner) {
+                    $inner->whereNull('revisionRequestedBy')
+                          ->orWhere('revisionRequestedBy', 'CM');
                 });
             });
 
             $allProposals = $query->get();
 
-            // CRITICAL: Double-check filter - Remove proposals where CM has endorsed twice or more
-            // This ensures immediate removal when CM forwards to RDD - does NOT wait for RDD endorsement
-            $filteredProposals = $allProposals->filter(function($proposal) use ($user) {
-                $cmEndorsements = $proposal->endorsements->filter(function($endorsement) use ($user) {
-                    return $endorsement->endorserID === $user->userID 
-                        && $endorsement->endorsementStatus === 'approved';
-                });
-                // Exclude if CM has endorsed twice or more (count >= 2)
-                // This removal is IMMEDIATE - based on CM's action, not RDD's
-                return $cmEndorsements->count() < 2;
-            });
+            // No extra endorsement-count filtering needed; the query is already resubmission-only.
+            $filteredProposals = $allProposals;
 
             // Log for debugging
             Log::info('CM For Revision Query Results', [
@@ -2779,18 +2788,17 @@ class ProposalController extends Controller
                 $q->where('userRole', 'RDD');
             })->pluck('userID')->toArray();
 
-            // RDD's For Revision should ONLY show proposals that:
-            // 1. Have been endorsed by CM (forwarded to RDD level)
-            // 2. Have statusID = 4 (sent for revision by RDD) OR statusID = 1 with resubmittedAfterRevision (resubmitted after RDD revision)
-            // NOTE: For statusID = 4 proposals, we don't require an RDD endorsement because marking for revision doesn't create one
-            // For resubmitted proposals (statusID = 1 with resubmittedAfterRevision), we require an RDD endorsement to ensure they're at RDD level
+            // RDD "For Revision" should show ONLY proposals that were resubmitted by the proponent
+            // after RDD requested revisions.
             $query = Proposal::with([
                 'status:statusID,statusName,statusDescription',
                 'files:fileID,proposalID,fileName,filePath,fileType,fileSize',
                 'user:userID,firstName,lastName,email,researchCenterID,departmentID',
                 'user.department:departmentID,name',
                 'user.researchCenter:centerID,centerName,name',
-                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt'
+                'endorsements:endorsementID,proposalID,endorserID,endorsementStatus,endorsedAt',
+                'endorsements.endorser:userID,userRolesID',
+                'endorsements.endorser.role:userRoleID,userRole'
             ])
             ->whereNull('archivedByRDD')
             // Must have been endorsed by CM (forwarded to RDD level)
@@ -2798,20 +2806,12 @@ class ProposalController extends Controller
                 $query->where('endorsementStatus', 'approved')
                     ->whereIn('endorserID', $cmUserIds);
             })
-            ->where(function($q) use ($rddUserIds) {
-                // Proposals sent for revision by RDD (statusID = 4)
-                // These don't require an RDD endorsement because marking for revision doesn't create one
-                $q->where('statusID', 4)
-                // OR resubmitted proposals after RDD sent for revision (statusID = 1 but resubmittedAfterRevision is set)
-                // These require an RDD endorsement to ensure they're at RDD level
-                ->orWhere(function($subQ) use ($rddUserIds) {
-                    $subQ->where('statusID', 1)
-                         ->whereNotNull('resubmittedAfterRevision')
-                         // Must have been reviewed by RDD (has an endorsement from RDD)
-                         ->whereHas('endorsements', function ($query) use ($rddUserIds) {
-                             $query->whereIn('endorserID', $rddUserIds);
-                         });
-                });
+            // Only show after proponent resubmits
+            ->whereNotNull('resubmittedAfterRevision')
+            ->where('statusID', 1)
+            // If available, ensure this revision was requested by RDD
+            ->when(Schema::hasColumn('proposals', 'revisionRequestedBy'), function($q) {
+                $q->where('revisionRequestedBy', 'RDD');
             });
 
             $allProposals = $query->get();
