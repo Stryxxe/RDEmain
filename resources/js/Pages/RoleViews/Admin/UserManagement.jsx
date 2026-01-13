@@ -601,15 +601,6 @@ const UserManagement = () => {
                                         <div className="flex items-center space-x-2">
                                             <button
                                                 onClick={() =>
-                                                    handleViewUser(user)
-                                                }
-                                                className="p-1 text-gray-400 hover:text-blue-600"
-                                                title="View"
-                                            >
-                                                <FiEye className="w-4 h-4" />
-                                            </button>
-                                            <button
-                                                onClick={() =>
                                                     handleEditUser(user)
                                                 }
                                                 className="p-1 text-gray-400 hover:text-green-600"

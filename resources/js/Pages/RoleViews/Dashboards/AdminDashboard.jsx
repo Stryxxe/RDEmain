@@ -21,11 +21,6 @@ const StatCard = ({ title, value, change, icon: Icon, color = 'blue' }) => {
         <div className="ml-4 flex-1">
           <p className="text-sm font-medium text-gray-600">{title}</p>
           <p className="text-2xl font-semibold text-gray-900">{value}</p>
-          {typeof change === 'number' && (
-            <p className={`text-sm ${change > 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {change > 0 ? '+' : ''}{change}% from last month
-            </p>
-          )}
         </div>
       </div>
     </div>
@@ -63,25 +58,47 @@ const RecentActivity = ({ activities, loading, currentPage, totalPages, onPageCh
       ) : (
         <>
           <div className="space-y-3 mb-4">
-            {activities.map((activity) => (
-              <div key={activity.activityID} className="pb-3 border-b border-gray-100 last:border-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getActionColor(activity.action)}`}>
-                    {activity.action.charAt(0).toUpperCase() + activity.action.slice(1)}
-                  </span>
-                  {activity.model_type && (
-                    <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
-                      {activity.model_type}
+            {activities.map((activity) => {
+              // Parse new_values to show specific changes
+              let changeDetails = '';
+              if (activity.new_values && typeof activity.new_values === 'object') {
+                const changes = Object.entries(activity.new_values)
+                  .filter(([key]) => !['updated_at', 'created_at'].includes(key))
+                  .map(([key, value]) => {
+                    const formattedKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                    return `${formattedKey}: ${value}`;
+                  });
+                if (changes.length > 0) {
+                  changeDetails = changes.slice(0, 2).join(', ');
+                  if (changes.length > 2) changeDetails += '...';
+                }
+              }
+
+              return (
+                <div key={activity.activityID} className="pb-3 border-b border-gray-100 last:border-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getActionColor(activity.action)}`}>
+                      {activity.action.charAt(0).toUpperCase() + activity.action.slice(1)}
                     </span>
-                  )}
+                    {activity.model_type && (
+                      <span className="text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded">
+                        {activity.model_type}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-900">
+                    {activity.description}
+                    {changeDetails && (
+                      <span className="text-gray-600"> - {changeDetails}</span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                    <span>{activity.userName}</span>
+                    <span>{activity.formatted_date}</span>
+                  </div>
                 </div>
-                <p className="text-sm text-gray-900">{activity.description}</p>
-                <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                  <span>{activity.userName}</span>
-                  <span>{activity.formatted_date}</span>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Pagination */}
@@ -241,11 +258,6 @@ const AdminDashboard = () => {
   const pendingUsers = users.filter((u) => u.status === 'pending').length;
   const inactiveUsers = users.filter((u) => u.status === 'inactive').length;
 
-  const pct = (part, total) => (total > 0 ? Math.round((part / total) * 100) : 0);
-  const activePct = pct(activeUsers, totalUsers);
-  const pendingPct = pct(pendingUsers, totalUsers);
-  const inactivePct = pct(inactiveUsers, totalUsers);
-
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -260,9 +272,9 @@ const AdminDashboard = () => {
         {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard title="Total Users" value={totalUsers} change={null} icon={FiUsers} color="blue" />
-        <StatCard title="Active Users" value={`${activeUsers} (${activePct}%)`} change={activePct} icon={FiUserCheck} color="green" />
-        <StatCard title="Pending Users" value={`${pendingUsers} (${pendingPct}%)`} change={pendingPct} icon={FiClock} color="yellow" />
-        <StatCard title="Inactive Users" value={`${inactiveUsers} (${inactivePct}%)`} change={inactivePct} icon={FiUserX} color="red" />
+        <StatCard title="Active Users" value={activeUsers} change={null} icon={FiUserCheck} color="green" />
+        <StatCard title="Pending Users" value={pendingUsers} change={null} icon={FiClock} color="yellow" />
+        <StatCard title="Inactive Users" value={inactiveUsers} change={null} icon={FiUserX} color="red" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

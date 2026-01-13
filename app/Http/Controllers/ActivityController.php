@@ -17,8 +17,14 @@ class ActivityController extends Controller
             ->orderBy('created_at', 'desc')
             ->paginate($perPage, ['*'], 'page', $page);
 
+        $formattedActivities = $activities->items();
+        foreach ($formattedActivities as $activity) {
+            $activity->userName = $activity->user?->name ?? 'System';
+            $activity->formatted_date = $activity->created_at->diffForHumans();
+        }
+
         return response()->json([
-            'data' => $activities->items(),
+            'data' => $formattedActivities,
             'total' => $activities->total(),
             'per_page' => $activities->perPage(),
             'current_page' => $activities->currentPage(),
