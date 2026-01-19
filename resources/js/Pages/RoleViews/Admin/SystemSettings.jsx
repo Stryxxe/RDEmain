@@ -12,6 +12,9 @@ import {
     FiDownload,
     FiTrash2,
     FiPlus,
+    FiMail,
+    FiEdit3,
+    FiX,
 } from "react-icons/fi";
 import AdminLayout from "../../../Components/Layouts/AdminLayout";
 import SimpleAlert from "../../../Components/SimpleAlert";
@@ -92,6 +95,20 @@ const SystemSettings = () => {
     });
     const [roleErrors, setRoleErrors] = useState("");
     const [editingRole, setEditingRole] = useState(null);
+
+    // Email Templates
+    const [emailTemplates, setEmailTemplates] = useState([]);
+    const [emailLoading, setEmailLoading] = useState(false);
+    const [editingEmail, setEditingEmail] = useState(null);
+    const [emailForm, setEmailForm] = useState({
+        templateID: null,
+        templateType: "",
+        subject: "",
+        body: "",
+        description: "",
+    });
+    const [emailErrors, setEmailErrors] = useState("");
+    const [showEmailModal, setShowEmailModal] = useState(false);
 
     // UI feedback
     const [alertState, setAlertState] = useState({
@@ -1231,8 +1248,98 @@ const SystemSettings = () => {
         }
     };
 
+    // Email Templates CRUD handlers
+    const fetchEmailTemplates = async () => {
+        try {
+            setEmailLoading(true);
+            const res = await axiosInstance.get("/admin/email-templates", {
+                headers: { Accept: "application/json" },
+                withCredentials: true,
+            });
+            const list = res?.data?.data || res?.data || [];
+            setEmailTemplates(Array.isArray(list) ? list : []);
+        } catch (e) {
+            console.error("Failed to load email templates", e);
+            setEmailTemplates([]);
+        } finally {
+            setEmailLoading(false);
+        }
+    };
+
+    const handleEditEmail = (template) => {
+        setEditingEmail(template.templateID);
+        setEmailForm({
+            templateID: template.templateID,
+            templateType: template.templateType,
+            subject: template.subject,
+            body: template.body,
+            description: template.description,
+        });
+        setShowEmailModal(true);
+    };
+
+    const handleCancelEditEmail = () => {
+        setEditingEmail(null);
+        setEmailForm({
+            templateID: null,
+            templateType: "",
+            subject: "",
+            body: "",
+            description: "",
+        });
+        setEmailErrors("");
+        setShowEmailModal(false);
+    };
+
+    const handleEmailSubmit = async (e) => {
+        e.preventDefault();
+        if (!emailForm.subject.trim()) {
+            setEmailErrors("Subject is required");
+            return;
+        }
+        if (!emailForm.body.trim()) {
+            setEmailErrors("Body is required");
+            return;
+        }
+        try {
+            setEmailLoading(true);
+            setEmailErrors("");
+            
+            const payload = {
+                subject: emailForm.subject,
+                body: emailForm.body,
+                description: emailForm.description,
+            };
+
+            await axiosInstance.put(
+                `/admin/email-templates/${emailForm.templateID}`,
+                payload,
+                {
+                    headers: { Accept: "application/json" },
+                    withCredentials: true,
+                }
+            );
+
+            setAlertState({
+                visible: true,
+                type: "success",
+                title: "Email Template Updated",
+                message: "Email template has been updated successfully.",
+            });
+
+            handleCancelEditEmail();
+            await fetchEmailTemplates();
+        } catch (e) {
+            console.error("Save email template failed", e);
+            setEmailErrors(e?.response?.data?.message || "Failed to save email template");
+        } finally {
+            setEmailLoading(false);
+        }
+    };
+
     useEffect(() => {
         fetchProjectRoles();
+        fetchEmailTemplates();
     }, []);
 
     return (
@@ -2967,6 +3074,157 @@ const SystemSettings = () => {
                                 Use This Path
                             </button>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Email Management Section */}
+            <div className="admin-card">
+                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+                    <FiMail className="w-5 h-5 mr-2" />
+                    Email Management
+                </h3>
+                <p className="text-sm text-gray-600 mb-6">
+                    Edit email templates that are sent to users. Use variables like {'{user_name}'} and {'{login_url}'} to customize content.
+                </p>
+
+                {emailLoading ? (
+                    <div className="text-center py-8">
+                        <div className="inline-block">
+                            <div className="animate-spin h-8 w-8 text-blue-600 border-4 border-gray-300 rounded-full border-t-blue-600"></div>
+                        </div>
+                    </div>
+                ) : emailTemplates.length === 0 ? (
+                    <div className="text-center py-8 text-gray-600">
+                        No email templates found
+                    </div>
+                ) : (
+                    <div className="space-y-4">
+                        {emailTemplates.map((template) => (
+                            <div key={template.templateID} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <h4 className="font-semibold text-gray-900">{template.templateType.replace('-', ' ').toUpperCase()}</h4>
+                                            {template.isActive && (
+                                                <span className="inline-block px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                                                    Active
+                                                </span>
+                                            )}
+                                        </div>
+                                        <p className="text-sm text-gray-600 mb-1">
+                                            <strong>Subject:</strong> {template.subject}
+                                        </p>
+                                        {template.description && (
+                                            <p className="text-sm text-gray-500">
+                                                <strong>Description:</strong> {template.description}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={() => handleEditEmail(template)}
+                                        className="ml-4 px-3 py-2 text-sm text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 transition-colors"
+                                    >
+                                        <FiEdit3 className="w-4 h-4" />
+                                        Edit
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+
+            {/* Email Template Edit Modal */}
+            {showEmailModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                        <div className="sticky top-0 bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between">
+                            <h2 className="text-xl font-bold text-gray-900">
+                                Edit Email Template: {emailForm.templateType}
+                            </h2>
+                            <button
+                                onClick={handleCancelEditEmail}
+                                className="text-gray-400 hover:text-gray-600"
+                            >
+                                <FiX className="w-6 h-6" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleEmailSubmit} className="p-6 space-y-4">
+                            {emailErrors && (
+                                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                                    <p className="text-sm text-red-800">{emailErrors}</p>
+                                </div>
+                            )}
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email Subject
+                                </label>
+                                <input
+                                    type="text"
+                                    value={emailForm.subject}
+                                    onChange={(e) => setEmailForm({ ...emailForm, subject: e.target.value })}
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Enter email subject"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Email Body (HTML)
+                                </label>
+                                <textarea
+                                    value={emailForm.body}
+                                    onChange={(e) => setEmailForm({ ...emailForm, body: e.target.value })}
+                                    rows="12"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+                                    placeholder="Enter email body (supports HTML)"
+                                />
+                                <div className="mt-2 p-3 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                                    <strong>Available Variables:</strong>
+                                    <ul className="mt-1 space-y-1 ml-4 list-disc">
+                                        <li>{'{user_name}'} - Full name of the user</li>
+                                        <li>{'{user_email}'} - Email address of the user</li>
+                                        <li>{'{login_url}'} - Login page URL</li>
+                                        <li>{'{system_name}'} - System name</li>
+                                        <li>{'{current_year}'} - Current year</li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Description (optional)
+                                </label>
+                                <textarea
+                                    value={emailForm.description}
+                                    onChange={(e) => setEmailForm({ ...emailForm, description: e.target.value })}
+                                    rows="2"
+                                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    placeholder="Enter template description"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 justify-end pt-4">
+                                <button
+                                    type="button"
+                                    onClick={handleCancelEditEmail}
+                                    className="px-6 py-2 text-gray-700 bg-gray-200 hover:bg-gray-300 rounded-lg font-medium transition-colors"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={emailLoading}
+                                    className="px-6 py-2 text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium transition-colors flex items-center gap-2"
+                                >
+                                    <FiSave className="w-4 h-4" />
+                                    Save Changes
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

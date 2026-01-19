@@ -1456,3 +1456,13 @@ Route::prefix('ocr')->group(function () {
     Route::middleware('auth:web')->post('/process-proposal', [OCRController::class, 'processProposal']);
 });
 
+// Email Template Management (Admin only)
+use App\Http\Controllers\Api\EmailTemplateController;
+
+Route::middleware('auth:web')->prefix('admin/email-templates')->group(function () {
+    Route::get('/', [EmailTemplateController::class, 'index']);
+    Route::get('/{emailTemplate}', [EmailTemplateController::class, 'show']);
+    Route::put('/{emailTemplate}', [EmailTemplateController::class, 'update']);
+    Route::get('/{templateType}/variables', [EmailTemplateController::class, 'getVariables']);
+});
+
